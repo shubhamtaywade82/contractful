@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 require 'tempfile'
 require 'cgi'
 require 'netrc'
 require 'set'
+require 'timeout'
 
 begin
   # Use mime/types/columnar if available, for reduced memory usage
@@ -38,11 +41,13 @@ module RestClient
   #   (including nil) will override RestClient.proxy.
   # * :verify_ssl enable ssl verification, possible values are constants from
   #     OpenSSL::SSL::VERIFY_*, defaults to OpenSSL::SSL::VERIFY_PEER
-  # * :read_timeout and :open_timeout are how long to wait for a response and
-  #     to open a connection, in seconds. Pass nil to disable the timeout.
-  # * :timeout can be used to set both timeouts
+  # * :read_timeout, :write_timeout and :open_timeout are how long to wait
+  #     to read from, write to, and open a connection, in seconds. Pass nil to
+  #     disable the timeout.
+  # * :timeout can be used to set read and open timeouts together
   # * :ssl_client_cert, :ssl_client_key, :ssl_ca_file, :ssl_ca_path,
-  #     :ssl_cert_store, :ssl_verify_callback, :ssl_verify_callback_warnings
+  #     :ssl_cert_store, :ssl_verify_callback, :ssl_verify_callback_warnings,
+  #     :ssl_min_version, :ssl_max_version
   # * :ssl_version specifies the SSL version for the underlying Net::HTTP connection
   # * :ssl_ciphers sets SSL ciphers for the connection. See
   #     OpenSSL::SSL::SSLContext#ciphers=
@@ -52,7 +57,7 @@ module RestClient
   class Request
 
     attr_reader :method, :uri, :url, :headers, :payload, :proxy,
-                :user, :password, :read_timeout, :max_redirects,
+                :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
                 :ssl_opts
 
@@ -64,7 +69,29 @@ module RestClient
     end
 
     SSLOptionList = %w{client_cert client_key ca_file ca_path cert_store
-                       version ciphers verify_callback verify_callback_warnings}
+                       version ciphers verify_callback verify_callback_warnings
+                       min_version max_version}
+
+    # Maps user-friendly SSL version spellings to the integer constants
+    # accepted by OpenSSL::SSL::SSLContext#min_version=/max_version=. Both the
+    # "TLSv1_2" and "TLS1_2" spellings are normalized, since the exact symbol
+    # format accepted by OpenSSL has varied across OpenSSL gem releases.
+    # Integers (e.g. OpenSSL::SSL::TLS1_2_VERSION) and unknown values are
+    # passed through unchanged.
+    SSL_VERSION_CONSTANTS = {
+      'SSLV2' => 'SSL2_VERSION',
+      'SSLV3' => 'SSL3_VERSION',
+      'SSL2' => 'SSL2_VERSION',
+      'SSL3' => 'SSL3_VERSION',
+      'TLSV1' => 'TLS1_VERSION',
+      'TLSV1_1' => 'TLS1_1_VERSION',
+      'TLSV1_2' => 'TLS1_2_VERSION',
+      'TLSV1_3' => 'TLS1_3_VERSION',
+      'TLS1' => 'TLS1_VERSION',
+      'TLS1_1' => 'TLS1_1_VERSION',
+      'TLS1_2' => 'TLS1_2_VERSION',
+      'TLS1_3' => 'TLS1_3_VERSION',
+    }.freeze
 
     def inspect
       "<RestClient::Request @method=#{@method.inspect}, @url=#{@url.inspect}>"
@@ -99,6 +126,9 @@ module RestClient
       end
       if args.include?(:open_timeout)
         @open_timeout = args[:open_timeout]
+      end
+      if args.include?(:write_timeout)
+        @write_timeout = args[:write_timeout]
       end
       @block_response = args[:block_response]
       @raw_response = args[:raw_response] || false
@@ -151,7 +181,9 @@ module RestClient
       @log = args[:log]
       @max_redirects = args[:max_redirects] || 10
       @processed_headers = make_headers headers
-      @processed_headers_lowercase = Hash[@processed_headers.map {|k, v| [k.downcase, v]}]
+      @processed_headers_lowercase = @processed_headers.map {|k, v|
+        [k.downcase, v]
+      }.to_h
       @args = args
 
       @before_execution_proc = args[:before_execution_proc]
@@ -605,7 +637,9 @@ module RestClient
     def parse_url_with_auth!(url)
       uri = URI.parse(url)
 
-      if uri.hostname.nil?
+      # Ruby >= 3.4 returns an empty hostname (rather than nil) for URIs
+      # such as 'http:///'.
+      if uri.hostname.nil? || uri.hostname.empty?
         raise URI::InvalidURIError.new("bad URI(no host provided): #{url}")
       end
 
@@ -660,6 +694,8 @@ module RestClient
       net = net_http_object(uri.hostname, uri.port)
       net.use_ssl = uri.is_a?(URI::HTTPS)
       net.ssl_version = ssl_version if ssl_version
+      net.min_version = normalize_ssl_version(ssl_min_version) if ssl_min_version
+      net.max_version = normalize_ssl_version(ssl_max_version) if ssl_max_version
       net.ciphers = ssl_ciphers if ssl_ciphers
 
       net.verify_mode = verify_ssl
@@ -709,6 +745,13 @@ module RestClient
           @open_timeout = nil
         end
         net.open_timeout = @open_timeout
+      end
+      if defined? @write_timeout
+        if @write_timeout == -1
+          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
+          @write_timeout = nil
+        end
+        net.write_timeout = @write_timeout
       end
 
       RestClient.before_execution_procs.each do |before_proc|
@@ -840,6 +883,23 @@ module RestClient
 
     def parser
       URI.const_defined?(:Parser) ? URI::Parser.new : URI
+    end
+
+    # Normalize an SSL version value into the form accepted by
+    # OpenSSL::SSL::SSLContext#min_version=/max_version=. Symbols and strings
+    # such as :TLSv1_2 or 'TLS1.3' are converted to the corresponding integer
+    # protocol version constant when it is available; anything else (integers,
+    # :SSLv23, unknown values) is passed through untouched so that OpenSSL can
+    # apply its own validation.
+    def normalize_ssl_version(value)
+      return value unless value.is_a?(Symbol) || value.is_a?(String)
+
+      const_name = SSL_VERSION_CONSTANTS[value.to_s.upcase.tr('.', '_')]
+      if const_name && OpenSSL::SSL.const_defined?(const_name)
+        OpenSSL::SSL.const_get(const_name)
+      else
+        value
+      end
     end
 
     # Given a MIME type or file extension, return either a MIME type or, if

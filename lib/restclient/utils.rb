@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'http/accept'
 
 module RestClient
@@ -26,23 +28,12 @@ module RestClient
       type_header = headers[:content_type]
       return nil unless type_header
 
-      # TODO: remove this hack once we drop support for Ruby 2.0
-      if RUBY_VERSION.start_with?('2.0')
-        _content_type, params = deprecated_cgi_parse_header(type_header)
-
-        if params.include?('charset')
-          return params.fetch('charset').gsub(/(\A["']*)|(["']*\z)/, '')
-        end
-
+      begin
+        _content_type, params = cgi_parse_header(type_header)
+      rescue HTTP::Accept::ParseError
+        return nil
       else
-
-        begin
-          _content_type, params = cgi_parse_header(type_header)
-        rescue HTTP::Accept::ParseError
-          return nil
-        else
-          params['charset']
-        end
+        params['charset']
       end
     end
 
@@ -61,76 +52,6 @@ module RestClient
       end
 
       [types.first.mime_type, types.first.parameters]
-    end
-
-    # Parse semi-colon separated, potentially quoted header string iteratively.
-    #
-    # @private
-    #
-    # @deprecated This method is deprecated and only exists to support Ruby
-    #   2.0, which is not supported by HTTP::Accept.
-    #
-    # @todo remove this method when dropping support for Ruby 2.0
-    #
-    def self._cgi_parseparam(s)
-      return enum_for(__method__, s) unless block_given?
-
-      while s[0] == ';'
-        s = s[1..-1]
-        ends = s.index(';')
-        while ends && ends > 0 \
-              && (s[0...ends].count('"') -
-                  s[0...ends].scan('\"').count) % 2 != 0
-          ends = s.index(';', ends + 1)
-        end
-        if ends.nil?
-          ends = s.length
-        end
-        f = s[0...ends]
-        yield f.strip
-        s = s[ends..-1]
-      end
-      nil
-    end
-
-    # Parse a Content-Type like header.
-    #
-    # Return the main content-type and a hash of options.
-    #
-    # This method was ported directly from Python's cgi.parse_header(). It
-    # probably doesn't read or perform particularly well in ruby.
-    # https://github.com/python/cpython/blob/3.4/Lib/cgi.py#L301-L331
-    #
-    # @param [String] line
-    # @return [Array(String, Hash)]
-    #
-    # @deprecated This method is deprecated and only exists to support Ruby
-    #   2.0, which is not supported by HTTP::Accept.
-    #
-    # @todo remove this method when dropping support for Ruby 2.0
-    #
-    def self.deprecated_cgi_parse_header(line)
-      parts = _cgi_parseparam(';' + line)
-      key = parts.next
-      pdict = {}
-
-      begin
-        while (p = parts.next)
-          i = p.index('=')
-          if i
-            name = p[0...i].strip.downcase
-            value = p[i+1..-1].strip
-            if value.length >= 2 && value[0] == '"' && value[-1] == '"'
-              value = value[1...-1]
-              value = value.gsub('\\\\', '\\').gsub('\\"', '"')
-            end
-            pdict[name] = value
-          end
-        end
-      rescue StopIteration
-      end
-
-      [key, pdict]
     end
 
     # Serialize a ruby object into HTTP query string parameters.

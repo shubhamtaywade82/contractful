@@ -27,12 +27,7 @@ RSpec::Core::RakeTask.new(:doc) do |t|
   t.pattern = 'spec/**/*_spec.rb'
 end
 
-desc "Run all examples with RCov"
-RSpec::Core::RakeTask.new('rcov') do |t|
-  t.pattern = 'spec/*_spec.rb'
-  t.rcov = true
-  t.rcov_opts = ['--exclude', 'examples']
-end
+task :default => :spec
 
 desc 'Regenerate authors file'
 task :authors do
@@ -49,19 +44,9 @@ the following kind souls:
   end
 end
 
-task :default do
-  sh 'rake -T'
-end
-
-def alias_task(alias_task, original)
-  desc "Alias for rake #{original}"
-  task alias_task, Rake.application[original].arg_names => original
-end
-alias_task(:test, :spec)
-
 ############################
 
-WindowsPlatforms = %w{x86-mingw32 x64-mingw32 x86-mswin32}
+WindowsPlatforms = %w{x86-mingw32 x64-mingw32 x64-mingw-ucrt}
 
 namespace :all do
 
@@ -129,12 +114,3 @@ Rake::RDocTask.new do |t|
   t.rdoc_files.include('README.md')
   t.rdoc_files.include('lib/*.rb')
 end
-
-############################
-
-require 'rubocop/rake_task'
-
-RuboCop::RakeTask.new(:rubocop) do |t|
-  t.options = ['--display-cop-names']
-end
-alias_task(:lint, :rubocop)

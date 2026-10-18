@@ -79,7 +79,8 @@ module RestClient
         end
         merge_meta_options!(request_args, meta)
 
-        response = RestClient::Request.execute(request_args)
+        response = execute_request(request_args, definition)
+        validate_response!(definition, response)
         instance.__run_after_callbacks(response)
         response
       end
@@ -108,6 +109,141 @@ module RestClient
       end
 
       # --- internals ---------------------------------------------------------
+
+      # Execute the request. When the contract declares expected error
+      # statuses (4xx/5xx), the default rest-client exception behavior is
+      # suppressed and every response is judged by the contract instead.
+      def execute_request(request_args, definition)
+        if declares_error_status?(definition)
+          RestClient::Request.execute(request_args) do |response|
+            handle_suppressed(response)
+          end
+        else
+          RestClient::Request.execute(request_args)
+        end
+      end
+
+      # Does the contract declare any 4xx/5xx status (directly or via range)?
+      def declares_error_status?(definition)
+        return false unless definition.response_statuses
+
+        definition.response_statuses.any? do |status|
+          if status.is_a?(Range)
+            status.min <= 599 && status.max >= 400
+          else
+            status >= 400
+          end
+        end
+      end
+
+      # Mirror AbstractResponse#return! for redirects while suppressing the
+      # final error-raising: redirectable 30x responses are still followed
+      # (recursively), everything else is returned for contract validation.
+      def handle_suppressed(response)
+        case response.code
+        when 301, 302, 307
+          if %w[get head].include?(response.request.method)
+            response.follow_redirection { |redirected| handle_suppressed(redirected) }
+          else
+            response
+          end
+        when 303
+          response.follow_get_redirection { |redirected| handle_suppressed(redirected) }
+        else
+          response
+        end
+      end
+
+      # Validate the response against the contract's response declaration:
+      # declared statuses, JSON body type and verify_response blocks.
+      def validate_response!(definition, response)
+        return response unless needs_validation?(definition)
+
+        status = response.code
+        if definition.response_statuses &&
+           !definition.response_statuses.any? { |s| s === status }
+          raise UnexpectedResponse.new(
+            "unexpected status #{status} for #{definition.describe} " \
+            "(expected #{render_statuses(definition.response_statuses)})",
+            response: response
+          )
+        end
+
+        parsed = nil
+        if definition.response_type
+          parsed = parse_response_body(response, definition)
+          unless response_type_matches?(definition.response_type, parsed)
+            raise UnexpectedResponse.new(
+              "response body does not match #{definition.response_type_name} " \
+              "for #{definition.describe}",
+              response: response
+            )
+          end
+        end
+
+        if definition.response_verifier &&
+           !call_verifier(definition.response_verifier, response, parsed)
+          raise UnexpectedResponse.new(
+            "verify_response block rejected the response for #{definition.describe}",
+            response: response
+          )
+        end
+
+        response
+      end
+
+      def needs_validation?(definition)
+        definition.response_statuses || definition.response_type ||
+          definition.response_verifier
+      end
+
+      def render_statuses(statuses)
+        statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }.join(', ')
+      end
+
+      def parse_response_body(response, definition)
+        return response.body if definition.response_type.equal?(String)
+
+        body = response.body
+        if body.nil? || body.empty?
+          raise UnexpectedResponse.new(
+            "expected #{definition.response_type_name} but the response body " \
+            "is empty for #{definition.describe}",
+            response: response
+          )
+        end
+
+        begin
+          JSON.parse(body)
+        rescue JSON::ParserError => e
+          raise UnexpectedResponse.new(
+            "response body is not valid JSON for #{definition.describe}: #{e.message}",
+            response: response
+          )
+        end
+      end
+
+      def response_type_matches?(type, parsed)
+        return true if type.equal?(:json)
+        return true if type.equal?(String)
+
+        parsed.is_a?(type)
+      end
+
+      # Arity-aware verifier invocation: blocks that declare two parameters
+      # additionally receive the JSON-parsed body (parsed lazily).
+      def call_verifier(block, response, parsed)
+        if block.arity >= 2
+          parsed ||= begin
+            JSON.parse(response.body)
+          rescue StandardError
+            nil
+          end
+          block.call(response, parsed)
+        else
+          block.call(response)
+        end
+      end
 
       def symbolize_keys(hash)
         hash.each_with_object({}) { |(k, v), h| h[k.to_sym] = v }

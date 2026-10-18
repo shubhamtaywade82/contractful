@@ -56,6 +56,18 @@ module RestClient
     # A param value could not be coerced/validated against its declared type.
     class InvalidParam < ParamError; end
 
+    # The HTTP response did not satisfy the contract's response declaration
+    # (unexpected status code, body type mismatch or failed verify_response
+    # block). The offending +response+ is attached for inspection.
+    class UnexpectedResponse < Error
+      attr_reader :response
+
+      def initialize(message = nil, response: nil)
+        @response = response
+        super(message)
+      end
+    end
+
     # Sentinel for "no default value declared" (distinct from `default: nil`).
     NO_DEFAULT = Object.new.freeze
   end

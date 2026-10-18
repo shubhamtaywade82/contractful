@@ -22,7 +22,18 @@ module RestClient
 
       VALID_VERBS = %i[get head post put patch delete options].freeze
 
+      # Symbol aliases for response body types. +:json+ means "must parse as
+      # JSON" without constraining the shape; +Array+/+Hash+ also parse and
+      # additionally check the parsed shape.
+      RESPONSE_TYPES = {
+        array: Array,
+        hash: Hash,
+        string: String,
+        json: :json,
+      }.freeze
+
       attr_reader :name, :verb, :path_template, :params, :description
+      attr_reader :response_statuses, :response_type, :response_verifier
 
       def initialize(name, verb, path_template, description: nil, &block)
         @name = name.to_sym
@@ -63,6 +74,42 @@ module RestClient
         @payload_style = style.to_sym
       end
 
+      # Declare the expected responses: one or more status codes (Integers or
+      # Ranges) and an optional body +type+ (Array, Hash, String, any class or
+      # the symbols :array/:hash/:string/:json).
+      #
+      # When the declared statuses include error codes (4xx/5xx), the default
+      # rest-client exception behavior is suppressed for this contract and
+      # every response is judged by the contract instead; a status outside
+      # the declared set raises {UnexpectedResponse}.
+      def responds(*statuses, type: nil)
+        if statuses.empty?
+          raise InvalidDefinition,
+                "responds requires at least one status for :#{@name}"
+        end
+        statuses.each do |status|
+          unless valid_status?(status)
+            raise InvalidDefinition,
+                  "invalid status #{status.inspect} for :#{@name} " \
+                  '(expected an Integer or an Integer Range)'
+          end
+        end
+        @response_statuses = statuses.freeze
+        @response_type = normalize_response_type(type) if type
+      end
+
+      # Register a custom assertion block. It receives the response (and the
+      # JSON-parsed body when declared with two parameters); a falsey return
+      # value raises {UnexpectedResponse}. Raising inside the block
+      # propagates untouched.
+      def verify_response(&block)
+        unless block
+          raise InvalidDefinition,
+                "verify_response requires a block for :#{@name}"
+        end
+        @response_verifier = block
+      end
+
       # --- path handling -----------------------------------------------------
 
       # Symbols referenced as +:placeholders+ in the path template.
@@ -95,17 +142,35 @@ module RestClient
 
       # --- introspection -----------------------------------------------------
 
-      # One-line description, e.g. <tt>"POST /repos/:owner/:repo/issues (params: :owner, :repo, :title)"</tt>.
+      # One-line description, e.g. <tt>"POST /repos/:owner/:repo/issues (params: :owner, :repo, :title) responds 200, 404 => Hash"</tt>.
       def describe
         parts = ["#{verb.to_s.upcase} #{path_template}"]
         if @params.any?
           parts << "(params: #{@params.keys.map { |k| ":#{k}" }.join(', ')})"
+        end
+        if @response_statuses
+          rendered = @response_statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }
+          response_part = "responds #{rendered.join(', ')}"
+          if @response_type
+            response_part << " => #{response_type_name}"
+          end
+          parts << response_part
         end
         parts.join(' ')
       end
 
       def inspect
         "#<RestClient::Contract::Definition #{describe}>"
+      end
+
+      # Human-readable name of the declared response body type (also used by
+      # the Executor when building violation messages).
+      def response_type_name
+        case @response_type
+        when :json then 'JSON'
+        when String then 'String'
+        else @response_type.name || 'anonymous class'
+        end
       end
 
       private
@@ -116,6 +181,21 @@ module RestClient
                 "unsupported HTTP verb #{verb.to_s.inspect} for :#{@name} " \
                 "(supported: #{VALID_VERBS.join(', ')})"
         end
+      end
+
+      def valid_status?(status)
+        status.is_a?(Integer) ||
+          (status.is_a?(Range) && status.min.is_a?(Integer) && status.max.is_a?(Integer))
+      end
+
+      def normalize_response_type(type)
+        return RESPONSE_TYPES[type] if type.is_a?(Symbol) && RESPONSE_TYPES.key?(type)
+
+        return type if type.is_a?(Class)
+
+        raise InvalidDefinition,
+              "unsupported response type #{type.inspect} for :#{@name} " \
+              '(expected a Class or :array/:hash/:string/:json)'
       end
 
       def validate_path_template!

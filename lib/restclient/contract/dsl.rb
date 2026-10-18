@@ -70,6 +70,23 @@ module RestClient
         __own_contract_config.auth = Contract::Auth.new(**schemes)
       end
 
+      # Header carrying the idempotency key (default 'Idempotency-Key').
+      def idempotency_header(name = nil)
+        if name.nil?
+          return __merged_scalar(:idempotency_header) || 'Idempotency-Key'
+        end
+        __own_contract_config.idempotency_header = name
+      end
+
+      # Generator producing idempotency keys (default: SecureRandom.uuid).
+      def idempotency_generator(generator = nil)
+        if generator.nil?
+          return __merged_scalar(:idempotency_generator) ||
+                 -> { ::SecureRandom.uuid }
+        end
+        __own_contract_config.idempotency_generator = generator
+      end
+
       # Register a callback executed before the HTTP request is sent. The
       # block receives a mutable context Hash:
       #

@@ -21,7 +21,7 @@ module RestClient
       # contract's param namespace).
       META_OPTIONS = %i[
         _headers _timeout _open_timeout _read_timeout _write_timeout
-        _persistent _max_retries _retry_interval
+        _persistent _max_retries _retry_interval _idempotency_key
       ].freeze
 
       META_MAP = {
@@ -67,6 +67,7 @@ module RestClient
         }
 
         apply_auth!(ctx, instance, definition)
+        apply_idempotency!(ctx, instance, definition, meta)
         instance.__run_before_callbacks(ctx)
 
         request_args = {
@@ -305,6 +306,19 @@ module RestClient
         unless resolved[:query].empty?
           ctx[:query] = (ctx[:query] || {}).merge(resolved[:query])
         end
+      end
+
+      # Inject an idempotency key when the contract is flagged `idempotent`
+      # or the caller supplied an explicit `_idempotency_key`. The key is
+      # generated once per logical call, so automatic retries of the same
+      # request reuse it (that is the entire point of the header).
+      def apply_idempotency!(ctx, instance, definition, meta)
+        explicit = meta[:_idempotency_key]
+        return unless explicit || definition.idempotent.equal?(true)
+
+        key = explicit || instance.class.idempotency_generator.call
+        header = instance.class.idempotency_header
+        ctx[:headers] = ctx[:headers].merge(header => key)
       end
 
       def symbolize_keys(hash)

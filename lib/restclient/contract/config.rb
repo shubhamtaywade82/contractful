@@ -18,6 +18,7 @@ module RestClient
       # Scalars are nil until explicitly set, so that "unset" can be
       # distinguished from every meaningful value (including false/{}).
       attr_reader :base_url, :default_headers, :strict_params, :payload_style, :auth
+      attr_reader :idempotency_header, :idempotency_generator
 
       def initialize
         @contracts = {}
@@ -27,6 +28,8 @@ module RestClient
         @strict_params = nil
         @payload_style = nil
         @auth = nil
+        @idempotency_header = nil
+        @idempotency_generator = nil
       end
 
       def base_url=(url)
@@ -61,6 +64,24 @@ module RestClient
                 "got #{value.inspect}"
         end
         @auth = value
+      end
+
+      def idempotency_header=(name)
+        unless name.is_a?(String) && !name.empty?
+          raise InvalidDefinition,
+                'idempotency_header must be a non-empty String, ' \
+                "got #{name.inspect}"
+        end
+        @idempotency_header = name
+      end
+
+      def idempotency_generator=(generator)
+        unless generator.respond_to?(:call)
+          raise InvalidDefinition,
+                'idempotency_generator must respond to #call, ' \
+                "got #{generator.inspect}"
+        end
+        @idempotency_generator = generator
       end
 
       def add_callback(kind, block)

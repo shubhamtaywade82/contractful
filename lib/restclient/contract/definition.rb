@@ -39,6 +39,8 @@ module RestClient
       attr_reader :strict
       # Contract-level auth opt-out (nil = inherit, false = disabled).
       attr_reader :auth
+      # Idempotent flag (nil = not flagged).
+      attr_reader :idempotent
 
       def initialize(name, verb, path_template, description: nil, &block)
         @name = name.to_sym
@@ -50,6 +52,7 @@ module RestClient
         @strict = nil
         @response_fields = {}
         @auth = nil
+        @idempotent = nil
 
         validate_verb!
         validate_path_template!
@@ -111,6 +114,16 @@ module RestClient
         end
         @response_statuses = statuses.freeze
         @response_type = normalize_response_type(type) if type
+      end
+
+      # Flag this contract as idempotent: the client will inject an
+      # idempotency key header on every call (default 'Idempotency-Key',
+      # see the class-level +idempotency_header+ / +idempotency_generator+),
+      # making automatic retries safe for non-GET operations.
+      def idempotent(flag = NO_DEFAULT)
+        return @idempotent if flag.equal?(NO_DEFAULT)
+
+        @idempotent = flag ? true : false
       end
 
       # Opt this contract out of the class-level auth: `auth false`. Called
@@ -193,6 +206,7 @@ module RestClient
         if @response_fields.any?
           parts << "(fields: #{@response_fields.keys.map { |k| ":#{k}" }.join(', ')})"
         end
+        parts << 'idempotent' if @idempotent
         if @response_statuses
           rendered = @response_statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }
           response_part = "responds #{rendered.join(', ')}"

@@ -18,6 +18,36 @@ through 4.0, uses current development tooling, and adds a few long-requested
 options such as `:write_timeout` and `:ssl_min_version` / `:ssl_max_version`.
 See [history.md](history.md) for the full list of changes.
 
+### Project documentation
+
+The complete engineering documentation set lives at the root and under
+`docs/`:
+
+| Document | Purpose |
+| --- | --- |
+| [PRD.md](PRD.md) | Product goals, non-goals, feature requirements |
+| [DESIGN.md](DESIGN.md) | Developer-experience and interface design principles |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, module map, request lifecycle |
+| [API.md](API.md) | Normative public API reference (incl. the contract DSL) |
+| [DATABASE.md](DATABASE.md) | No-database decision, in-memory state, fixture policy |
+| [AGENTS.md](AGENTS.md) | Rules for AI coding agents working in this repo |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Human contributor workflow |
+| [docs/requirements/REQUIREMENTS.md](docs/requirements/REQUIREMENTS.md) | Traceability: requirements ↔ specs ↔ status |
+| [docs/implementation/IMPLEMENTATION_PLAN.md](docs/implementation/IMPLEMENTATION_PLAN.md) | Roadmap workstreams and sequencing |
+| [docs/implementation/SETUP.md](docs/implementation/SETUP.md) | Tested local development setup |
+| [docs/engineering/TESTING.md](docs/engineering/TESTING.md) | Test strategy, organization, known traps |
+| [docs/engineering/QUALITY_GATES.md](docs/engineering/QUALITY_GATES.md) | Merge/release gates and enforcement |
+| [docs/engineering/ERROR_HANDLING.md](docs/engineering/ERROR_HANDLING.md) | Exception model, retryable vs terminal |
+| [docs/engineering/INTEGRATIONS.md](docs/engineering/INTEGRATIONS.md) | Dependencies, platforms, downstream consumers |
+| [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md) | Assets, trust boundaries, mitigations |
+| [docs/security/AGENT_TOOL_POLICY.md](docs/security/AGENT_TOOL_POLICY.md) | Permission boundaries for autonomous agents |
+| [docs/operations/DELIVERY.md](docs/operations/DELIVERY.md) | Versioning, releases, rollback |
+| [docs/operations/OBSERVABILITY.md](docs/operations/OBSERVABILITY.md) | Logging, diagnostics, health signals |
+| [docs/operations/RUNBOOK.md](docs/operations/RUNBOOK.md) | Symptom → diagnosis → fix field guide |
+| [docs/adr/](docs/adr/) | Architecture decision records (0001–0003) |
+| [docs/agents/AGENT_WORKFLOWS.md](docs/agents/AGENT_WORKFLOWS.md) | Phase-by-phase agent execution playbook |
+| [docs/agents/MCP_INTEGRATION.md](docs/agents/MCP_INTEGRATION.md) | MCP policy (conditional document) |
+
 ### New mailing list
 
 We have a new email list for announcements, hosted by Groups.io.

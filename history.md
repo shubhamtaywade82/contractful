@@ -1,3 +1,19 @@
+# Unreleased (on `feature/contract-first`, PR #2)
+
+Documentation and build-integrity release candidate content:
+
+* Add the project documentation suite: `AGENTS.md`, `CONTRIBUTING.md`,
+  `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `API.md`, `DATABASE.md` at the
+  root, plus `docs/` with the requirements traceability matrix,
+  architecture decision records (0001–0003), implementation plan and setup
+  guide, engineering guides (testing, quality gates, error handling,
+  integrations), security documents (threat model, agent tool policy),
+  operations guides (delivery, observability, runbook) and the agent
+  workflow playbook.
+* Fix the `spec:unit` rake task to use the `spec/unit/**/*_spec.rb` glob —
+  the previous pattern skipped the nested `spec/unit/contract/` directory,
+  so the contract-first suite never ran under CI's unit job.
+
 # 2.5.0
 
 Feature release completing the contract-first layer: closed request

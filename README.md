@@ -627,6 +627,49 @@ responses, operation-level server overrides. The generated source
 round-trips: evaluating it yields a class whose contracts `describe`
 exactly like the imported definitions.
 
+### Testing sequences with recorded fixtures
+
+Contracts deliberately do not express ordering, timing or cross-call state
+machines. The opt-in sequence helper replays recorded vendor responses
+through a contract client and fails on the FIRST contract violation with
+the step number attached (test-only — it uses WebMock):
+
+```ruby
+require 'restclient/contract/sequence'
+
+sequence = RestClient::Contract::Sequence.load(client, 'order_lifecycle.yml')
+sequence.after_step do |index, step, response|
+  # stateful rules contracts cannot express: token refresh sequencing,
+  # rate-limit windows (response.rate_limit), cross-step invariants
+end
+sequence.run   # => [#<Result step 1>, ...] or raises Sequence::Failure
+```
+
+Fixture shape (YAML or JSON, under your control):
+
+```yaml
+name: order lifecycle
+steps:
+  - call: create_order
+    params: { quantity: 10 }
+    response: { status: 201, body: { order_id: 'o-1', status: 'open' } }
+    expect_request:
+      json_include: { quantity: 10 }     # assert the OUTGOING payload subset
+  - call: get_order
+    params: { order_id: 'o-1' }
+    response: { status: 200, body: { order_id: 'o-1', status: 'filled' } }
+    expect_request:
+      path: /orders/o-1
+```
+
+Each step stubs its recorded response, invokes the contract method and
+lets the contract's own validation run — a recorded response the contract
+does not declare is a violation at that step. `expect_request` pins
+ordering-sensitive outgoing details (`path`, `query_include`,
+`headers_include`, `json_include` — unknown keys fail the fixture loudly).
+Unknown contract names, malformed steps and missing responses are rejected
+at load time, before anything runs.
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

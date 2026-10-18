@@ -62,6 +62,7 @@ requirement landed.
 | REQ-F13 | Reflection + dispatch (FR-22) | `contracts/contract_names/contract?/contract_for` on class and instance; `call_*`, `*_contract`, `has_*?` via `method_missing` with `respond_to_missing?` | `spec/unit/contract/introspection_spec.rb` | implemented (2.4) |
 | REQ-F14 | Inheritance | Config, contracts, callbacks merge down the ancestor chain; nearest definition wins | `spec/unit/contract/definition_spec.rb`, `spec/unit/contract/callbacks_spec.rb` | implemented (2.4) |
 | REQ-N01 | OpenAPI import helper | `OpenAPIImport.import` converts an OpenAPI 3.x document into Definitions (types, constraints, payload styles, statuses, response fields); every lossy mapping is reported on `#notes`; `to_ruby` output re-evaluates to contracts that `describe` identically; opt-in require, zero runtime deps | `spec/unit/contract/openapi_import_spec.rb` | implemented (2.6) |
+| REQ-N02 | Recorded-sequence test helper | `Sequence.load` validates a fixture against the client's contracts (unknown calls/keys rejected at load); `run` replays each recorded response through the contract pipeline under WebMock and raises `Failure` on the first violation with the step number; `before_step`/`after_step` hooks carry stateful rules; `expect_request` pins outgoing path/query/headers/payload subsets | `spec/unit/contract/sequence_spec.rb` | implemented (2.6) |
 
 ## Platform, packaging, compatibility
 
@@ -76,7 +77,6 @@ requirement landed.
 
 | ID | Requirement | Acceptance criterion (key) | Status |
 | --- | --- | --- | --- |
-| REQ-N02 | Recorded-sequence test helper | Replays recorded vendor response sequences through contracts for ordering/timing tests contracts cannot express | planned |
 | REQ-N03 | Tags for 2.4.0/2.5.0 after PR #2 merge | `v2.4.0`, `v2.5.0` tags exist on master post-merge | planned |
 
 Planned items live in [docs/implementation/IMPLEMENTATION_PLAN.md](docs/implementation/IMPLEMENTATION_PLAN.md); they become `in-progress` only when a branch opens.

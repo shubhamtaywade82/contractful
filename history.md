@@ -58,6 +58,16 @@ Documentation and build-integrity release candidate content:
   unions, `default` responses) instead of guessing, `to_ruby` renders a
   ready-to-paste client class from the built definitions, and the
   generated source round-trips through `Definition#describe`.
+* Add the recorded-sequence test helper (REQ-N02): an opt-in, test-only
+  module (`require 'restclient/contract/sequence'`) that replays recorded
+  vendor response sequences through a contract client under WebMock. Each
+  fixture step stubs its recorded response, invokes the contract method
+  and runs the contract's own validation — the first violation fails with
+  the step number attached. `expect_request` assertions pin outgoing
+  paths, query params, headers and JSON payload subsets (unknown keys are
+  rejected at load time); `before_step`/`after_step` hooks carry the
+  stateful rules contracts cannot express (token refresh sequencing,
+  rate-limit windows, cross-step invariants).
 
 # 2.5.0
 

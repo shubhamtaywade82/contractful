@@ -48,15 +48,16 @@ the output round-trips through `Definition#describe`; every lossy mapping
 decision is reported on `Import#notes`. Verified by
 `spec/unit/contract/openapi_import_spec.rb`.
 
-### W4 — Recorded-sequence test helper (REQ-N02, planned)
+### W4 — Recorded-sequence test helper (REQ-N02, status: shipped, 2.6.0)
 
 Contracts deliberately do not express ordering, timing or cross-call state
-machines. Deliver the testing counterpart: a helper that replays recorded
-vendor response sequences through a contract client (fixture files under
-the consumer's control), asserting each step validates and stateful rules
-(token refresh, rate-limit windows) hold. Acceptance: a sequence fixture
-drives `Client` through N recorded interactions with WebMock, failing on
-the first contract violation with the step number attached.
+machines. Shipped as `require 'restclient/contract/sequence'`: a sequence
+fixture (YAML/JSON under the consumer's control) drives the contract
+client through N recorded interactions with WebMock, failing on the first
+contract violation with the step number attached. `expect_request`
+assertions pin outgoing path/query/header/payload subsets; `before_step` /
+`after_step` hooks carry the stateful rules (token refresh, rate-limit
+windows). Verified by `spec/unit/contract/sequence_spec.rb`.
 
 ### W5 — Downstream client enablement (status: opportunity)
 

@@ -46,6 +46,9 @@ describe RestClient::Resource do
 
   it "can instantiate with no user/password" do
     @resource = RestClient::Resource.new('http://some/resource')
+    expect(@resource.url).to eq 'http://some/resource'
+    expect(@resource.user).to be_nil
+    expect(@resource.password).to be_nil
   end
 
   it "is backwards compatible with previous constructor" do

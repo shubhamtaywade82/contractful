@@ -106,9 +106,9 @@ describe RestClient::Response, :include_helpers do
   describe "exceptions processing" do
     it "should return itself for normal codes" do
       (200..206).each do |code|
-        net_http_res = res_double(:code => '200')
+        net_http_res = res_double(:code => code.to_s)
         resp = RestClient::Response.create('abc', net_http_res, @request)
-        resp.return!
+        expect(resp.return!).to equal(resp)
       end
     end
 
@@ -225,7 +225,7 @@ describe RestClient::Response, :include_helpers do
     end
 
     it "follow a redirection when the request is a get and the response is in the 30x range" do
-      stub_request(:get, 'http://some/resource').to_return(:body => '', :status => 301, :headers => {'Location' => 'http://new/resource'})
+      stub_request(:get, 'http://some/resource').to_return(:body => '', :status => 302, :headers => {'Location' => 'http://new/resource'})
       stub_request(:get, 'http://new/resource').to_return(:body => 'Foo')
       expect(RestClient::Request.execute(:url => 'http://some/resource', :method => :get).body).to eq 'Foo'
     end

@@ -197,8 +197,11 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'does not repeat path params in the payload or query' do
+      # Pin both halves of the intent in the stub match: the payload contains
+      # only the fields that are not path placeholders, and no query string
+      # is appended with the interpolated path params.
       stub = stub_request(:post, 'https://api.test/repos/octo/hello/issues')
-             .with(body: '{"title":"Hi"}')
+             .with(body: '{"title":"Hi"}', query: {})
 
       client.create_issue(owner: 'octo', repo: 'hello', title: 'Hi')
 

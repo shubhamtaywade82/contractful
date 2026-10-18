@@ -22,6 +22,10 @@ RSpec::Core::RakeTask.new('spec:integration') do |t|
   t.pattern = 'spec/integration/*_spec.rb'
 end
 
+desc "Run RuboCop static analysis (see .rubocop.yml for the baseline strategy)"
+require 'rubocop/rake_task'
+RuboCop::RakeTask.new('rubocop')
+
 desc "Print specdocs"
 RSpec::Core::RakeTask.new(:doc) do |t|
   t.rspec_opts = ["--format", "specdoc", "--dry-run"]

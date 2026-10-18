@@ -7,3 +7,14 @@ gemspec
 group :test do
   gem 'rake'
 end
+
+group :development, :test do
+  # Static analysis baseline (see .rubocop.yml for the adoption strategy).
+  # require: false - nothing in the runtime loads these; the Rakefile task
+  # and CI lint job require them explicitly.
+  # Patch-level constraints (not ~> 1.92) because Gemfile.lock is not
+  # committed: newer RuboCop minors can enable new cops, which would break
+  # the lint baseline without any change to this repository.
+  gem 'rubocop', '~> 1.92.0', require: false
+  gem 'rubocop-rspec', '~> 3.10.0', require: false
+end

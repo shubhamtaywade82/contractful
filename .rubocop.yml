@@ -1,0 +1,40 @@
+inherit_from: .rubocop_todo.yml
+
+# RuboCop baseline for rest-client.
+#
+# Adoption strategy for an inherited codebase: existing violations are
+# quarantined in .rubocop_todo.yml, generated with:
+#
+#   bundle exec rubocop --auto-gen-config --no-exclude-limit
+#
+# and committed. The lint job in CI fails on any offense that is NOT in the
+# baseline, so new code cannot add violations. Fix offenses opportunistically
+# and regenerate the baseline to shrink it; never disable a cop ad hoc
+# without a comment explaining why, and never mass-autocorrect at the cost
+# of behavioral churn (see AGENTS.md testing discipline).
+#
+# Plugin policy: only plugins for tooling this repository actually uses.
+# It is a plain Ruby gem with RSpec, so rubocop-rspec is loaded and the
+# Rails/RSpec-Rails/Performance plugin families are deliberately not.
+
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  # The excluded plugin families above are a deliberate policy, not an
+  # oversight, so do not print "suggest extensions" warnings on every run.
+  SuggestExtensions: false
+  Exclude:
+    - 'pkg/**/*'
+    - 'rdoc/**/*'
+    - 'tmp/**/*'
+    - 'vendor/**/*'
+
+# AGENTS.md hard rule 2: the magic comment is mandatory on every file under
+# lib/ and spec/. Every existing file already complies; this keeps it that
+# way instead of relying on review alone.
+Style/FrozenStringLiteralComment:
+  Enabled: true

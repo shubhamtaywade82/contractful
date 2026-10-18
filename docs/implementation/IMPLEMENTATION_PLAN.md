@@ -36,24 +36,28 @@ master (tagging requires operator approval per AGENT_TOOL_POLICY.md),
 verify matrix on master, then the release cadence in DELIVERY.md. Note:
 `gem push` remains blocked on RubyGems credentials.
 
-### W3 — OpenAPI import helper (REQ-N01, planned)
+### W3 — OpenAPI import helper (REQ-N01, status: shipped, 2.6.0)
 
 A separate, opt-in reader that converts an OpenAPI 3.x document into
 `contract` declarations (source-to-source, run at development time, not a
-runtime dependency). Acceptance: given a vendor's OpenAPI file, it emits
-declarations that round-trip through `Definition#describe` with the same
-paths, params and response statuses. Zero runtime deps — ship it as part of
-the gem but require explicit `require 'restclient/contract/openapi_import'`.
+runtime dependency). Shipped as `require 'restclient/contract/openapi_import'`:
+`.import` builds Definitions (typed params with closed-schema constraints,
+payload styles, statuses incl. `2XX` wildcards, open-schema response
+fields), `.to_ruby` renders a client class from those same definitions and
+the output round-trips through `Definition#describe`; every lossy mapping
+decision is reported on `Import#notes`. Verified by
+`spec/unit/contract/openapi_import_spec.rb`.
 
-### W4 — Recorded-sequence test helper (REQ-N02, planned)
+### W4 — Recorded-sequence test helper (REQ-N02, status: shipped, 2.6.0)
 
 Contracts deliberately do not express ordering, timing or cross-call state
-machines. Deliver the testing counterpart: a helper that replays recorded
-vendor response sequences through a contract client (fixture files under
-the consumer's control), asserting each step validates and stateful rules
-(token refresh, rate-limit windows) hold. Acceptance: a sequence fixture
-drives `Client` through N recorded interactions with WebMock, failing on
-the first contract violation with the step number attached.
+machines. Shipped as `require 'restclient/contract/sequence'`: a sequence
+fixture (YAML/JSON under the consumer's control) drives the contract
+client through N recorded interactions with WebMock, failing on the first
+contract violation with the step number attached. `expect_request`
+assertions pin outgoing path/query/header/payload subsets; `before_step` /
+`after_step` hooks carry the stateful rules (token refresh, rate-limit
+windows). Verified by `spec/unit/contract/sequence_spec.rb`.
 
 ### W5 — Downstream client enablement (status: opportunity)
 

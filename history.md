@@ -1,7 +1,43 @@
-# Unreleased (review hardening)
+# 2.6.0
 
-Code review fixes from a skills-based review (secret redaction, contract
-layer robustness, spec hygiene). No public API changes.
+Roadmap-helpers release: the two planned development-time companions to
+the contract-first layer (REQ-N01, REQ-N02), plus the documentation suite
+and the review-hardening fixes that landed on master ahead of the release.
+
+* Add the project documentation suite: `AGENTS.md`, `CONTRIBUTING.md`,
+  `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `API.md`, `DATABASE.md` at the
+  root, plus `docs/` with the requirements traceability matrix,
+  architecture decision records (0001–0003), implementation plan and setup
+  guide, engineering guides (testing, quality gates, error handling,
+  integrations), security documents (threat model, agent tool policy),
+  operations guides (delivery, observability, runbook) and the agent
+  workflow playbook.
+* Fix the `spec:unit` rake task to use the `spec/unit/**/*_spec.rb` glob —
+  the previous pattern skipped the nested `spec/unit/contract/` directory,
+  so the contract-first suite never ran under CI's unit job.
+* Add the OpenAPI import helper (REQ-N01): an opt-in, development-time
+  reader (`require 'restclient/contract/openapi_import'`) that converts an
+  OpenAPI 3.x document into `contract` definitions — typed closed-schema
+  params with enum/min/max/length/pattern constraints, `payload_style`
+  inference, response statuses (including `2XX` wildcards), JSON body
+  types and open-schema `response_field` bindings. A notes channel reports
+  every lossy mapping decision (header params, multipart bodies, `oneOf`
+  unions, `default` responses) instead of guessing, `to_ruby` renders a
+  ready-to-paste client class from the built definitions, and the
+  generated source round-trips through `Definition#describe`.
+* Add the recorded-sequence test helper (REQ-N02): an opt-in, test-only
+  module (`require 'restclient/contract/sequence'`) that replays recorded
+  vendor response sequences through a contract client under WebMock. Each
+  fixture step stubs its recorded response, invokes the contract method
+  and runs the contract's own validation — the first violation fails with
+  the step number attached. `expect_request` assertions pin outgoing
+  paths, query params, headers and JSON payload subsets (unknown keys are
+  rejected at load time); `before_step`/`after_step` hooks carry the
+  stateful rules contracts cannot express (token refresh sequencing,
+  rate-limit windows, cross-step invariants).
+
+Review-hardening fixes from a skills-based code review (secret redaction,
+contract layer robustness, spec hygiene). No public API changes.
 
 * Redact credential-bearing request headers from the request log. The
   request log line (`RestClient.get "http://...", "Accept"=>...`) now
@@ -32,22 +68,6 @@ layer robustness, spec hygiene). No public API changes.
   frozen literals in place (`String#force_encoding` on literals now goes
   through `.dup`).
 * Remove an unused variable warning in the idempotency spec.
-
-# Unreleased (on `feature/contract-first`, PR #2)
-
-Documentation and build-integrity release candidate content:
-
-* Add the project documentation suite: `AGENTS.md`, `CONTRIBUTING.md`,
-  `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `API.md`, `DATABASE.md` at the
-  root, plus `docs/` with the requirements traceability matrix,
-  architecture decision records (0001–0003), implementation plan and setup
-  guide, engineering guides (testing, quality gates, error handling,
-  integrations), security documents (threat model, agent tool policy),
-  operations guides (delivery, observability, runbook) and the agent
-  workflow playbook.
-* Fix the `spec:unit` rake task to use the `spec/unit/**/*_spec.rb` glob —
-  the previous pattern skipped the nested `spec/unit/contract/` directory,
-  so the contract-first suite never ran under CI's unit job.
 
 # 2.5.0
 

@@ -46,6 +46,27 @@ module RestClient
         __own_contract_config.payload_style = style
       end
 
+      # Register a callback executed before the HTTP request is sent. The
+      # block receives a mutable context Hash:
+      #
+      #   { definition:, method:, url:, headers:, payload:, query: }
+      #
+      # Mutating the context changes the outgoing request (for example
+      # injecting Authorization headers or rewriting the URL). Callbacks
+      # accumulate down the inheritance chain, root-most first.
+      def before_request(&block)
+        __own_contract_config.add_callback(:before_request, block)
+      end
+
+      # Register a callback executed after a contract-valid response is
+      # received (after response validation, before the contract method
+      # returns). The block receives the RestClient::Response; return values
+      # are ignored. Callbacks accumulate down the inheritance chain,
+      # root-most first.
+      def after_response(&block)
+        __own_contract_config.add_callback(:after_response, block)
+      end
+
       # Declare a contract. The request line is <tt>'VERB /path'</tt>; the
       # optional block is instance_eval'd against the new {Definition}.
       #

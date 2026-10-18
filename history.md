@@ -1,4 +1,6 @@
-# 2.3.0 (unreleased)
+# 2.3.0
+
+Feature release building on the 2.2.0 modernization.
 
 * Add `Response#json`: parse the response body as JSON with a single call
   (`response.json`, or `response.json(symbolize_names: true)`). Keyword

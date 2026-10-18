@@ -68,6 +68,34 @@ contract layer robustness, spec hygiene). No public API changes.
   frozen literals in place (`String#force_encoding` on literals now goes
   through `.dup`).
 * Remove an unused variable warning in the idempotency spec.
+* Guard `Payload::Base#to_s` against non-seekable streams: the rewind after
+  reading used to raise `NoMethodError` (reader objects without `#seek`) or
+  `Errno::ESPIPE` (pipes, sockets), which crashed `Request#log_request` for
+  small streamed payloads; non-rewindable streams are now left positioned at
+  EOF, mirroring the defensive `Payload#rewind` contract.
+* Resolve case-insensitive header collisions in `make_headers`: a user header
+  spelled `'content-type'` now replaces (instead of coexisting with) the
+  default `'Content-Type'`, so duplicate headers no longer reach the wire, and
+  the payload-override and Cookie-override warnings fire across casings.
+  String header keys still pass through verbatim (rest-client 1.x/2.x
+  compatibility, upstream issue #599); both behaviors are pinned by specs.
+* Document the finalized design decisions from the repository review in
+  `docs/adr/0004-review-observations-resolution.md` (non-seekable payload
+  logging, string header passthrough, connection pool without a checkout cap,
+  and the frozen `Response < String` / response-block arity API), with an
+  API-freeze note at the response-block call site.
+* Shrink the RuboCop baseline from 197 cops / 4,766 quarantined offenses to
+  81 cops / ~2,100: all safe autocorrections applied (whitespace, literal
+  style, safe refactors) plus hand fixes for the non-correctable lint and
+  naming findings (constant renames `SSL_OPTION_LIST`/`WINDOWS_PLATFORMS`,
+  rescue-variable renames, real documentation comments for the previously
+  undocumented modules, duplicated-branch merge in the contract DSL). Four
+  intentional patterns moved out of the auto-generated todo into documented
+  `.rubocop.yml` entries (rescue ::Exception around pool invalidation, the
+  to_ruby eval sandbox, symbol numbering like `:TLSv1_2`, and the public
+  `has_file?`/`has_default?` predicate names). The stdout/stderr log devices
+  now write via `$stdout`/`warn` so logging follows a reassigned `$stdout`,
+  and the log specs assert captured output instead of spying on IO methods.
 
 # 2.5.0
 

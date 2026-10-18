@@ -69,7 +69,7 @@ describe RestClient::Payload, :include_helpers do
 
     it 'should not close if stream already closed' do
       p = RestClient::Payload::UrlEncoded.new({'foo ' => 'bar'})
-      3.times {p.close}
+      expect { 3.times { p.close } }.not_to raise_error
     end
 
   end
@@ -83,7 +83,7 @@ describe RestClient::Payload, :include_helpers do
 
     it 'should not error on close if stream already closed' do
       m = RestClient::Payload::Multipart.new(:file => File.new(test_image_path))
-      3.times {m.close}
+      expect { 3.times { m.close } }.not_to raise_error
     end
 
     it "should form properly separated multipart data" do
@@ -267,7 +267,13 @@ Content-Type: text/plain\r
 
     # hashery gem introduces Hash#read convenience method. Existence of #read method used to determine of content is streameable :/
     it "shouldn't treat hashes as streameable" do
-      expect(RestClient::Payload.generate({"foo" => 'bar'})).to be_kind_of(RestClient::Payload::UrlEncoded)
+      # Pin the branch order in Payload.generate: a Hash that responds to
+      # #read must still take the Hash branch, not the Streamed one.
+      hash_that_reads = {"foo" => 'bar'}
+      def hash_that_reads.read(*)
+        'looks like a stream'
+      end
+      expect(RestClient::Payload.generate(hash_that_reads)).to be_kind_of(RestClient::Payload::UrlEncoded)
     end
 
     it "should recognize multipart payload wrapped in ParamsArray" do

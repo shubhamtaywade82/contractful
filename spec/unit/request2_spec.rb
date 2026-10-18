@@ -179,4 +179,64 @@ describe RestClient::Request, :include_helpers do
     end
   end
 
+  describe 'persistent connections' do
+    before do
+      RestClient.connection_pool = RestClient::ConnectionPool.new(max_idle: 4)
+    end
+
+    after do
+      RestClient.connection_pool.clear!
+      RestClient.connection_pool = nil
+    end
+
+    it 'reuses the pooled connection for sequential requests' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(:body => 'first').then.to_return(:body => 'second')
+
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource',
+                                    :method => :get, :persistent => true)
+      ).to eq 'first'
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource',
+                                    :method => :get, :persistent => true)
+      ).to eq 'second'
+
+      # A single connection was retained and reused for both requests.
+      expect(RestClient.connection_pool.stats).to eq(idle: 1, checked_out: 0)
+    end
+
+    it 'does not pool connections unless :persistent is requested' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(:body => 'ok').then.to_return(:body => 'ok')
+
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get)
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get)
+
+      expect(RestClient.connection_pool.stats).to eq(idle: 0, checked_out: 0)
+    end
+
+    it 'discards the connection after a network failure' do
+      stub_request(:get, 'http://some/resource').to_timeout
+
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource',
+                                    :method => :get, :persistent => true)
+      }.to raise_error(RestClient::Exceptions::OpenTimeout)
+
+      expect(RestClient.connection_pool.stats).to eq(idle: 0, checked_out: 0)
+    end
+
+    it 'keeps the connection pooled when the response is an HTTP error' do
+      stub_request(:get, 'http://some/resource').to_return(:status => 404)
+
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource',
+                                    :method => :get, :persistent => true)
+      }.to raise_error(RestClient::ResourceNotFound)
+
+      expect(RestClient.connection_pool.stats).to eq(idle: 1, checked_out: 0)
+    end
+  end
+
 end

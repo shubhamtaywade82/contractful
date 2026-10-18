@@ -47,6 +47,9 @@ module RestClient
   #     retry_interval * 4, ...
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override RestClient.proxy.
+  # * :persistent reuse the underlying connection across requests via the
+  #     process-wide RestClient.connection_pool (HTTP keep-alive). Defaults to
+  #     false. See RestClient::ConnectionPool.
   # * :verify_ssl enable ssl verification, possible values are constants from
   #     OpenSSL::SSL::VERIFY_*, defaults to OpenSSL::SSL::VERIFY_PEER
   # * :read_timeout, :write_timeout and :open_timeout are how long to wait
@@ -67,7 +70,7 @@ module RestClient
     attr_reader :method, :uri, :url, :headers, :payload, :proxy,
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
-                :ssl_opts, :max_retries, :retry_interval
+                :ssl_opts, :max_retries, :retry_interval, :persistent
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -152,6 +155,7 @@ module RestClient
       end
       @block_response = args[:block_response]
       @raw_response = args[:raw_response] || false
+      @persistent = args.fetch(:persistent, false)
 
       @stream_log_percent = args[:stream_log_percent] || 10
       if @stream_log_percent <= 0 || @stream_log_percent > 100
@@ -777,6 +781,98 @@ module RestClient
       setup_credentials req
 
       net = net_http_object(uri.hostname, uri.port)
+      configure_net_http(net, uri)
+
+      RestClient.before_execution_procs.each do |before_proc|
+        before_proc.call(req, args)
+      end
+
+      if @before_execution_proc
+        @before_execution_proc.call(req, args)
+      end
+
+      log_request
+
+      start_time = Time.now
+      tempfile = nil
+
+      if persistent
+        pool = RestClient.connection_pool
+        key = persistent_connection_key(uri)
+
+        http = pool.checkout(key) { net.start }
+        # The pooled connection may have been built by a request with different
+        # timeout settings; always (re)apply this request's timeouts.
+        apply_timeouts!(http)
+
+        begin
+          established_connection = true
+          res, tempfile = perform_net_http_request(http, req, payload)
+        rescue ::Exception
+          # The connection state cannot be trusted after any failure; never
+          # return it to the pool.
+          pool.invalidate(key, http)
+          raise
+        end
+
+        pool.checkin(key, http)
+
+        # Process the result only after the connection has been returned to
+        # the pool: process_result may raise for HTTP error responses, and
+        # those leave the connection perfectly reusable.
+        unless @block_response
+          process_result(res, start_time, tempfile, &block)
+        end
+      else
+        net.start do |http|
+          established_connection = true
+
+          res, tempfile = perform_net_http_request(http, req, payload)
+          unless @block_response
+            process_result(res, start_time, tempfile, &block)
+          end
+        end
+      end
+    rescue EOFError
+      raise RestClient::ServerBrokeConnection
+    rescue Net::OpenTimeout => err
+      raise RestClient::Exceptions::OpenTimeout.new(nil, err)
+    rescue Net::ReadTimeout => err
+      raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+    rescue Net::WriteTimeout => err
+      raise RestClient::Exceptions::WriteTimeout.new(nil, err)
+    rescue Timeout::Error, Errno::ETIMEDOUT => err
+      # handling for non-Net::HTTP timeouts
+      if established_connection
+        raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+      else
+        raise RestClient::Exceptions::OpenTimeout.new(nil, err)
+      end
+
+    rescue OpenSSL::SSL::SSLError => error
+      # TODO: deprecate and remove RestClient::SSLCertificateNotVerified and just
+      # pass through OpenSSL::SSL::SSLError directly.
+      #
+      # Exceptions in verify_callback are ignored [1], and jruby doesn't support
+      # it at all [2]. RestClient has to catch OpenSSL::SSL::SSLError and either
+      # re-throw it as is, or throw SSLCertificateNotVerified based on the
+      # contents of the message field of the original exception.
+      #
+      # The client has to handle OpenSSL::SSL::SSLError exceptions anyway, so
+      # we shouldn't make them handle both OpenSSL and RestClient exceptions.
+      #
+      # [1] https://github.com/ruby/ruby/blob/89e70fe8e7/ext/openssl/ossl.c#L238
+      # [2] https://github.com/jruby/jruby/issues/597
+
+      if error.message.include?("certificate verify failed")
+        raise SSLCertificateNotVerified.new(error.message)
+      else
+        raise error
+      end
+    end
+
+    # Apply the request's SSL settings and timeouts to a Net::HTTP object.
+    def configure_net_http(net, uri)
       net.use_ssl = uri.is_a?(URI::HTTPS)
       net.ssl_version = ssl_version if ssl_version
       net.min_version = normalize_ssl_version(ssl_min_version) if ssl_min_version
@@ -817,96 +913,77 @@ module RestClient
         warn('Try passing :verify_ssl => false instead.')
       end
 
+      apply_timeouts!(net)
+    end
+
+    # Apply the request's timeout settings to a Net::HTTP object. Safe to call
+    # multiple times and on already-started connections, which is how pooled
+    # connections pick up the timeouts of each request that reuses them.
+    def apply_timeouts!(net)
       if defined? @read_timeout
-        if @read_timeout == -1
-          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
-          @read_timeout = nil
-        end
+        @read_timeout = normalize_timeout_value!(@read_timeout)
         net.read_timeout = @read_timeout
       end
       if defined? @open_timeout
-        if @open_timeout == -1
-          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
-          @open_timeout = nil
-        end
+        @open_timeout = normalize_timeout_value!(@open_timeout)
         net.open_timeout = @open_timeout
       end
       if defined? @write_timeout
-        if @write_timeout == -1
-          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
-          @write_timeout = nil
-        end
+        @write_timeout = normalize_timeout_value!(@write_timeout)
         net.write_timeout = @write_timeout
       end
+    end
 
-      RestClient.before_execution_procs.each do |before_proc|
-        before_proc.call(req, args)
+    def normalize_timeout_value!(value)
+      if value == -1
+        warn 'Deprecated: to disable timeouts, please use nil instead of -1'
+        nil
+      else
+        value
       end
+    end
 
-      if @before_execution_proc
-        @before_execution_proc.call(req, args)
-      end
-
-      log_request
-
-      start_time = Time.now
+    # Issue the request on a started Net::HTTP connection and read the
+    # response body. Returns a [response, tempfile] pair; response is nil when
+    # a :block_response was provided, since the block then handles the raw
+    # Net::HTTPResponse itself.
+    def perform_net_http_request(http, req, payload)
       tempfile = nil
 
-      net.start do |http|
-        established_connection = true
-
-        if @block_response
-          net_http_do_request(http, req, payload, &@block_response)
-        else
-          res = net_http_do_request(http, req, payload) { |http_response|
-            if @raw_response
-              # fetch body into tempfile
-              tempfile = fetch_body_to_tempfile(http_response)
-            else
-              # fetch body
-              http_response.read_body
-            end
-            http_response
-          }
-          process_result(res, start_time, tempfile, &block)
-        end
-      end
-    rescue EOFError
-      raise RestClient::ServerBrokeConnection
-    rescue Net::OpenTimeout => err
-      raise RestClient::Exceptions::OpenTimeout.new(nil, err)
-    rescue Net::ReadTimeout => err
-      raise RestClient::Exceptions::ReadTimeout.new(nil, err)
-    rescue Net::WriteTimeout => err
-      raise RestClient::Exceptions::WriteTimeout.new(nil, err)
-    rescue Timeout::Error, Errno::ETIMEDOUT => err
-      # handling for non-Net::HTTP timeouts
-      if established_connection
-        raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+      if @block_response
+        net_http_do_request(http, req, payload, &@block_response)
+        [nil, nil]
       else
-        raise RestClient::Exceptions::OpenTimeout.new(nil, err)
+        res = net_http_do_request(http, req, payload) { |http_response|
+          if @raw_response
+            # fetch body into tempfile
+            tempfile = fetch_body_to_tempfile(http_response)
+          else
+            # fetch body
+            http_response.read_body
+          end
+          http_response
+        }
+        [res, tempfile]
       end
+    end
 
-    rescue OpenSSL::SSL::SSLError => error
-      # TODO: deprecate and remove RestClient::SSLCertificateNotVerified and just
-      # pass through OpenSSL::SSL::SSLError directly.
-      #
-      # Exceptions in verify_callback are ignored [1], and jruby doesn't support
-      # it at all [2]. RestClient has to catch OpenSSL::SSL::SSLError and either
-      # re-throw it as is, or throw SSLCertificateNotVerified based on the
-      # contents of the message field of the original exception.
-      #
-      # The client has to handle OpenSSL::SSL::SSLError exceptions anyway, so
-      # we shouldn't make them handle both OpenSSL and RestClient exceptions.
-      #
-      # [1] https://github.com/ruby/ruby/blob/89e70fe8e7/ext/openssl/ossl.c#L238
-      # [2] https://github.com/jruby/jruby/issues/597
+    # Build the connection pool key for a persistent request. Connections are
+    # pooled per scheme/host/port plus proxy and the SSL settings that cannot
+    # be changed on a live connection. A custom :ssl_cert_store is assumed to
+    # be equivalent for a given host (a fresh default cert store object is
+    # built for every request, so object identity cannot be part of the key).
+    def persistent_connection_key(uri)
+      proxy_part = proxy_uri ? proxy_uri.to_s : 'direct'
+      cert_fingerprint = ssl_client_cert ?
+        OpenSSL::Digest::SHA256.hexdigest(ssl_client_cert.to_der) : nil
 
-      if error.message.include?("certificate verify failed")
-        raise SSLCertificateNotVerified.new(error.message)
-      else
-        raise error
-      end
+      [
+        uri.scheme, uri.host, uri.port, proxy_part, verify_ssl,
+        ssl_version, ssl_min_version, ssl_max_version, ssl_ciphers,
+        ssl_ca_file, ssl_ca_path, cert_fingerprint,
+        ssl_verify_callback&.object_id,
+      ].join('|')
     end
 
     def setup_credentials(req)

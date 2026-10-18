@@ -3,6 +3,12 @@
 * Add `Response#json`: parse the response body as JSON with a single call
   (`response.json`, or `response.json(symbolize_names: true)`). Keyword
   arguments are forwarded to `JSON.parse`.
+* Add optional persistent connections (HTTP keep-alive): pass
+  `persistent: true` to reuse the underlying connection across requests via
+  the new thread-safe `RestClient::ConnectionPool` (also available as
+  `RestClient.connection_pool`). Connections are pooled per host/proxy/SSL
+  settings, never shared concurrently, discarded after network failures, and
+  re-established when the server closed them.
 * Add automatic retries: pass `:max_retries` (plus the optional
   `:retry_interval`, default 0.5s) to retry requests after transient network
   failures — connection/read/write timeouts, broken connections, connection

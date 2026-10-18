@@ -202,6 +202,42 @@ RestClient::Request.execute(method: :get, url: 'http://example.com',
                             max_retries: 2, open_timeout: 2)
 ```
 
+## Persistent connections (keep-alive)
+
+<em>New in 2.3.</em> Pass `persistent: true` to reuse the underlying TCP/TLS
+connection across requests via the process-wide connection pool, instead of
+opening a new connection for every request. This saves the connection and TLS
+handshake overhead when making many requests to the same host.
+
+```ruby
+RestClient::Request.execute(method: :get, url: 'https://api.example.com/things',
+                            persistent: true)
+
+RestClient::Request.execute(method: :post, url: 'https://api.example.com/things',
+                            payload: ..., persistent: true)
+
+RestClient.connection_pool.stats   # => {idle: 1, checked_out: 0}
+RestClient.connection_pool.clear!  # close all pooled connections
+```
+
+How it behaves:
+
+- Connections are pooled per scheme/host/port plus proxy and SSL settings.
+  Requests to different hosts (or through different proxies) get their own
+  pooled connections, and redirects automatically use the pool for the target
+  host.
+- A connection is never shared between concurrent requests; if no idle
+  connection is available, a new one is opened (just like a non-persistent
+  request). At most a few idle connections per host are retained
+  (`RestClient::ConnectionPool.new(max_idle: 8)` by default).
+- After a network failure the connection is discarded rather than reused;
+  HTTP error responses (4xx/5xx) do not affect the connection.
+- Stale connections closed by the server are detected and re-established on
+  the next use.
+
+Call `RestClient.connection_pool.clear!` before forking a process or when you
+know connections have gone stale.
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

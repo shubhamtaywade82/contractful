@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # -*- coding: utf-8 -*-
 require_relative '_lib'
 
@@ -27,7 +29,7 @@ describe RestClient do
 
   describe 'charset parsing' do
     it 'handles utf-8' do
-      body = "λ".force_encoding('ASCII-8BIT')
+      body = "λ".dup.force_encoding('ASCII-8BIT')
       stub_request(:get, "www.example.com").to_return(
         :body => body, :status => 200, :headers => {
           'Content-Type' => 'text/plain; charset=UTF-8'
@@ -38,7 +40,7 @@ describe RestClient do
     end
 
     it 'handles windows-1252' do
-      body = "\xff".force_encoding('ASCII-8BIT')
+      body = "\xff".dup.force_encoding('ASCII-8BIT')
       stub_request(:get, "www.example.com").to_return(
         :body => body, :status => 200, :headers => {
           'Content-Type' => 'text/plain; charset=windows-1252'
@@ -50,7 +52,7 @@ describe RestClient do
     end
 
     it 'handles binary' do
-      body = "\xfe".force_encoding('ASCII-8BIT')
+      body = "\xfe".dup.force_encoding('ASCII-8BIT')
       stub_request(:get, "www.example.com").to_return(
         :body => body, :status => 200, :headers => {
           'Content-Type' => 'application/octet-stream; charset=binary'
@@ -64,7 +66,7 @@ describe RestClient do
     end
 
     it 'handles euc-jp' do
-      body = "\xA4\xA2\xA4\xA4\xA4\xA6\xA4\xA8\xA4\xAA".
+      body = "\xA4\xA2\xA4\xA4\xA4\xA6\xA4\xA8\xA4\xAA".dup.
         force_encoding(Encoding::BINARY)
       body_utf8 = 'あいうえお'
       expect(body_utf8.encoding).to eq Encoding::UTF_8

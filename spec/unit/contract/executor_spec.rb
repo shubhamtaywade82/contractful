@@ -342,6 +342,28 @@ RSpec.describe 'RestClient::Contract executor' do
 
       expect(stub).to have_been_requested
     end
+
+    it 'does not crash when a subclass defines initialize without calling super' do
+      client_class = build_client do
+        base 'https://api.test'
+
+        contract :list_posts, 'GET /posts'
+      end
+
+      # A subclass that owns its constructor (e.g. taking other arguments)
+      # and forgets `super` must not blow up inside header merging.
+      subclass = Class.new(client_class) do
+        def initialize(_token)
+          # deliberately no super(base:, headers:)
+        end
+      end
+
+      stub = stub_request(:get, 'https://api.test/posts')
+
+      subclass.new('token').list_posts
+
+      expect(stub).to have_been_requested
+    end
   end
 
   describe 'definition-time validation' do

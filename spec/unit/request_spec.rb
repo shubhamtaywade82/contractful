@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative './_lib'
 
 describe RestClient::Request, :include_helpers do
@@ -681,6 +683,35 @@ describe RestClient::Request, :include_helpers do
       expect(log[0]).to eq %Q{RestClient.get "http://user:REDACTED@url", "Accept"=>"*/*", "User-Agent"=>"rest-client"\n}
     end
 
+    it 'does not log the Authorization header value' do
+      log = RestClient.log = []
+      RestClient::Request.new(
+        :method => :get, :url => 'http://url',
+        :headers => {:authorization => 'Bearer top-secret-token'}
+      ).log_request
+      expect(log[0]).not_to include('top-secret-token')
+      expect(log[0]).to include(%Q{"Authorization"=>"[REDACTED]"})
+    end
+
+    it 'does not log the Cookie header value' do
+      log = RestClient.log = []
+      RestClient::Request.new(
+        :method => :get, :url => 'http://url',
+        :headers => {'Cookie' => 'session=secret-cookie-value'}
+      ).log_request
+      expect(log[0]).not_to include('secret-cookie-value')
+      expect(log[0]).to include(%Q{"Cookie"=>"[REDACTED]"})
+    end
+
+    it 'logs non-credential headers verbatim' do
+      log = RestClient.log = []
+      RestClient::Request.new(
+        :method => :get, :url => 'http://url',
+        :headers => {:user_agent => 'rest-client', :x_request_id => 'abc-123'}
+      ).log_request
+      expect(log[0]).to include(%Q{"X-Request-Id"=>"abc-123"})
+    end
+
     it 'logs to a passed logger, if provided' do
       logger = double('logger', '<<' => true)
       expect(logger).to receive(:<<)
@@ -1234,6 +1265,29 @@ describe RestClient::Request, :include_helpers do
       allow(net_http_res).to receive(:read_body).and_return("body")
       received_tempfile = @request.send(:fetch_body_to_tempfile, net_http_res)
       expect(received_tempfile).to eq tempfile
+    end
+
+    it 'redacts URL credentials from streaming progress logs' do
+      log = RestClient.log = []
+      @request = RestClient::Request.new(
+        :method => 'get', :url => 'http://user:password@example.com/big.bin',
+        :raw_response => true, :stream_log_percent => 50
+      )
+
+      tempfile = double('tempfile')
+      allow(tempfile).to receive(:binmode)
+      allow(tempfile).to receive(:close)
+      expect(Tempfile).to receive(:new).with('rest-client.').and_return(tempfile)
+      allow(tempfile).to receive(:write)
+
+      net_http_res = Net::HTTPOK.new(nil, '200', 'body')
+      allow(net_http_res).to receive(:[]).with('Content-Length').and_return('4')
+      allow(net_http_res).to receive(:read_body).and_yield('abcd')
+
+      @request.send(:fetch_body_to_tempfile, net_http_res)
+
+      expect(log.join("\n")).not_to include('password')
+      expect(log.join("\n")).to include('http://user:REDACTED@example.com/big.bin')
     end
   end
 

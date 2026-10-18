@@ -205,6 +205,28 @@ RSpec.describe RestClient::Contract::Param do
       end
     end
 
+    context 'custom Class params without restclient_coerce' do
+      let(:plain_class) do
+        Class.new do
+          def self.name
+            'NotAKernelFunction'
+          end
+        end
+      end
+      let(:type) { plain_class }
+
+      it 'rejects values without dispatching an arbitrary method' do
+        expect { param.process!('x') }.to raise_error(
+          RestClient::Contract::InvalidParam, /expected NotAKernelFunction/
+        )
+      end
+
+      it 'still casts via Kernel module functions' do
+        complex_param = described_class.new(:c, Complex)
+        expect(complex_param.process!('1+2i')).to eq(Complex(1, 2))
+      end
+    end
+
     context 'with inclusion' do
       let(:type) { Integer }
       let(:options) { { inclusion: (1..10) } }

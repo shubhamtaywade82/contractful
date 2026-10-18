@@ -225,7 +225,10 @@ module RestClient
         # alphanumeric characters, replacing `+` `/` with `A` `B` (included in
         # the list twice) to round out the set of 64.
         s = SecureRandom.base64(12)
-        s.tr!('+/', 'AB')
+        # Do not mutate the generated string in place: the return value of
+        # SecureRandom.base64 may be frozen, and boundary can then never be
+        # built at all.
+        s = s.tr('+/', 'AB')
 
         @boundary = '----RubyFormBoundary' + s
       end

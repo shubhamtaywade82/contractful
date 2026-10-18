@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # encoding: binary
 
 require_relative '_lib'

@@ -388,11 +388,17 @@ module RestClient
           end
         end
 
-        begin
-          cast = send(@type.name.to_sym, value) # Kernel cast, e.g. Float("1.5")
-          return cast if cast.is_a?(@type)
-        rescue StandardError
-          nil
+        # Last resort: a Kernel cast (e.g. Float("1.5")). The dispatch is
+        # deliberately bounded to Kernel's module functions — a class name is
+        # never used to call arbitrary methods on this object.
+        cast_name = @type.name.to_sym
+        if Kernel.respond_to?(cast_name)
+          begin
+            cast = Kernel.public_send(cast_name, value)
+            return cast if cast.is_a?(@type)
+          rescue StandardError
+            nil
+          end
         end
 
         raise InvalidParam, "expected #{type_name}, got #{describe_value(value)}"

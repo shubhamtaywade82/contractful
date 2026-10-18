@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '_lib'
 
 describe RestClient::ConnectionPool do

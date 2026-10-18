@@ -1,3 +1,38 @@
+# Unreleased (review hardening)
+
+Code review fixes from a skills-based review (secret redaction, contract
+layer robustness, spec hygiene). No public API changes.
+
+* Redact credential-bearing request headers from the request log. The
+  request log line (`RestClient.get "http://...", "Accept"=>...`) now
+  renders `Authorization`, `Proxy-Authorization` and `Cookie` values as
+  `[REDACTED]`, honoring the promise in
+  `docs/operations/OBSERVABILITY.md` ("auth headers are not logged") and
+  closing the T5 credential-leakage path in the threat model. Non-credential
+  headers are logged exactly as before.
+* Use the redacted URL in raw-response streaming progress logs. The
+  `streaming GET ... % done` lines previously logged the raw URL, leaking
+  basic-auth credentials embedded in the URL; every other log line already
+  used the redacted form.
+* Fix a `TypeError` ("no implicit conversion of nil into Hash") raised from
+  `__contract_effective_headers` when a contract client subclass defines
+  its own `initialize` without calling `super`.
+* Bound the custom-class param coercion fallback to Kernel casts. The last
+  resort cast in `RestClient::Contract::Param` used to `send` a method
+  named after the type class on the param object itself (unbounded dynamic
+  dispatch); it now only attempts public `Kernel` module functions
+  (`Float`, `Complex`, ...).
+* Harden `Payload::Multipart#boundary` against frozen `SecureRandom.base64`
+  return values: the `+`/`/` -> `A`/`B` substitution no longer mutates the
+  generated string in place, so the boundary can be built even when the
+  generated string is frozen.
+* Enforce the repo hard rule "`frozen_string_literal: true` at the top of
+  every file under `lib/` and `spec/`" for the 19 spec files that were
+  still missing the magic comment, and adjust the few specs that mutated
+  frozen literals in place (`String#force_encoding` on literals now goes
+  through `.dup`).
+* Remove an unused variable warning in the idempotency spec.
+
 # Unreleased (on `feature/contract-first`, PR #2)
 
 Documentation and build-integrity release candidate content:

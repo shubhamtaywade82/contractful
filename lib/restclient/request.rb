@@ -114,6 +114,15 @@ module RestClient
       'TLS1_3' => 'TLS1_3_VERSION',
     }.freeze
 
+    # Request headers whose values are credentials. Their values are redacted
+    # from the request log (see docs/security/THREAT_MODEL.md T5 and
+    # docs/operations/OBSERVABILITY.md, which promise that auth headers are
+    # not logged).
+    REDACTED_HEADERS = %w[authorization proxy-authorization cookie].freeze
+
+    # Placeholder written to the log in place of a redacted header value.
+    REDACTED_VALUE = '[REDACTED]'
+
     # Network-level failures that are considered transient. When the
     # `:max_retries` request option is greater than zero, requests that fail
     # with one of these errors are retried automatically (with exponential
@@ -679,9 +688,23 @@ module RestClient
 
       out << "RestClient.#{method} #{redacted_url.inspect}"
       out << payload.short_inspect if payload
-      out << processed_headers.to_a.sort.map { |(k, v)| [k.inspect, v.inspect].join("=>") }.join(", ")
+      out << processed_headers.to_a.sort.map { |(k, v)|
+        [k.inspect, log_header_value(k, v).inspect].join("=>")
+      }.join(", ")
       log << out.join(', ') + "\n"
     end
+
+    # Value to render for a header in the request log. Credential-bearing
+    # headers (Authorization, Proxy-Authorization, Cookie) are redacted so
+    # that enabling logging cannot leak tokens or session cookies.
+    def log_header_value(key, value)
+      if REDACTED_HEADERS.include?(key.to_s.downcase)
+        REDACTED_VALUE
+      else
+        value
+      end
+    end
+    private :log_header_value
 
     # Return a hash of headers whose keys are capitalized strings
     #
@@ -1101,14 +1124,17 @@ module RestClient
         tf.write chunk
         size += chunk.size
         if log
+          # Use the redacted URL here as everywhere else in the log: a URL
+          # with embedded basic-auth credentials must not leak into the
+          # streaming progress lines.
           if total == 0
-            log << "streaming %s %s (%d of unknown) [0 Content-Length]\n" % [@method.upcase, @url, size]
+            log << "streaming %s %s (%d of unknown) [0 Content-Length]\n" % [@method.upcase, redacted_url, size]
           else
             percent = (size * 100) / total
             current_log_bucket, _ = percent.divmod(@stream_log_percent)
             if current_log_bucket != stream_log_bucket
               stream_log_bucket = current_log_bucket
-              log << "streaming %s %s %d%% done (%d of %d)\n" % [@method.upcase, @url, (size * 100) / total, size, total]
+              log << "streaming %s %s %d%% done (%d of %d)\n" % [@method.upcase, redacted_url, (size * 100) / total, size, total]
             end
           end
         end

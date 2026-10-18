@@ -150,6 +150,29 @@ module RestClient
         definition
       end
 
+      # --- reflection / introspection ------------------------------------------
+
+      # All contracts visible from this class, merged down the ancestor chain
+      # (nearest definition wins). Returns a defensive copy.
+      def contracts
+        __merged_contracts.dup
+      end
+
+      # Names of all contracts visible from this class.
+      def contract_names
+        __merged_contracts.keys
+      end
+
+      # Does this class (or an ancestor) declare a contract named +name+?
+      def contract?(name)
+        __merged_contracts.key?(name.to_sym)
+      end
+
+      # The {Definition} for +name+, or nil when unknown.
+      def contract_for(name)
+        __merged_contracts[name.to_sym]
+      end
+
       # --- machinery (used by Executor / introspection) -----------------------
 
       # The config object owned by *this* class (created on demand).
@@ -178,6 +201,16 @@ module RestClient
           return value unless value.nil?
         end
         nil
+      end
+
+      # Contracts merged down the ancestor chain, root-most first (nearest
+      # definition wins on name collisions).
+      def __merged_contracts
+        merged = {}
+        __contract_config_chain.reverse_each do |config|
+          merged.update(config.contracts)
+        end
+        merged
       end
 
       # Callbacks of one kind, accumulated root-first.
@@ -285,6 +318,71 @@ module RestClient
       def initialize(base: nil, headers: nil)
         @__base_override = base
         @__header_overrides = headers || {}
+      end
+
+      # --- reflection / introspection ----------------------------------------
+
+      # @see ClassMethods#contracts
+      def contracts
+        self.class.contracts
+      end
+
+      # @see ClassMethods#contract_names
+      def contract_names
+        self.class.contract_names
+      end
+
+      # @see ClassMethods#contract?
+      def contract?(name)
+        self.class.contract?(name)
+      end
+
+      # @see ClassMethods#contract_for
+      def contract_for(name)
+        self.class.contract_for(name)
+      end
+
+      # Dynamic dispatch for contract conveniences. Real methods (including
+      # generated contract methods) always take precedence, so a contract
+      # literally named +call_ping+ is unaffected by the +call_*+ pattern.
+      #
+      #   client.call_list_posts(**params)  # alias of client.list_posts
+      #   client.list_posts_contract        # => the Definition
+      #   client.has_list_posts?            # => contract presence predicate
+      #                                       (false when unknown, never raises)
+      def method_missing(name, *args, **kwargs, &block)
+        string = name.to_s
+
+        if (match = string.match(/\Acall_(.+)\z/)) &&
+           (definition = self.class.contract_for(match[1]))
+          return Contract::Executor.call(self, definition, kwargs)
+        end
+
+        if (match = string.match(/\A(.+)_contract\z/)) &&
+           (definition = self.class.contract_for(match[1]))
+          return definition
+        end
+
+        if (match = string.match(/\Ahas_(.+)\?\z/))
+          # Predicate semantics: unknown contracts are simply absent.
+          return self.class.contract?(match[1])
+        end
+
+        super
+      end
+
+      def respond_to_missing?(name, include_private = false)
+        string = name.to_s
+
+        if (match = string.match(/\Acall_(.+)\z/)) && self.class.contract?(match[1])
+          return true
+        end
+        if (match = string.match(/\A(.+)_contract\z/)) && self.class.contract?(match[1])
+          return true
+        end
+        return true if string.match?(/\Ahas_.+\?\z/)
+
+        super
       end
 
       # Base URL for this instance (constructor override > class config).

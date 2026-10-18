@@ -36,14 +36,17 @@ master (tagging requires operator approval per AGENT_TOOL_POLICY.md),
 verify matrix on master, then the release cadence in DELIVERY.md. Note:
 `gem push` remains blocked on RubyGems credentials.
 
-### W3 — OpenAPI import helper (REQ-N01, planned)
+### W3 — OpenAPI import helper (REQ-N01, status: shipped, 2.6.0)
 
 A separate, opt-in reader that converts an OpenAPI 3.x document into
 `contract` declarations (source-to-source, run at development time, not a
-runtime dependency). Acceptance: given a vendor's OpenAPI file, it emits
-declarations that round-trip through `Definition#describe` with the same
-paths, params and response statuses. Zero runtime deps — ship it as part of
-the gem but require explicit `require 'restclient/contract/openapi_import'`.
+runtime dependency). Shipped as `require 'restclient/contract/openapi_import'`:
+`.import` builds Definitions (typed params with closed-schema constraints,
+payload styles, statuses incl. `2XX` wildcards, open-schema response
+fields), `.to_ruby` renders a client class from those same definitions and
+the output round-trips through `Definition#describe`; every lossy mapping
+decision is reported on `Import#notes`. Verified by
+`spec/unit/contract/openapi_import_spec.rb`.
 
 ### W4 — Recorded-sequence test helper (REQ-N02, planned)
 

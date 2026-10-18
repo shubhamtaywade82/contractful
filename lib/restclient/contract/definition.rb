@@ -34,6 +34,7 @@ module RestClient
 
       attr_reader :name, :verb, :path_template, :params, :description
       attr_reader :response_statuses, :response_type, :response_verifier
+      attr_reader :response_fields
       # Per-contract strict-params override (nil = inherit the class setting).
       attr_reader :strict
 
@@ -45,6 +46,7 @@ module RestClient
         @params = {}
         @payload_style = nil
         @strict = nil
+        @response_fields = {}
 
         validate_verb!
         validate_path_template!
@@ -108,6 +110,19 @@ module RestClient
         @response_type = normalize_response_type(type) if type
       end
 
+      # Declare a field of the response payload. See {ResponseField} for the
+      # open-schema semantics: +required+ and +type+ bind, everything else is
+      # additive data. Response fields require the body to be a JSON object.
+      def response_field(name, type = nil, **options)
+        if @response_type.equal?(String)
+          raise InvalidDefinition,
+                "response_field cannot be used with a String response type " \
+                "for :#{@name}"
+        end
+        key = name.to_sym
+        @response_fields[key] = ResponseField.new(key, type, **options)
+      end
+
       # Register a custom assertion block. It receives the response (and the
       # JSON-parsed body when declared with two parameters); a falsey return
       # value raises {UnexpectedResponse}. Raising inside the block
@@ -157,6 +172,9 @@ module RestClient
         parts = ["#{verb.to_s.upcase} #{path_template}"]
         if @params.any?
           parts << "(params: #{@params.keys.map { |k| ":#{k}" }.join(', ')})"
+        end
+        if @response_fields.any?
+          parts << "(fields: #{@response_fields.keys.map { |k| ":#{k}" }.join(', ')})"
         end
         if @response_statuses
           rendered = @response_statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }

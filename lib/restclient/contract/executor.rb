@@ -181,6 +181,20 @@ module RestClient
           end
         end
 
+        unless definition.response_fields.empty?
+          parsed = parse_json_object(response, definition)
+          violations = definition.response_fields.flat_map do |_, field|
+            field.violations_for(parsed)
+          end
+          unless violations.empty?
+            raise UnexpectedResponse.new(
+              "response violates contract for #{definition.describe}: " \
+              "#{violations.join('; ')}",
+              response: response
+            )
+          end
+        end
+
         if definition.response_verifier &&
            !call_verifier(definition.response_verifier, response, parsed)
           raise UnexpectedResponse.new(
@@ -194,7 +208,7 @@ module RestClient
 
       def needs_validation?(definition)
         definition.response_statuses || definition.response_type ||
-          definition.response_verifier
+          definition.response_verifier || !definition.response_fields.empty?
       end
 
       def render_statuses(statuses)
@@ -221,6 +235,36 @@ module RestClient
             response: response
           )
         end
+      end
+
+      # Parse the response body as a JSON object for response_field checks.
+      def parse_json_object(response, definition)
+        body = response.body
+        if body.nil? || body.empty?
+          raise UnexpectedResponse.new(
+            "expected a JSON object but the response body is empty " \
+            "for #{definition.describe}",
+            response: response
+          )
+        end
+
+        parsed = begin
+          JSON.parse(body)
+        rescue JSON::ParserError => e
+          raise UnexpectedResponse.new(
+            "response body is not valid JSON for #{definition.describe}: #{e.message}",
+            response: response
+          )
+        end
+        unless parsed.is_a?(Hash)
+          raise UnexpectedResponse.new(
+            "expected a JSON object but got #{parsed.class} " \
+            "for #{definition.describe} " \
+            '(response fields require an object body)',
+            response: response
+          )
+        end
+        parsed
       end
 
       def response_type_matches?(type, parsed)

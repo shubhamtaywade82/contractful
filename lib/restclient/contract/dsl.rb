@@ -451,7 +451,7 @@ module RestClient
       # and per-call _headers into one effective Hash.
       def __contract_effective_headers(call_headers)
         merged = self.class.default_headers
-        merged.update(@__header_overrides)
+        merged.update(@__header_overrides) if @__header_overrides
         merged.update(call_headers) if call_headers
         merged
       end

@@ -792,6 +792,8 @@ module RestClient
       raise RestClient::Exceptions::OpenTimeout.new(nil, err)
     rescue Net::ReadTimeout => err
       raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+    rescue Net::WriteTimeout => err
+      raise RestClient::Exceptions::WriteTimeout.new(nil, err)
     rescue Timeout::Error, Errno::ETIMEDOUT => err
       # handling for non-Net::HTTP timeouts
       if established_connection

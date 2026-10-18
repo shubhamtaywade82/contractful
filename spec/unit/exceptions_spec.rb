@@ -99,6 +99,7 @@ describe "backwards compatibility" do
   it 'subclasses timeout from RestClient::RequestTimeout, RequestFailed, EWR' do
     expect(RestClient::Exceptions::OpenTimeout).to be < RestClient::Exceptions::Timeout
     expect(RestClient::Exceptions::ReadTimeout).to be < RestClient::Exceptions::Timeout
+    expect(RestClient::Exceptions::WriteTimeout).to be < RestClient::Exceptions::Timeout
 
     expect(RestClient::Exceptions::Timeout).to be < RestClient::RequestTimeout
     expect(RestClient::Exceptions::Timeout).to be < RestClient::RequestFailed

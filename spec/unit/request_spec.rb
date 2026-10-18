@@ -490,6 +490,12 @@ describe RestClient::Request, :include_helpers do
     expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::OpenTimeout)
   end
 
+  it "catches Net::WriteTimeout and raises RestClient's WriteTimeout",
+     :if => defined?(Net::WriteTimeout) do
+    allow(@http).to receive(:request).and_raise(Net::WriteTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::WriteTimeout)
+  end
+
   it "uses correct error message for ReadTimeout",
      :if => defined?(Net::ReadTimeout) do
     allow(@http).to receive(:request).and_raise(Net::ReadTimeout)

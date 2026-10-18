@@ -3,6 +3,10 @@
 * Add `Response#json`: parse the response body as JSON with a single call
   (`response.json`, or `response.json(symbolize_names: true)`). Keyword
   arguments are forwarded to `JSON.parse`.
+* Add `RestClient::Exceptions::WriteTimeout`, raised when `Net::WriteTimeout`
+  fires. Previously a write timeout leaked a raw `Net::WriteTimeout` (or was
+  misclassified as a read timeout), so the three timeout phases now share the
+  common `RestClient::Exceptions::Timeout` rescue target.
 
 # 2.2.0
 

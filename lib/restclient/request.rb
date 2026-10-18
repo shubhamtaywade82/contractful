@@ -749,15 +749,31 @@ module RestClient
 
     # Delay before retrying after a retryable HTTP response: honor the
     # server's Retry-After header (seconds or HTTP-date) when present and
-    # within :max_retry_after, otherwise fall back to exponential backoff.
+    # within :max_retry_after; on a 429 without Retry-After, fall back to
+    # the RateLimit-Reset quota window; otherwise exponential backoff.
     def retry_delay_for_response(response, attempt)
       header = response.headers[:retry_after] if response.respond_to?(:headers)
       delay = parse_retry_after(header)
+
+      if delay.nil? && response.respond_to?(:rate_limit) && response.code == 429
+        delay = rate_limit_reset_delay(response)
+      end
+
       if delay.nil? || delay > max_retry_after
         retry_backoff_delay(attempt)
       else
         delay
       end
+    end
+
+    # Seconds until the reported rate-limit quota resets, when the server
+    # sent RateLimit-Reset (or the legacy X-RateLimit-Reset).
+    def rate_limit_reset_delay(response)
+      info = response.rate_limit
+      return nil unless info&.reset
+
+      secs = info.reset_in
+      secs && secs.positive? ? secs : nil
     end
 
     # Retry-After: delta-seconds ("120") or HTTP-date ("Wed, 21 Oct 2026 07:28:00 GMT").

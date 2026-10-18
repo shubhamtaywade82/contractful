@@ -43,6 +43,20 @@ module RestClient
       @headers ||= AbstractResponse.beautify_headers(@net_http_res.to_hash)
     end
 
+    # Parsed rate-limit information ({RestClient::RateLimit}), or nil when
+    # the server did not send any rate-limit headers. Memoized.
+    def rate_limit
+      @rate_limit ||= RateLimit.from_headers(headers)
+    end
+
+    # True when the response indicates rate limiting: a 429 status, or a
+    # server-reported remaining quota of zero.
+    def rate_limited?
+      return true if code == 429
+
+      rate_limit ? rate_limit.exhausted? : false
+    end
+
     # The raw headers.
     def raw_headers
       @raw_headers ||= @net_http_res.to_hash

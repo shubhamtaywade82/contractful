@@ -39,12 +39,21 @@ module RestClient
   # * :max_redirects maximum number of redirections (default to 10)
   # * :max_retries number of times to retry the request when a transient
   #     network failure occurs (connection timeouts, broken/reset connections,
-  #     EPIPE). Defaults to 0 (disabled). Retries use exponential backoff and
-  #     are only attempted for network-level failures, never for HTTP error
-  #     responses.
+  #     EPIPE) or when the response carries a retryable HTTP status (see
+  #     :retry_after). Defaults to 0 (disabled). Retries use exponential
+  #     backoff (or the server's Retry-After for HTTP statuses).
   # * :retry_interval base delay in seconds between retries (default 0.5).
   #     The delay doubles with each retry: retry_interval, retry_interval * 2,
   #     retry_interval * 4, ...
+  # * :retry_after honor Retry-After / classify retryable HTTP statuses
+  #     (408, 425, 429, 500, 502, 503, 504 — see
+  #     RestClient::Exceptions::RETRIABLE_STATUSES) and retry them like
+  #     network failures when :max_retries is positive. Defaults to true.
+  #     The delay between attempts honors a server-provided Retry-After
+  #     header (delta-seconds or HTTP-date), falling back to exponential
+  #     backoff.
+  # * :max_retry_after upper bound (seconds) for a Retry-After delay;
+  #     larger values fall back to the exponential backoff (default 60).
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override RestClient.proxy.
   # * :persistent reuse the underlying connection across requests via the
@@ -70,7 +79,8 @@ module RestClient
     attr_reader :method, :uri, :url, :headers, :payload, :proxy,
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
-                :ssl_opts, :max_retries, :retry_interval, :persistent
+                :ssl_opts, :max_retries, :retry_interval, :persistent,
+                :retry_after, :max_retry_after
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -219,6 +229,14 @@ module RestClient
           "got #{@retry_interval.inspect}")
       end
 
+      @retry_after = args.fetch(:retry_after, true) ? true : false
+      @max_retry_after = args.fetch(:max_retry_after, 60)
+      unless @max_retry_after.is_a?(Numeric) && @max_retry_after >= 0
+        raise ArgumentError.new(
+          ":max_retry_after must be a non-negative Numeric, " +
+          "got #{@max_retry_after.inspect}")
+      end
+
       @processed_headers = make_headers headers
       @processed_headers_lowercase = @processed_headers.map {|k, v|
         [k.downcase, v]
@@ -237,12 +255,36 @@ module RestClient
       # state between attempts.
       attempts = 0
       begin
-        req = net_http_request_class(method).new(uri, processed_headers)
-        transmit uri, req, payload, & block
+        loop do
+          req = net_http_request_class(method).new(uri, processed_headers)
+          result = transmit uri, req, payload, & block
+
+          # When a block handles responses itself (error-status suppression),
+          # retryable statuses never raise — judge the returned response.
+          if block_given? && retry_after && attempts < max_retries &&
+             result.is_a?(RestClient::Response) &&
+             Exceptions.retryable?(result.code) && rewind_payload!
+            attempts += 1
+            delay = retry_delay_for_response(result, attempts)
+            log_response_retry(result, attempts, delay)
+            sleep_for_retry(delay)
+            next
+          end
+          break result
+        end
       rescue *RETRIABLE_EXCEPTIONS => err
         attempts += 1
         if attempts <= max_retries && rewind_payload!
           delay = retry_backoff_delay(attempts)
+          log_retry(err, attempts, delay)
+          sleep_for_retry(delay)
+          retry
+        end
+        raise
+      rescue RestClient::ExceptionWithResponse => err
+        attempts += 1
+        if retry_after && attempts <= max_retries && err.retryable? && rewind_payload!
+          delay = retry_delay_for_response(err.response, attempts)
           log_retry(err, attempts, delay)
           sleep_for_retry(delay)
           retry
@@ -703,6 +745,58 @@ module RestClient
 
     def sleep_for_retry(secs)
       sleep(secs) if secs > 0
+    end
+
+    # Delay before retrying after a retryable HTTP response: honor the
+    # server's Retry-After header (seconds or HTTP-date) when present and
+    # within :max_retry_after; on a 429 without Retry-After, fall back to
+    # the RateLimit-Reset quota window; otherwise exponential backoff.
+    def retry_delay_for_response(response, attempt)
+      header = response.headers[:retry_after] if response.respond_to?(:headers)
+      delay = parse_retry_after(header)
+
+      if delay.nil? && response.respond_to?(:rate_limit) && response.code == 429
+        delay = rate_limit_reset_delay(response)
+      end
+
+      if delay.nil? || delay > max_retry_after
+        retry_backoff_delay(attempt)
+      else
+        delay
+      end
+    end
+
+    # Seconds until the reported rate-limit quota resets, when the server
+    # sent RateLimit-Reset (or the legacy X-RateLimit-Reset).
+    def rate_limit_reset_delay(response)
+      info = response.rate_limit
+      return nil unless info&.reset
+
+      secs = info.reset_in
+      secs && secs.positive? ? secs : nil
+    end
+
+    # Retry-After: delta-seconds ("120") or HTTP-date ("Wed, 21 Oct 2026 07:28:00 GMT").
+    def parse_retry_after(value)
+      return nil if value.nil?
+
+      if value.match?(/\A\d+\z/)
+        value.to_f
+      else
+        require 'time'
+        delay = Time.httpdate(value) - Time.now
+        delay > 0 ? delay : 0.0
+      end
+    rescue StandardError
+      nil
+    end
+
+    def log_response_retry(response, attempt, delay)
+      return unless log
+
+      log << "RestClient retry ##{attempt}/#{max_retries} for " +
+             "#{redacted_url.inspect} after response HTTP #{response.code}: " +
+             "sleeping #{delay}s\n"
     end
 
     def log_retry(err, attempt, delay)

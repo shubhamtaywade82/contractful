@@ -13,7 +13,8 @@ RSpec::Core::RakeTask.new('spec')
 
 desc "Run unit specs"
 RSpec::Core::RakeTask.new('spec:unit') do |t|
-  t.pattern = 'spec/unit/*_spec.rb'
+  # ** so the nested spec/unit/contract/ suite runs too
+  t.pattern = 'spec/unit/**/*_spec.rb'
 end
 
 desc "Run integration specs"

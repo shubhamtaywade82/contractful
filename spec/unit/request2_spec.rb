@@ -177,6 +177,102 @@ describe RestClient::Request, :include_helpers do
                                 :retry_interval => 'forever')
       }.to raise_error(ArgumentError, /:retry_interval/)
     end
+
+    it 'rejects invalid :max_retry_after values' do
+      expect {
+        RestClient::Request.new(:url => 'http://some/resource', :method => :get,
+                                :max_retry_after => -5)
+      }.to raise_error(ArgumentError, /:max_retry_after/)
+    end
+  end
+
+  describe 'retryable-status retries with Retry-After' do
+    before do
+      allow_any_instance_of(RestClient::Request).to receive(:sleep_for_retry) { |_, secs|
+        @slept << secs
+      }
+    end
+
+    before { @slept = [] }
+
+    it 'retries a 503 and succeeds' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(status: 503, headers: { 'Retry-After' => '1' })
+        .then.to_return(body: 'ok')
+
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 2, :retry_interval => 0.5)
+      ).to eq 'ok'
+      expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
+    end
+
+    it 'honors Retry-After delta-seconds over the exponential backoff' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(status: 429, headers: { 'Retry-After' => '7' })
+        .then.to_return(body: 'ok')
+
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                  :max_retries => 1, :retry_interval => 0.5)
+      expect(@slept).to eq([7.0])
+    end
+
+    it 'falls back to exponential backoff when Retry-After exceeds :max_retry_after' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(status: 503, headers: { 'Retry-After' => '3600' })
+        .then.to_return(body: 'ok')
+
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                  :max_retries => 1, :retry_interval => 0.25)
+      expect(@slept).to eq([0.25])
+    end
+
+    it 'parses HTTP-date Retry-After values' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(status: 503,
+                   headers: { 'Retry-After' => Time.at(Time.now.to_i + 3).httpdate })
+        .then.to_return(body: 'ok')
+
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                  :max_retries => 1, :retry_interval => 0.25)
+      expect(@slept.first).to be_between(0.5, 3.0)
+    end
+
+    it 'retries 429 inside the block path (error-status suppression)' do
+      stub_request(:get, 'http://some/resource')
+        .to_return(status: 429, headers: { 'Retry-After' => '0' })
+        .then.to_return(status: 200, body: 'ok')
+
+      result = RestClient::Request.execute(:url => 'http://some/resource',
+                                           :method => :get,
+                                           :max_retries => 1,
+                                           :retry_interval => 0) do |response|
+        response
+      end
+      expect(result.code).to eq 200
+      expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
+    end
+
+    it 'does not retry terminal statuses like 404' do
+      stub = stub_request(:get, 'http://some/resource')
+        .to_return(status: 404).then.to_return(body: 'should not happen')
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 3, :retry_interval => 0)
+      }.to raise_error(RestClient::NotFound)
+      expect(stub).to have_been_made.once
+    end
+
+    it 'does not retry retryable statuses when :retry_after is disabled' do
+      stub = stub_request(:get, 'http://some/resource')
+        .to_return(status: 503).then.to_return(body: 'should not happen')
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 3, :retry_interval => 0,
+                                    :retry_after => false)
+      }.to raise_error(RestClient::ServiceUnavailable)
+      expect(stub).to have_been_made.once
+    end
   end
 
   describe 'persistent connections' do

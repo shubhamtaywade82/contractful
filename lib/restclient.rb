@@ -13,11 +13,13 @@ require File.dirname(__FILE__) + '/restclient/utils'
 require File.dirname(__FILE__) + '/restclient/request'
 require File.dirname(__FILE__) + '/restclient/connection_pool'
 require File.dirname(__FILE__) + '/restclient/abstract_response'
+require File.dirname(__FILE__) + '/restclient/rate_limit'
 require File.dirname(__FILE__) + '/restclient/response'
 require File.dirname(__FILE__) + '/restclient/raw_response'
 require File.dirname(__FILE__) + '/restclient/resource'
 require File.dirname(__FILE__) + '/restclient/params_array'
 require File.dirname(__FILE__) + '/restclient/payload'
+require File.dirname(__FILE__) + '/restclient/contract'
 require File.dirname(__FILE__) + '/restclient/windows'
 
 # This module's static methods are the entry point for using the REST client.

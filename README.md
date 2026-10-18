@@ -18,6 +18,36 @@ through 4.0, uses current development tooling, and adds a few long-requested
 options such as `:write_timeout` and `:ssl_min_version` / `:ssl_max_version`.
 See [history.md](history.md) for the full list of changes.
 
+### Project documentation
+
+The complete engineering documentation set lives at the root and under
+`docs/`:
+
+| Document | Purpose |
+| --- | --- |
+| [PRD.md](PRD.md) | Product goals, non-goals, feature requirements |
+| [DESIGN.md](DESIGN.md) | Developer-experience and interface design principles |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, module map, request lifecycle |
+| [API.md](API.md) | Normative public API reference (incl. the contract DSL) |
+| [DATABASE.md](DATABASE.md) | No-database decision, in-memory state, fixture policy |
+| [AGENTS.md](AGENTS.md) | Rules for AI coding agents working in this repo |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Human contributor workflow |
+| [docs/requirements/REQUIREMENTS.md](docs/requirements/REQUIREMENTS.md) | Traceability: requirements ↔ specs ↔ status |
+| [docs/implementation/IMPLEMENTATION_PLAN.md](docs/implementation/IMPLEMENTATION_PLAN.md) | Roadmap workstreams and sequencing |
+| [docs/implementation/SETUP.md](docs/implementation/SETUP.md) | Tested local development setup |
+| [docs/engineering/TESTING.md](docs/engineering/TESTING.md) | Test strategy, organization, known traps |
+| [docs/engineering/QUALITY_GATES.md](docs/engineering/QUALITY_GATES.md) | Merge/release gates and enforcement |
+| [docs/engineering/ERROR_HANDLING.md](docs/engineering/ERROR_HANDLING.md) | Exception model, retryable vs terminal |
+| [docs/engineering/INTEGRATIONS.md](docs/engineering/INTEGRATIONS.md) | Dependencies, platforms, downstream consumers |
+| [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md) | Assets, trust boundaries, mitigations |
+| [docs/security/AGENT_TOOL_POLICY.md](docs/security/AGENT_TOOL_POLICY.md) | Permission boundaries for autonomous agents |
+| [docs/operations/DELIVERY.md](docs/operations/DELIVERY.md) | Versioning, releases, rollback |
+| [docs/operations/OBSERVABILITY.md](docs/operations/OBSERVABILITY.md) | Logging, diagnostics, health signals |
+| [docs/operations/RUNBOOK.md](docs/operations/RUNBOOK.md) | Symptom → diagnosis → fix field guide |
+| [docs/adr/](docs/adr/) | Architecture decision records (0001–0003) |
+| [docs/agents/AGENT_WORKFLOWS.md](docs/agents/AGENT_WORKFLOWS.md) | Phase-by-phase agent execution playbook |
+| [docs/agents/MCP_INTEGRATION.md](docs/agents/MCP_INTEGRATION.md) | MCP policy (conditional document) |
+
 ### New mailing list
 
 We have a new email list for announcements, hosted by Groups.io.
@@ -187,10 +217,32 @@ RestClient::Request.execute(method: :get, url: 'http://example.com/resource',
                             max_retries: 3, retry_interval: 0.5)
 ```
 
-Retried failures are network errors only: open/read/write timeouts, a server
+Retried failures are network errors: open/read/write timeouts, a server
 that breaks the connection (`EOFError`), connection reset/abort, and broken
-pipes. HTTP error responses (4xx/5xx) are never retried, and redirects behave
-as usual.
+pipes. By default HTTP error responses (4xx/5xx) are never retried — see
+the 2.5 classification below for the retryable-status exception — and
+redirects behave as usual.
+
+<em>New in 2.5.</em> The error model now classifies failures as **retryable
+vs terminal**. HTTP statuses 408, 425, 429, 500, 502, 503 and 504
+(`RestClient::Exceptions::RETRIABLE_STATUSES`) are treated as transient like
+network failures and retried when `:max_retries` is positive. Between
+attempts the server's `Retry-After` header is honored (delta-seconds or
+HTTP-date, capped by `:max_retry_after`, default 60) instead of blind
+backoff. Opt out entirely with `retry_after: false`. The classification is
+exposed for your own retry logic too:
+
+```ruby
+RestClient::Exceptions.retryable?(429)                        # => true
+RestClient::Exceptions.retryable?(404)                        # => false
+RestClient::Exceptions.retryable?(ex)   # exception or network error
+RestClient::ServiceUnavailable.new(response).retryable?       # => true
+```
+
+Every other 4xx (401, 404, 422, ...) is terminal: retrying will not fix a
+bad token, a missing resource or a bad payload. Retryable-status retries
+also apply inside the block/error-suppression path, so contract clients get
+them via `_max_retries:` as well.
 
 Request payloads are rewound between attempts, so bodies are retransmitted in
 full. If a payload cannot be rewound (for example a non-seekable request
@@ -237,6 +289,310 @@ How it behaves:
 
 Call `RestClient.connection_pool.clear!` before forking a process or when you
 know connections have gone stale.
+
+## Contract-first API clients
+
+<em>New in 2.4.</em> `RestClient::Contract` is a contract-first layer built on
+heavy metaprogramming: you *declare* the HTTP shape of an API — verb, path,
+typed parameters, expected responses — and the gem generates the client
+methods, path builders, validation and introspection for you. The contract
+*is* the implementation; there is no imperative request code to write or
+drift.
+
+```ruby
+class GitHubAPI
+  include RestClient::Contract
+
+  base 'https://api.github.com'
+  default_headers 'Accept' => 'application/vnd.github+json'
+
+  before_request do |ctx|
+    ctx[:headers]['Authorization'] = "token #{ENV['GITHUB_TOKEN']}"
+  end
+
+  contract :list_users, 'GET /users' do
+    param :page,     Integer, default: 1
+    param :per_page, Integer, inclusion: (1..100), default: 30
+    responds 200, type: :array
+  end
+
+  contract :create_issue, 'POST /repos/:owner/:repo/issues' do
+    param :owner, String, required: true
+    param :repo,  String, required: true
+    param :title, String, required: true
+    param :labels, Array, default: []
+    responds 201, 422
+  end
+end
+
+api = GitHubAPI.new
+api.list_users(page: 2)
+api.create_issue(owner: 'octo', repo: 'hello', title: 'Hi', labels: ['bug'])
+api.create_issue_url(owner: 'octo', repo: 'hello') # => "https://api.github.com/repos/octo/hello/issues"
+```
+
+### Typed parameters
+
+Every value passed to a contract method is coerced and validated before any
+HTTP traffic happens. Supported types: `String`, `Integer`, `Float`,
+`:boolean`, `Array`, `Hash`, any class (checked with `is_a?`, then
+`Class#restclient_coerce` if defined, then a Kernel cast) and any `Proc`
+(its return value is used). Options: `required:`, `default:` (lazy procs
+allowed), `inclusion:` and `coerce: false` for strict type checking.
+
+```ruby
+contract :search, 'GET /search' do
+  param :q,        String,  required: true
+  param :page,     Integer, default: 1
+  param :per_page, Integer, inclusion: (1..100), default: 25
+  param :sort,     String,  inclusion: %w[asc desc], default: 'desc'
+end
+```
+
+Params also carry the closed-schema constraints known from JSON Schema /
+OpenAPI: `min:` / `max:` (inclusive bounds on any Comparable), `length:`
+(exact Integer or a Range, over String/Array/Hash) and `pattern:` (Regexp on
+Strings). Constraints are enforced after coercion, so a `min: 1` Integer
+param rejects the string `"0"` exactly like the integer 0:
+
+```ruby
+contract :create_order, 'POST /orders' do
+  param :security_id,      String,  required: true, length: (1..20)
+  param :transaction_type, String,  required: true, inclusion: %w[BUY SELL]
+  param :quantity,         Integer, required: true, min: 1
+end
+```
+
+Violations raise a precise error instead of producing a malformed request:
+
+- `RestClient::Contract::MissingParam` — required param absent
+- `RestClient::Contract::UnknownParam` — undeclared param in strict mode
+- `RestClient::Contract::InvalidParam` — value failed coercion/validation
+
+Unknown params are rejected by default (contract-first strictness); opt out
+per class with `strict_params false` or per contract with `strict_params
+false` inside the block. Remaining (declared) params are routed by verb:
+query string for GET/HEAD/DELETE/OPTIONS, JSON body (`Content-Type:
+application/json`) for POST/PUT/PATCH. Override with `payload_style :form`
+or `:query` per contract, or `payload_style :form` at class level.
+
+Path placeholders (`:owner`, `:repo`) are automatically declared as required
+params, interpolated into the path, URI-escaped, and never duplicated into
+the query string or payload.
+
+### Per-call meta options
+
+Underscore-prefixed keyword arguments configure the underlying request
+without polluting the param contract: `_headers`, `_timeout`,
+`_open_timeout`, `_read_timeout`, `_write_timeout`, `_persistent`,
+`_max_retries`, `_retry_interval`.
+
+```ruby
+api.list_users(_headers: { 'X-Request-Id' => SecureRandom.hex(8) },
+               _timeout: 5, _persistent: true)
+```
+
+### Response contracts
+
+`responds` declares what an operation expects back: status codes (Integers or
+Ranges) and an optional JSON body type (`Array`, `Hash`, `String`, any class,
+or `:array`/`:hash`/`:string`/`:json`).
+
+```ruby
+contract :show_widget, 'GET /widgets/:id' do
+  param :id, Integer
+  responds 200, 404          # 404 becomes a normal return value
+end
+
+contract :list_posts, 'GET /posts' do
+  responds (200..299), type: Array
+  verify_response { |_response, parsed| parsed.is_a?(Array) }
+end
+```
+
+Declaring any 4xx/5xx status suppresses rest-client's default
+exception-raising for that contract: the response is returned and judged by
+the contract instead (redirects are still followed). Anything unexpected —
+undeclared status, non-JSON body, wrong shape, failed `verify_response`
+block — raises `RestClient::Contract::UnexpectedResponse` with the offending
+`response` attached. Contracts without any response declaration keep the
+classic rest-client behavior (`ResourceNotFound`, etc.).
+
+### Closed requests, open responses
+
+The request and response halves of a contract follow different philosophies,
+and the DSL encodes both:
+
+- **Request schemas are closed.** You control what you send, so reject bad
+  input before the network call: undeclared params raise `UnknownParam`, and
+  declared params are type-checked, enum-checked and range-checked
+  (`inclusion:`, `min:`/`max:`, `length:`, `pattern:`) before the transport
+  is ever touched.
+- **Response schemas are open.** Required fields and their types bind, but
+  new fields and new enum members are additive — unknown values are data,
+  not errors. Declare response fields with `response_field`:
+
+```ruby
+contract :create_order, 'POST /orders' do
+  param :security_id, String, required: true
+  param :quantity,    Integer, required: true, min: 1
+
+  response_field :order_id, :string, required: true
+  response_field :status,   :string   # open: new states are additive
+end
+```
+
+A required field that is missing or null, or a declared field whose value
+does not match its type (an `orderId` that comes back as an integer, for
+example), raises `UnexpectedResponse` on return. Undeclared fields pass
+through untouched and are never errors; `inclusion:` on a response field is
+not enforced unless you opt in with `strict: true`. Values are never
+coerced — what the server sent is what you inspect.
+
+One thing a contract cannot express is ordering, timing or cross-call state
+machines (rate-limit windows, order lifecycles, pagination handshakes).
+Test those separately against recorded sequences rather than trying to
+encode them in the per-call contract.
+
+### Auth in the contract
+
+The contract is the source of truth for *how* to authenticate; the client
+supplies only credentials. Values may be literals or callables — callables
+are invoked on every request so short-lived tokens stay fresh. Multiple
+`api_key` entries cover dual-header schemes (DhanHQ's `access-token` +
+`client-id`, for example):
+
+```ruby
+class DhanHQClient
+  include RestClient::Contract
+
+  base 'https://api.dhan.co'
+  auth api_key: [
+    { name: 'access-token', value: -> { ENV['DHAN_ACCESS_TOKEN'] } },
+    { name: 'client-id',    value: -> { ENV['DHAN_CLIENT_ID'] } },
+  ]
+  # also available: auth bearer: -> { token }, auth basic: -> { [user, pass] }
+  # and auth api_key: { name: 'k', value: v, in: :query }
+end
+```
+
+Auth is resolved right before the `before_request` callbacks run, so
+callbacks can still inspect or override the resolved credentials. Individual
+contracts can opt out with `auth false` inside the block. Auth config
+inherits down the class chain, nearest definition wins.
+
+### Idempotency keys
+
+Flag a contract `idempotent` and every call carries an idempotency key
+header (default `Idempotency-Key`, generated with `SecureRandom.uuid`),
+which makes automatic retries of non-GET operations safe. The key is
+generated once per logical call and stays stable across retries — that is
+the entire point of the header. Customize the header name with
+`idempotency_header` and the generator with `idempotency_generator` at
+class level; pin a specific key per call with `_idempotency_key:`.
+
+```ruby
+contract :create_order, 'POST /orders' do
+  param :security_id, String, required: true
+  idempotent true
+end
+
+api.create_order(security_id: 'X1', _max_retries: 2)
+# a 503 will be retried with the SAME Idempotency-Key
+```
+
+### Pagination
+
+Collection contracts can declare their pagination strategy; the pagination
+params must also be declared as regular contract params. Every paginated
+contract gets two metaprogrammed methods: `#{name}_pages` (a lazy Enumerator
+of per-page responses, each fully validated by the contract) and
+`all_#{name}` (a flat Array of every item across pages).
+
+```ruby
+contract :list_orders, 'GET /orders' do
+  param :pageToken, String
+  param :pageSize,  Integer, default: 50
+
+  paginated style: :cursor, cursor_param: :pageToken,
+            next_cursor_path: 'nextPageToken', items_path: 'orders'
+end
+
+api.list_orders_pages.take(3)     # first three validated pages
+api.all_list_orders               # every order across every page
+```
+
+Offset pagination is covered too: `paginated style: :offset,
+offset_param: :offset, limit_param: :limit, items_path: 'data',
+has_more_path: 'hasMore'` — iteration stops when `has_more_path` is false
+or (without it) when a page comes back empty. A `_max_pages` guard (default
+1000) turns a missing stop condition into
+`RestClient::Contract::PaginationError` instead of an infinite request
+loop, and page 1 can resume from an explicitly supplied cursor or offset.
+
+### Rate-limit information
+
+Every response exposes parsed quota state when the server sends the IETF
+`RateLimit-*` headers or the legacy `X-RateLimit-*` convention (servers that
+document limits only in prose — DhanHQ, for instance — simply yield `nil`;
+data absence is not an error):
+
+```ruby
+response = api.list_orders
+response.rate_limit&.remaining   # => 98
+response.rate_limit&.reset_in    # => 12.4 (seconds)
+response.rate_limited?           # => true on a 429 or an exhausted quota
+```
+
+A 429 that carries no `Retry-After` falls back to the `RateLimit-Reset`
+window before resorting to exponential backoff.
+
+### Callbacks
+
+`before_request` receives a *mutable* context
+(`definition:, method:, url:, headers:, payload:, query:`) — mutating it
+changes the outgoing request, which is ideal for auth injection.
+`after_response` receives the validated response. Both accumulate down the
+inheritance chain, root-most first, so a base client class can hold shared
+middleware.
+
+### Generated CRUD resources
+
+`resource :posts` metaprograms the five standard REST contracts —
+`list_posts`, `get_post(id)`, `create_post(attrs)`, `update_post(id, attrs)`,
+`delete_post(id)` — with `only:`/`except:` filters, `update_with: :put`,
+`path:` override and a small English singularizer (override with
+`singular:`). Generated CRUD contracts accept free-form attributes
+(non-strict); declare contracts by hand when you want strict validation.
+
+```ruby
+class BlogAPI
+  include RestClient::Contract
+  base 'https://api.example.com'
+  resource :posts, only: %i[index show create]
+end
+
+BlogAPI.new.create_post(title: 'Hello', body: '...')  # POST /posts
+```
+
+### Reflection and dynamic dispatch
+
+Everything registered through the DSL is introspectable:
+
+```ruby
+GitHubAPI.contract_names          # => [:list_users, :create_issue]
+GitHubAPI.contract?(:list_users)  # => true
+GitHubAPI.contract_for(:list_users)  # => #<RestClient::Contract::Definition GET /users ...>
+GitHubAPI.contract_for(:list_users).describe
+# => "GET /users (params: :page, :per_page) responds 200 => Array"
+
+api.list_users_contract  # the Definition (dynamic dispatch)
+api.call_list_users(page: 1)  # execute by name
+api.has_list_users?  # => true
+```
+
+Clients also accept instance-level overrides: `GitHubAPI.new(base:
+'https://staging.example.com', headers: { 'X-Env' => 'test' })`.
 
 ## Multipart
 

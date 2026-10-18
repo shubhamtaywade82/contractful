@@ -1,3 +1,121 @@
+# Unreleased (on `feature/contract-first`, PR #2)
+
+Documentation and build-integrity release candidate content:
+
+* Add the project documentation suite: `AGENTS.md`, `CONTRIBUTING.md`,
+  `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `API.md`, `DATABASE.md` at the
+  root, plus `docs/` with the requirements traceability matrix,
+  architecture decision records (0001–0003), implementation plan and setup
+  guide, engineering guides (testing, quality gates, error handling,
+  integrations), security documents (threat model, agent tool policy),
+  operations guides (delivery, observability, runbook) and the agent
+  workflow playbook.
+* Fix the `spec:unit` rake task to use the `spec/unit/**/*_spec.rb` glob —
+  the previous pattern skipped the nested `spec/unit/contract/` directory,
+  so the contract-first suite never ran under CI's unit job.
+
+# 2.5.0
+
+Feature release completing the contract-first layer: closed request
+schemas, open response schemas, contract-declared auth, idempotency keys,
+pagination and rate-limit awareness — the pieces a contract needs to carry
+beyond shapes.
+
+* Add closed-schema param constraints: `min:` / `max:` (inclusive bounds on
+  any Comparable), `length:` (exact Integer or Range over String/Array/Hash)
+  and `pattern:` (Regexp on Strings). Constraints are enforced after
+  coercion — `param :quantity, Integer, min: 1` rejects the string "0"
+  exactly like the integer 0 — and every violation raises `InvalidParam`
+  before any HTTP request is built.
+* Add `response_field`: per-field response bindings with open-schema
+  semantics. Required fields and their types bind (missing, null or
+  type-mismatched fields raise `UnexpectedResponse` on return), while
+  undeclared fields are additive data and `inclusion:` sets are not
+  enforced unless `strict: true` — a new enum member the client does not
+  know about yet is data, not an error. Values are never coerced.
+* Add contract-declared auth: `auth bearer:`, `auth api_key:` (single or
+  multiple entries, header or query location — the dual-header style) and
+  `auth basic:`. Credentials may be literals or callables; callables are
+  invoked per request so short-lived tokens stay fresh. Auth is resolved
+  before the `before_request` callbacks (which can still override it),
+  inherits down the class chain, and individual contracts can opt out with
+  `auth false`.
+* Add retryable vs terminal error classification:
+  `RestClient::Exceptions::RETRIABLE_STATUSES` (408, 425, 429, 500, 502,
+  503, 504), `Exception#retryable?` and `Exceptions.retryable?` (which also
+  classifies plain network errors like `SocketError`/`Errno::*`). Requests
+  now retry retryable HTTP statuses — not just network failures — when
+  `:max_retries` is positive, honoring the server's `Retry-After` header
+  (delta-seconds or HTTP-date, capped by the new `:max_retry_after`
+  option, default 60), including inside the block/error-suppression path.
+  Opt out with `retry_after: false`.
+* Add idempotency keys: flag a contract `idempotent` and every call carries
+  an `Idempotency-Key` header (header name and generator configurable at
+  class level, per-call key via `_idempotency_key:`), generated once per
+  logical call and stable across automatic retries — which is what makes
+  retrying POSTs safe.
+* Add pagination contracts: `paginated style: :cursor, cursor_param:,
+  next_cursor_path:, items_path:` or `style: :offset, offset_param:,
+  limit_param:, has_more_path:`. Every paginated contract gets two
+  metaprogrammed methods — `#{name}_pages` (lazy Enumerator of validated
+  page responses) and `all_#{name}` (flat collector). A `_max_pages` guard
+  (default 1000) raises `RestClient::Contract::PaginationError` instead of
+  looping forever, and page 1 can resume from an explicitly supplied
+  cursor or offset.
+* Add rate-limit header parsing: `RestClient::RateLimit` reads the IETF
+  `RateLimit-*` headers and the legacy `X-RateLimit-*` convention
+  (preferring IETF), handling integer/HTTP-date/epoch resets and the
+  "limit, limit;w=window" description form. Every response exposes
+  `response.rate_limit` (nil when the server sends no headers — data
+  absence, not an error) and `response.rate_limited?` (429 or exhausted
+  quota). A 429 without `Retry-After` falls back to the `RateLimit-Reset`
+  window before exponential backoff.
+
+# 2.4.0
+
+Feature release adding a contract-first architecture layer with heavy
+metaprogramming on top of the classic rest-client API.
+
+* Add `RestClient::Contract`: declare API operations as contracts —
+  `contract :name, 'VERB /path'` with an `instance_eval`'d DSL block — and
+  the gem generates the client methods (`define_method`), `#{name}_url`
+  path builders, parameter validation and a reflection API for you. The
+  contract *is* the implementation.
+* Add a typed parameter engine: `String`, `Integer`, `Float`, `:boolean`,
+  `Array`, `Hash`, arbitrary classes (`is_a?` check, then
+  `Class#restclient_coerce`, then a Kernel cast) and `Proc` coercions, with
+  `required:`, `default:` (lazy procs supported), `inclusion:` and
+  `coerce: false` strict mode. Path placeholders (`:owner`, `:repo`) are
+  auto-synthesized as required params, URI-escaped and consumed out of the
+  query/payload. Violations raise `MissingParam`, `UnknownParam` or
+  `InvalidParam` with precise messages before any HTTP traffic happens.
+* Add response contracts: `responds 200, 404, type: Hash` declares expected
+  statuses (Integers or Ranges) and an optional JSON body type
+  (`:array`/`:hash`/`:string`/`:json`/any class). Declaring 4xx/5xx statuses
+  suppresses the default exception behavior for that contract — expected
+  error responses become normal return values (redirects are still
+  followed). Violations raise `UnexpectedResponse` with the response
+  attached. `verify_response` blocks add custom assertions and receive the
+  JSON-parsed body when declared with two parameters.
+* Add `before_request` / `after_response` callbacks: `before_request`
+  receives a mutable execution context (changing it changes the outgoing
+  request), `after_response` receives the validated response. Both
+  accumulate down the class inheritance chain, root-most first.
+* Add the `resource :posts` macro: metaprograms the five standard REST
+  CRUD contracts (`list_posts`, `get_post`, `create_post`, `update_post`,
+  `delete_post`) with `only:`/`except:` filters, `update_with: :put`,
+  `path:` override and a small English singularizer (`singular:` override).
+  Generated CRUD contracts accept free-form attributes via the new
+  per-contract `strict_params` override.
+* Add reflection and dynamic dispatch: `.contracts`, `.contract_names`,
+  `.contract?`, `.contract_for` (class and instance level,
+  inheritance-aware) plus `method_missing`-powered `call_#{name}`,
+  `#{name}_contract` and `has_#{name}?` with `respond_to_missing?` support.
+* Add per-call meta options for contracts (`_headers`, `_timeout`,
+  `_open_timeout`, `_read_timeout`, `_write_timeout`, `_persistent`,
+  `_max_retries`, `_retry_interval`) and instance-level overrides via
+  `MyAPI.new(base:, headers:)`.
+
 # 2.3.0
 
 Feature release building on the 2.2.0 modernization.

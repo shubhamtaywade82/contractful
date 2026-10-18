@@ -335,6 +335,17 @@ Response objects have several useful methods. (See the class rdoc for more detai
 - `Response#cookie_jar`: <em>New in 1.8</em> An HTTP::CookieJar of cookies
 - `Response#request`: The RestClient::Request object used to make the request
 - `Response#history`: <em>New in 2.0</em> If redirection was followed, a list of prior Response objects
+- `Response#json`: <em>New in 2.3</em> Parse the response body as JSON. Keyword
+  arguments are forwarded to `JSON.parse`.
+
+```ruby
+>> r = RestClient.get('https://httpbin.org/get')
+>> r.json['url']
+=> "https://httpbin.org/get"
+
+>> r.json(symbolize_names: true)[:url]
+=> "https://httpbin.org/get"
+```
 
 ```ruby
 RestClient.get('http://example.com')

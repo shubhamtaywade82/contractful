@@ -36,6 +36,25 @@ module RestClient
       body
     end
 
+    # Parse the response body as JSON and return the result.
+    #
+    # This is a convenience wrapper around `JSON.parse(body)`. Any keyword
+    # arguments are forwarded to `JSON.parse`, so for example:
+    #
+    #   response.json                          # => {"a" => 1}
+    #   response.json(symbolize_names: true)   # => {a: 1}
+    #
+    # Raises `JSON::ParserError` if the body is not valid JSON. Note that the
+    # return value is a plain parsed data structure, not a Response object.
+    #
+    # @param kwargs [Hash] keyword arguments forwarded to JSON.parse
+    #
+    # @return [Object] the parsed JSON data structure (typically Hash or Array)
+    #
+    def json(**kwargs)
+      JSON.parse(to_s, **kwargs)
+    end
+
     def inspect
       "<RestClient::Response #{code.inspect} #{body_truncated(10).inspect}>"
     end

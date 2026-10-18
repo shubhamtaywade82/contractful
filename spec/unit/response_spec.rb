@@ -21,6 +21,37 @@ describe RestClient::Response, :include_helpers do
     expect(RestClient::Response.create(nil, @net_http_res, @request).to_s).to eq ""
   end
 
+  describe 'json parsing' do
+    def json_response(body)
+      res = res_double(to_hash: {'Content-Type' => ['application/json']},
+                       code: '200', body: body)
+      response_from_res_double(res, @request, duration: 1)
+    end
+
+    it "parses a JSON object body" do
+      expect(json_response('{"a": 1, "b": "two"}').json).to eq(
+        {'a' => 1, 'b' => 'two'})
+    end
+
+    it "parses a JSON array body" do
+      expect(json_response('[1, 2, 3]').json).to eq([1, 2, 3])
+    end
+
+    it "forwards keyword arguments to JSON.parse" do
+      expect(json_response('{"a": 1}').json(symbolize_names: true)).to eq(
+        {a: 1})
+    end
+
+    it "parses scalars and null" do
+      expect(json_response('42').json).to eq 42
+      expect(json_response('null').json).to be_nil
+    end
+
+    it "raises JSON::ParserError for invalid JSON" do
+      expect { json_response('not json').json }.to raise_error(JSON::ParserError)
+    end
+  end
+
   describe 'header processing' do
     it "test headers and raw headers" do
       expect(@response.raw_headers["Status"][0]).to eq "200 OK"

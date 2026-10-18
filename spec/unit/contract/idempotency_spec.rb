@@ -61,7 +61,7 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
 
   it 'generates a fresh key per logical call' do
     keys = []
-    stub = stub_request(:post, 'https://api.test/orders')
+    stub_request(:post, 'https://api.test/orders')
            .with { |req| keys << req.headers['Idempotency-Key']; true }
 
     client.create_order(security_id: 'X1')

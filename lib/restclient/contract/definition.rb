@@ -41,6 +41,8 @@ module RestClient
       attr_reader :auth
       # Idempotent flag (nil = not flagged).
       attr_reader :idempotent
+      # Pagination declaration (nil = not paginated), see {Pagination}.
+      attr_reader :pagination
 
       def initialize(name, verb, path_template, description: nil, &block)
         @name = name.to_sym
@@ -53,6 +55,7 @@ module RestClient
         @response_fields = {}
         @auth = nil
         @idempotent = nil
+        @pagination = nil
 
         validate_verb!
         validate_path_template!
@@ -114,6 +117,13 @@ module RestClient
         end
         @response_statuses = statuses.freeze
         @response_type = normalize_response_type(type) if type
+      end
+
+      # Declare pagination for this collection contract. The pagination
+      # params (cursor/offset/limit) must also be declared as regular
+      # contract params. See {Pagination} for the styles and options.
+      def paginated(**options)
+        @pagination = Pagination.normalize!(options)
       end
 
       # Flag this contract as idempotent: the client will inject an
@@ -207,6 +217,7 @@ module RestClient
           parts << "(fields: #{@response_fields.keys.map { |k| ":#{k}" }.join(', ')})"
         end
         parts << 'idempotent' if @idempotent
+        parts << 'paginated' if @pagination
         if @response_statuses
           rendered = @response_statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }
           response_part = "responds #{rendered.join(', ')}"

@@ -349,6 +349,19 @@ module RestClient
         define_method(:"#{name}_url") do |**params|
           Contract::Executor.build_url(self, definition, params)
         end
+
+        return unless definition.pagination
+
+        # Metaprogrammed pagination: every paginated contract gets an
+        # enumerator of validated pages plus a flat collector, driven by the
+        # contract's own pagination declaration.
+        define_method(:"#{name}_pages") do |**params|
+          Contract::Pagination.each_page(self, definition, params)
+        end
+
+        define_method(:"all_#{name}") do |**params|
+          Contract::Pagination.all_items(self, definition, params)
+        end
       end
     end
 

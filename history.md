@@ -1,3 +1,60 @@
+# 2.5.0
+
+Feature release completing the contract-first layer: closed request
+schemas, open response schemas, contract-declared auth, idempotency keys,
+pagination and rate-limit awareness — the pieces a contract needs to carry
+beyond shapes.
+
+* Add closed-schema param constraints: `min:` / `max:` (inclusive bounds on
+  any Comparable), `length:` (exact Integer or Range over String/Array/Hash)
+  and `pattern:` (Regexp on Strings). Constraints are enforced after
+  coercion — `param :quantity, Integer, min: 1` rejects the string "0"
+  exactly like the integer 0 — and every violation raises `InvalidParam`
+  before any HTTP request is built.
+* Add `response_field`: per-field response bindings with open-schema
+  semantics. Required fields and their types bind (missing, null or
+  type-mismatched fields raise `UnexpectedResponse` on return), while
+  undeclared fields are additive data and `inclusion:` sets are not
+  enforced unless `strict: true` — a new enum member the client does not
+  know about yet is data, not an error. Values are never coerced.
+* Add contract-declared auth: `auth bearer:`, `auth api_key:` (single or
+  multiple entries, header or query location — the dual-header style) and
+  `auth basic:`. Credentials may be literals or callables; callables are
+  invoked per request so short-lived tokens stay fresh. Auth is resolved
+  before the `before_request` callbacks (which can still override it),
+  inherits down the class chain, and individual contracts can opt out with
+  `auth false`.
+* Add retryable vs terminal error classification:
+  `RestClient::Exceptions::RETRIABLE_STATUSES` (408, 425, 429, 500, 502,
+  503, 504), `Exception#retryable?` and `Exceptions.retryable?` (which also
+  classifies plain network errors like `SocketError`/`Errno::*`). Requests
+  now retry retryable HTTP statuses — not just network failures — when
+  `:max_retries` is positive, honoring the server's `Retry-After` header
+  (delta-seconds or HTTP-date, capped by the new `:max_retry_after`
+  option, default 60), including inside the block/error-suppression path.
+  Opt out with `retry_after: false`.
+* Add idempotency keys: flag a contract `idempotent` and every call carries
+  an `Idempotency-Key` header (header name and generator configurable at
+  class level, per-call key via `_idempotency_key:`), generated once per
+  logical call and stable across automatic retries — which is what makes
+  retrying POSTs safe.
+* Add pagination contracts: `paginated style: :cursor, cursor_param:,
+  next_cursor_path:, items_path:` or `style: :offset, offset_param:,
+  limit_param:, has_more_path:`. Every paginated contract gets two
+  metaprogrammed methods — `#{name}_pages` (lazy Enumerator of validated
+  page responses) and `all_#{name}` (flat collector). A `_max_pages` guard
+  (default 1000) raises `RestClient::Contract::PaginationError` instead of
+  looping forever, and page 1 can resume from an explicitly supplied
+  cursor or offset.
+* Add rate-limit header parsing: `RestClient::RateLimit` reads the IETF
+  `RateLimit-*` headers and the legacy `X-RateLimit-*` convention
+  (preferring IETF), handling integer/HTTP-date/epoch resets and the
+  "limit, limit;w=window" description form. Every response exposes
+  `response.rate_limit` (nil when the server sends no headers — data
+  absence, not an error) and `response.rate_limited?` (429 or exhausted
+  quota). A 429 without `Retry-After` falls back to the `RateLimit-Reset`
+  window before exponential backoff.
+
 # 2.4.0
 
 Feature release adding a contract-first architecture layer with heavy

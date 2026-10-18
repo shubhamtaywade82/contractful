@@ -136,6 +136,14 @@ module RestClient
       @response.body if @response
     end
 
+    # Part of the error model: is this failure transient (worth retrying)
+    # or terminal? Exceptions without a response are terminal by default;
+    # subclasses override (see {Exceptions::RETRIABLE_STATUSES} for the
+    # status classification of response-bearing errors).
+    def retryable?
+      false
+    end
+
     def to_s
       message
     end
@@ -151,6 +159,12 @@ module RestClient
 
   # Compatibility
   class ExceptionWithResponse < RestClient::Exception
+    # Retryable when the HTTP status itself classifies as transient
+    # (408/425/429 and the usual 5xx gateway/server errors — see
+    # {Exceptions::RETRIABLE_STATUSES}). Every other status is terminal.
+    def retryable?
+      Exceptions::RETRIABLE_STATUSES.include?(http_code)
+    end
   end
 
   # The request failed with an error code not managed by the code
@@ -173,6 +187,57 @@ module RestClient
   module Exceptions
     # Map http status codes to the corresponding exception class
     EXCEPTIONS_MAP = {}
+
+    # HTTP statuses whose failures are TRANSIENT rather than terminal — the
+    # retryable side of the error model. 408 (request timeout), 425 (too
+    # early), 429 (rate limited) and the standard gateway/server breakdowns.
+    # Everything else (401, 404, 422, 501, ...) is terminal: retrying will
+    # not fix a bad token, a missing resource or a bad payload.
+    RETRIABLE_STATUSES = [408, 425, 429, 500, 502, 503, 504].freeze
+
+    # Network-level failure classes that classify as retryable. NOTE:
+    # ::Timeout::Error is referenced with a top-level scope because
+    # RestClient::Exceptions::Timeout shadows the Timeout module here.
+    def self.network_errors
+      @network_errors ||= begin
+        require 'net/http'
+        require 'timeout'
+        [
+          SocketError,
+          EOFError,
+          Errno::ECONNRESET,
+          Errno::ECONNABORTED,
+          Errno::EPIPE,
+          Errno::ECONNREFUSED,
+          Errno::EHOSTUNREACH,
+          Errno::ENETUNREACH,
+          ::Timeout::Error,
+          Net::OpenTimeout,
+          Net::ReadTimeout,
+          Net::WriteTimeout,
+        ].freeze
+      end
+    end
+
+    # Classify a failure as retryable (transient) or terminal.
+    #
+    # Accepts an Integer HTTP status, a RestClient::Exception instance, or
+    # any other exception object (checked against {network_errors}).
+    #
+    #   Exceptions.retryable?(429)                          # => true
+    #   Exceptions.retryable?(404)                          # => false
+    #   Exceptions.retryable?(RestClient::NotFound.new)     # => false
+    #   Exceptions.retryable?(SocketError.new('boom'))      # => true
+    def self.retryable?(candidate)
+      case candidate
+      when Integer
+        RETRIABLE_STATUSES.include?(candidate)
+      when RestClient::Exception
+        candidate.retryable?
+      else
+        network_errors.any? { |klass| candidate.is_a?(klass) }
+      end
+    end
   end
 
   # Create HTTP status exception classes
@@ -206,6 +271,13 @@ module RestClient
         super(nil, nil)
         self.message = message if message
         self.original_exception = original_exception if original_exception
+      end
+
+      # A network timeout never carries an HTTP status, so the status-based
+      # classification cannot see it — network timeouts are transient by
+      # definition.
+      def retryable?
+        true
       end
     end
 
@@ -241,6 +313,10 @@ module RestClient
     def initialize(message = 'Server broke connection')
       super nil, nil
       self.message = message
+    end
+
+    def retryable?
+      true
     end
   end
 

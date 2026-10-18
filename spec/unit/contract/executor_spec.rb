@@ -414,5 +414,24 @@ RSpec.describe 'RestClient::Contract executor' do
 
       expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
     end
+
+    it 'retries retryable server errors (503) declared via responds' do
+      client_class = build_client do
+        base 'https://api.test'
+
+        contract :create_order, 'POST /orders' do
+          param :security_id, String, required: true
+          responds 200, 201, 503
+        end
+      end
+
+      stub_request(:post, 'https://api.test/orders')
+        .to_return(status: 503, headers: { 'Retry-After' => '0' })
+        .then.to_return(status: 201, body: JSON.generate(order_id: 'ORD-9'))
+
+      response = client_class.new.create_order(security_id: 'X1', _max_retries: 2)
+      expect(response.code).to eq 201
+      expect(a_request(:post, 'https://api.test/orders')).to have_been_made.twice
+    end
   end
 end

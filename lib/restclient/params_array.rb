@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module RestClient
-
   # The ParamsArray class is used to represent an ordered list of [key, value]
   # pairs. Use this when you need to include a key multiple times or want
   # explicit control over parameter ordering.
@@ -34,8 +33,8 @@ module RestClient
       @array = process_input(array)
     end
 
-    def each(*args, &blk)
-      @array.each(*args, &blk)
+    def each(...)
+      @array.each(...)
     end
 
     def empty?
@@ -45,7 +44,7 @@ module RestClient
     private
 
     def process_input(array)
-      array.map {|v| process_pair(v) }
+      array.map { |v| process_pair(v) }
     end
 
     # A pair may be:
@@ -56,14 +55,12 @@ module RestClient
     def process_pair(pair)
       case pair
       when Hash
-        if pair.length != 1
-          raise ArgumentError.new("Bad # of fields for pair: #{pair.inspect}")
-        end
+        raise ArgumentError.new("Bad # of fields for pair: #{pair.inspect}") if pair.length != 1
+
         pair.to_a.fetch(0)
       when Array
-        if pair.length > 2
-          raise ArgumentError.new("Bad # of fields for pair: #{pair.inspect}")
-        end
+        raise ArgumentError.new("Bad # of fields for pair: #{pair.inspect}") if pair.length > 2
+
         [pair.fetch(0), pair[1]]
       else
         # recurse, converting any non-array to an array

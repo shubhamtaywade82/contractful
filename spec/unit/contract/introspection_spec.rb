@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract reflection and dynamic dispatch' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       base 'https://api.test'
       instance_exec(&block)
     end

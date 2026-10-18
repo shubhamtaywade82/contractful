@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # frozen_string_literal: true
 
 require_relative 'lib/restclient/version'
@@ -19,7 +18,7 @@ Gem::Specification.new do |s|
     'bug_tracker_uri' => 'https://github.com/shubhamtaywade82/rest-client/issues',
     'changelog_uri' => 'https://github.com/shubhamtaywade82/rest-client/blob/master/history.md',
     'homepage_uri' => 'https://github.com/shubhamtaywade82/rest-client',
-    'rubygems_mfa_required' => 'true',
+    'rubygems_mfa_required' => 'true'
   }
 
   s.add_development_dependency('webmock', '>= 3.19', '< 5')

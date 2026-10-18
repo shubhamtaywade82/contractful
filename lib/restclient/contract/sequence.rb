@@ -115,9 +115,7 @@ module RestClient
 
         fixture[:steps].each_with_index do |raw, index|
           step = index + 1
-          unless raw.is_a?(Hash) && raw[:call]
-            raise InvalidFixture, "step #{step}: every step needs a 'call'"
-          end
+          raise InvalidFixture, "step #{step}: every step needs a 'call'" unless raw.is_a?(Hash) && raw[:call]
 
           call = raw[:call].to_sym
           unless client.class.contract?(call)
@@ -141,19 +139,18 @@ module RestClient
 
           assert_fixture(response[:body], step, call, 'response body')
 
-          if (expected = raw[:expect_request])
-            unless expected.is_a?(Hash)
-              raise InvalidFixture,
-                    "step #{step} (#{call}): expect_request must be a Hash"
-            end
-            unknown = expected.keys.map(&:to_sym) - KNOWN_ASSERTIONS
-            unless unknown.empty?
-              raise InvalidFixture,
-                    "step #{step} (#{call}): unknown expect_request keys " \
-                    "#{unknown.map(&:inspect).join(', ')} (known: " \
-                    "#{KNOWN_ASSERTIONS.map(&:inspect).join(', ')})"
-            end
+          next unless (expected = raw[:expect_request])
+          unless expected.is_a?(Hash)
+            raise InvalidFixture,
+                  "step #{step} (#{call}): expect_request must be a Hash"
           end
+          unknown = expected.keys.map(&:to_sym) - KNOWN_ASSERTIONS
+          next if unknown.empty?
+
+          raise InvalidFixture,
+                "step #{step} (#{call}): unknown expect_request keys " \
+                "#{unknown.map(&:inspect).join(', ')} (known: " \
+                "#{KNOWN_ASSERTIONS.map(&:inspect).join(', ')})"
         end
 
         fixture[:steps].map { |raw| normalize_step(raw) }
@@ -174,10 +171,10 @@ module RestClient
           response: {
             status: raw[:response].fetch(:status, 200),
             headers: stringify_keys(raw[:response][:headers] || {}),
-            body: raw[:response][:body],
+            body: raw[:response][:body]
           },
           expect_request: raw[:expect_request] &&
-                          deep_symbolize(raw[:expect_request]),
+            deep_symbolize(raw[:expect_request])
         }
       end
 
@@ -245,7 +242,7 @@ module RestClient
         def webmock!
           unless defined?(WebMock)
             raise Error,
-                  "the sequence helper needs the webmock gem — add it to your " \
+                  'the sequence helper needs the webmock gem — add it to your ' \
                   "test group and require 'webmock/rspec' (or 'webmock')"
           end
 
@@ -286,7 +283,7 @@ module RestClient
 
         # Hooks are stateful user rules; a raise inside one is a step
         # failure, not a crash of the player.
-        def safe(hook, number, step)
+        def safe(_hook, number, step)
           yield
         rescue StandardError => e
           raise Failure.new(number, step[:call], e, "hook failed: #{e.message}")
@@ -396,9 +393,7 @@ module RestClient
         def subset_violations(wanted, actual)
           wanted.filter_map do |key, value|
             actual_value = actual[key.to_s]
-            unless actual_value && Array(actual_value).include?(value.to_s)
-              "expected #{key}=#{value.inspect}"
-            end
+            "expected #{key}=#{value.inspect}" unless actual_value && Array(actual_value).include?(value.to_s)
           end
         end
 
@@ -406,9 +401,8 @@ module RestClient
           wanted.filter_map do |key, value|
             dotted = prefix ? "#{prefix}.#{key}" : key.to_s
             if value.is_a?(Hash)
-              unless actual.is_a?(Hash)
-                next "expected #{dotted} inside a JSON object, got #{actual.class}"
-              end
+              next "expected #{dotted} inside a JSON object, got #{actual.class}" unless actual.is_a?(Hash)
+
               deep_subset_violations(value, actual[key.to_s] || actual[key], dotted)
             elsif actual.is_a?(Hash) && (actual.key?(key.to_s) || actual.key?(key))
               found = actual[key.to_s] || actual[key]

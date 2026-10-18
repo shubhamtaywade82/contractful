@@ -9,24 +9,24 @@ RSpec.describe RestClient::Contract::Param do
 
   describe 'definition-time validation' do
     it 'rejects unknown symbols' do
-      expect {
+      expect do
         described_class.new(:x, :nonsense)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /unsupported param type :nonsense/
       )
     end
 
     it 'rejects non-class, non-proc types' do
-      expect {
+      expect do
         described_class.new(:x, 'String')
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /expected a Class, Proc or supported symbol/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /expected a Class, Proc or supported symbol/)
     end
 
     it 'rejects an inclusion that does not respond to include?' do
-      expect {
+      expect do
         described_class.new(:x, Integer, inclusion: 1)
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /inclusion must respond to #include\?/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /inclusion must respond to #include\?/)
     end
 
     it 'maps symbol aliases to classes' do
@@ -160,7 +160,7 @@ RSpec.describe RestClient::Contract::Param do
       end
 
       it 'wraps proc failures in InvalidParam' do
-        param = described_class.new(:x, ->(v) { raise ArgumentError, 'bad' })
+        param = described_class.new(:x, ->(_v) { raise ArgumentError, 'bad' })
         expect { param.process!('x') }.to raise_error(
           RestClient::Contract::InvalidParam, /custom coercion failed: ArgumentError: bad/
         )
@@ -269,7 +269,10 @@ RSpec.describe RestClient::Contract::Param do
 
     it 'calls proc defaults lazily' do
       calls = 0
-      param = described_class.new(:x, default: -> { calls += 1; calls })
+      param = described_class.new(:x, default: lambda { 
+                                                 calls += 1
+                                                        calls
+})
       expect(param.default_value).to eq 1
       expect(param.default_value).to eq 2
     end

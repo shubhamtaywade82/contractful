@@ -31,7 +31,7 @@ module RestClient
         _write_timeout: :write_timeout,
         _persistent: :persistent,
         _max_retries: :max_retries,
-        _retry_interval: :retry_interval,
+        _retry_interval: :retry_interval
       }.freeze
 
       # Verbs whose params are sent as a query string by default.
@@ -63,7 +63,7 @@ module RestClient
           url: url,
           headers: headers,
           payload: payload,
-          query: query,
+          query: query
         }
 
         apply_auth!(ctx, instance, definition)
@@ -74,11 +74,9 @@ module RestClient
           method: ctx[:method],
           url: ctx[:url],
           headers: ctx[:headers],
-          payload: ctx[:payload],
+          payload: ctx[:payload]
         }
-        if ctx[:query] && !ctx[:query].empty?
-          request_args[:headers] = request_args[:headers].merge(params: ctx[:query])
-        end
+        request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
         merge_meta_options!(request_args, meta)
 
         response = execute_request(request_args, definition)
@@ -96,9 +94,7 @@ module RestClient
         definition.path_param_names.each do |key|
           param = definition.params[key]
           value = params.key?(key) && !params[key].nil? ? params[key] : nil
-          if value.nil? && param&.has_default?
-            value = param.default_value
-          end
+          value = param.default_value if value.nil? && param&.has_default?
           if value.nil?
             raise MissingParam,
                   "path param :#{key} is required by " \
@@ -244,7 +240,7 @@ module RestClient
         body = response.body
         if body.nil? || body.empty?
           raise UnexpectedResponse.new(
-            "expected a JSON object but the response body is empty " \
+            'expected a JSON object but the response body is empty ' \
             "for #{definition.describe}",
             response: response
           )
@@ -303,9 +299,10 @@ module RestClient
 
         resolved = auth.resolve
         ctx[:headers] = ctx[:headers].merge(resolved[:headers]) unless resolved[:headers].empty?
-        unless resolved[:query].empty?
-          ctx[:query] = (ctx[:query] || {}).merge(resolved[:query])
-        end
+        return if resolved[:query].empty?
+
+        ctx[:query] = (ctx[:query] || {}).merge(resolved[:query])
+        
       end
 
       # Inject an idempotency key when the contract is flagged `idempotent`
@@ -335,9 +332,8 @@ module RestClient
                     "unknown meta option #{key.inspect} " \
                     "(supported: #{META_OPTIONS.map(&:inspect).join(', ')})"
             end
-            if key == :_headers && !value.is_a?(Hash)
-              raise ParamError, "_headers must be a Hash, got #{value.inspect}"
-            end
+            raise ParamError, "_headers must be a Hash, got #{value.inspect}" if key == :_headers && !value.is_a?(Hash)
+
             meta[key] = value
           else
             regular[key] = value
@@ -375,12 +371,10 @@ module RestClient
 
       def strict_params?(instance, definition = nil)
         # Per-contract override wins over the class-level setting.
-        if definition && !definition.strict.nil?
-          return definition.strict
-        end
+        return definition.strict if definition && !definition.strict.nil?
 
         value = instance.class.__merged_scalar(:strict_params)
-        value.nil? ? true : value
+        value.nil? || value
       end
 
       def effective_payload_style(instance, definition, verb)
@@ -407,7 +401,7 @@ module RestClient
 
       def build_full_url(base, path)
         base = base.sub(%r{/+\z}, '')
-        path = path.start_with?('/') ? path : "/#{path}"
+        path = "/#{path}" unless path.start_with?('/')
         "#{base}#{path}"
       end
 

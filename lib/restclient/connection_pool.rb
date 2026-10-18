@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
+# Root namespace; this file adds the persistent-connection pool.
 module RestClient
-
   # A small thread-safe pool for reusing started Net::HTTP connections
   # (HTTP keep-alive / persistent connections) across requests.
   #
@@ -22,7 +22,8 @@ module RestClient
     def initialize(max_idle: 8)
       unless max_idle.is_a?(Integer) && max_idle >= 0
         raise ArgumentError.new(
-          ":max_idle must be a non-negative Integer, got #{max_idle.inspect}")
+          ":max_idle must be a non-negative Integer, got #{max_idle.inspect}"
+        )
       end
 
       @max_idle = max_idle
@@ -73,7 +74,7 @@ module RestClient
     # after a network error). The connection is closed and never reused.
     def invalidate(key, conn)
       @mutex.synchronize do
-        @checked_out[key] -= 1 if @checked_out[key] > 0
+        @checked_out[key] -= 1 if @checked_out[key].positive?
       end
       shutdown(conn)
       nil
@@ -85,7 +86,10 @@ module RestClient
     def clear!
       conns = []
       @mutex.synchronize do
-        @idle.each_value { |idle_conns| conns.concat(idle_conns); idle_conns.clear }
+        @idle.each_value do |idle_conns| 
+          conns.concat(idle_conns)
+                                         idle_conns.clear
+end
       end
       conns.each { |conn| shutdown(conn) }
       nil
@@ -95,8 +99,8 @@ module RestClient
     def stats
       @mutex.synchronize do
         {
-          :idle => @idle.values.reduce(0) { |sum, idle_conns| sum + idle_conns.size },
-          :checked_out => @checked_out.values.reduce(0, :+),
+          idle: @idle.values.reduce(0) { |sum, idle_conns| sum + idle_conns.size },
+          checked_out: @checked_out.values.reduce(0, :+)
         }
       end
     end

@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract executor' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       instance_exec(&block)
     end
   end
@@ -51,29 +52,29 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'coerces and validates params before the request' do
-      expect {
+      expect do
         client.list_posts(per_page: 500)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidParam,
         /param :per_page: value 500 is not in 1\.\.100/
       )
     end
 
     it 'rejects unknown params in strict mode' do
-      expect {
+      expect do
         client.list_posts(bogus: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnknownParam,
-        /unknown param :bogus for GET \/posts/
+        %r{unknown param :bogus for GET /posts}
       )
     end
 
     it 'rejects missing required params' do
-      expect {
+      expect do
         client.create_post
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::MissingParam,
-        /param :title is required by POST \/posts/
+        %r{param :title is required by POST /posts}
       )
     end
 
@@ -105,7 +106,7 @@ RSpec.describe 'RestClient::Contract executor' do
                headers: {
                  'Accept' => 'application/json',
                  'X-Instance' => 'yes',
-                 'X-Call' => 'yes',
+                 'X-Call' => 'yes'
                }
              )
 
@@ -145,9 +146,9 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'rejects unknown meta options' do
-      expect {
+      expect do
         client.list_posts(_timeots: 5)
-      }.to raise_error(RestClient::Contract::UnknownParam, /unknown meta option :_timeots/)
+      end.to raise_error(RestClient::Contract::UnknownParam, /unknown meta option :_timeots/)
     end
 
     it 'raises MissingBaseUrl when no base is configured' do
@@ -217,11 +218,11 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'raises MissingParam when a path param is absent' do
-      expect {
+      expect do
         client.create_issue(owner: 'octo', title: 'Hi')
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::MissingParam,
-        /param :repo is required by POST \/repos\/:owner\/:repo\/issues/
+        %r{param :repo is required by POST /repos/:owner/:repo/issues}
       )
     end
   end
@@ -319,15 +320,15 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'validates and coerces declared path params' do
-      expect {
+      expect do
         client_class.new.show_issue_url(owner: 'octo', repo: 'hi', number: 'x')
-      }.to raise_error(RestClient::Contract::InvalidParam, /param :number/)
+      end.to raise_error(RestClient::Contract::InvalidParam, /param :number/)
     end
 
     it 'raises MissingParam for absent path params' do
-      expect {
+      expect do
         client_class.new.show_issue_url(owner: 'octo')
-      }.to raise_error(RestClient::Contract::MissingParam, /path param :repo is required/)
+      end.to raise_error(RestClient::Contract::MissingParam, /path param :repo is required/)
     end
   end
 
@@ -356,8 +357,9 @@ RSpec.describe 'RestClient::Contract executor' do
       # A subclass that owns its constructor (e.g. taking other arguments)
       # and forgets `super` must not blow up inside header merging.
       subclass = Class.new(client_class) do
-        def initialize(_token)
-          # deliberately no super(base:, headers:)
+        def initialize(_token) # rubocop:disable Lint/MissingSuper
+          # deliberately no super(base:, headers:) — the missing super call
+          # is the exact behavior under test here.
         end
       end
 
@@ -371,30 +373,30 @@ RSpec.describe 'RestClient::Contract executor' do
 
   describe 'definition-time validation' do
     it 'rejects invalid request lines' do
-      expect {
+      expect do
         build_client { contract :x, 'FETCH /posts' }
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         %r{invalid request line "FETCH /posts"}
       )
     end
 
     it 'rejects invalid base URLs' do
-      expect {
+      expect do
         build_client { base 'ftp://nope' }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /base must be an absolute http\(s\) URL/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /base must be an absolute http\(s\) URL/)
     end
 
     it 'rejects reserved contract names' do
-      expect {
+      expect do
         build_client { contract :inspect, 'GET /x' }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /is reserved/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /is reserved/)
     end
 
     it 'rejects invalid contract names' do
-      expect {
+      expect do
         build_client { contract 'not a name', 'GET /x' }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /not a valid method name/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /not a valid method name/)
     end
   end
 
@@ -425,17 +427,17 @@ RSpec.describe 'RestClient::Contract executor' do
     end
 
     it 'rejects out-of-range input before the network is touched' do
-      expect {
+      expect do
         client.create_order(security_id: '12345', transaction_type: 'BUY', quantity: 0)
-      }.to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+      end.to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
 
       expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
     end
 
     it 'rejects enum violations before the network is touched' do
-      expect {
+      expect do
         client.create_order(security_id: '12345', transaction_type: 'HOLD', quantity: 1)
-      }.to raise_error(RestClient::Contract::InvalidParam, /not in \["BUY", "SELL"\]/)
+      end.to raise_error(RestClient::Contract::InvalidParam, /not in \["BUY", "SELL"\]/)
 
       expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
     end

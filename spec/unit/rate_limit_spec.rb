@@ -92,7 +92,7 @@ RSpec.describe 'response rate-limit integration' do
       .to_return(body: 'ok', headers: {
                    'RateLimit-Limit' => '100',
                    'RateLimit-Remaining' => '98',
-                   'RateLimit-Reset' => '60',
+                   'RateLimit-Reset' => '60'
                  })
 
     response = RestClient.get('http://some/resource')

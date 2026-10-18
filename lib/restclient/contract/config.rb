@@ -17,7 +17,8 @@ module RestClient
 
       # Scalars are nil until explicitly set, so that "unset" can be
       # distinguished from every meaningful value (including false/{}).
-      attr_reader :base_url, :default_headers, :strict_params, :payload_style, :auth
+      attr_accessor :base_url
+      attr_reader :default_headers, :strict_params, :payload_style, :auth
       attr_reader :idempotency_header, :idempotency_generator
 
       def initialize
@@ -32,9 +33,6 @@ module RestClient
         @idempotency_generator = nil
       end
 
-      def base_url=(url)
-        @base_url = url
-      end
 
       def default_headers=(headers)
         unless headers.is_a?(Hash)
@@ -85,12 +83,9 @@ module RestClient
       end
 
       def add_callback(kind, block)
-        unless @callbacks.key?(kind)
-          raise InvalidDefinition, "unknown callback kind #{kind.inspect}"
-        end
-        unless block.is_a?(Proc)
-          raise InvalidDefinition, "callback #{kind} requires a block"
-        end
+        raise InvalidDefinition, "unknown callback kind #{kind.inspect}" unless @callbacks.key?(kind)
+        raise InvalidDefinition, "callback #{kind} requires a block" unless block.is_a?(Proc)
+
         @callbacks[kind] << block
       end
     end

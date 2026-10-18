@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract pagination' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       instance_exec(&block)
     end
   end
@@ -170,9 +171,9 @@ RSpec.describe 'RestClient::Contract pagination' do
         .with(query: hash_including('pageToken' => 'more'))
         .to_return(body: JSON.generate(items: ['x'], next: 'more'))
 
-      expect {
+      expect do
         client_class.new.list_forever_pages(_max_pages: 3).to_a
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::PaginationError,
         /exceeded 3 pages.*_max_pages/
       )
@@ -191,9 +192,9 @@ RSpec.describe 'RestClient::Contract pagination' do
       stub_request(:get, 'https://api.test/things')
         .to_return(body: JSON.generate(items: %w[a], next: nil))
 
-      expect {
+      expect do
         client_class.new.all_list_things
-      }.to raise_error(RestClient::Contract::PaginationError, /declare items_path/)
+      end.to raise_error(RestClient::Contract::PaginationError, /declare items_path/)
     end
 
     it 'raises on non-array items' do
@@ -209,55 +210,55 @@ RSpec.describe 'RestClient::Contract pagination' do
       stub_request(:get, 'https://api.test/bad')
         .to_return(body: JSON.generate(items: 'not-an-array', next: nil))
 
-      expect {
+      expect do
         client_class.new.all_list_bad
-      }.to raise_error(RestClient::Contract::PaginationError, /expected Array/)
+      end.to raise_error(RestClient::Contract::PaginationError, /expected Array/)
     end
   end
 
   describe 'definition-time validation' do
     it 'requires a style' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             paginated
           end
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /requires a style/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /requires a style/)
     end
 
     it 'requires cursor keys for the cursor style' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             paginated style: :cursor
           end
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /requires :cursor_param/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /requires :cursor_param/)
     end
 
     it 'requires offset_param for the offset style' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             paginated style: :offset
           end
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /requires :offset_param/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /requires :offset_param/)
     end
 
     it 'rejects unknown styles' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             paginated style: :hyper
           end
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /unknown pagination style/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /unknown pagination style/)
     end
 
     it 'marks paginated contracts in introspection' do

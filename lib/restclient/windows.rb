@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 module RestClient
+  # Windows-specific support code (root certificate store loading).
   module Windows
   end
 end
 
-if RestClient::Platform.windows?
-  require_relative './windows/root_certs'
-end
+require_relative 'windows/root_certs' if RestClient::Platform.windows?

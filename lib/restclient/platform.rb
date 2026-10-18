@@ -3,6 +3,7 @@
 require 'rbconfig'
 
 module RestClient
+  # Platform introspection: user agent strings and windows? detection.
   module Platform
     # Return true if we are running on a darwin-based Ruby platform. This will
     # be false for jruby even on OS X.

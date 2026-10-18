@@ -81,7 +81,7 @@ module RestClient
       end
 
       def inspect
-        "#<RestClient::Contract::Auth #{to_s}>"
+        "#<RestClient::Contract::Auth #{self}>"
       end
 
       private
@@ -126,11 +126,12 @@ module RestClient
         ok = value.is_a?(String) || value.is_a?(Symbol) ||
              (value.is_a?(Array) && scheme_name == :basic) ||
              value.respond_to?(:call)
-        unless ok
-          raise InvalidDefinition,
-                "auth #{scheme_name}: value must be a literal or a callable, " \
-                "got #{value.inspect}"
-        end
+        return if ok
+
+        raise InvalidDefinition,
+              "auth #{scheme_name}: value must be a literal or a callable, " \
+              "got #{value.inspect}"
+        
       end
 
       def credential(value)

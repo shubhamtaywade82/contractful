@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
 module RestClient
-
   # A Response from RestClient, you can access the response body, the code or the headers.
   #
   class Response < String
-
     include AbstractResponse
 
     # Return the HTTP response body.
@@ -67,8 +65,8 @@ module RestClient
     # @param [Net::HTTPResponse] net_http_res
     # @param [RestClient::Request] request
     # @param [Time] start_time
-    def self.create(body, net_http_res, request, start_time=nil)
-      result = self.new(body || '')
+    def self.create(body, net_http_res, request, start_time = nil)
+      result = new(body || '')
 
       result.response_set_vars(net_http_res, request, start_time)
       fix_encoding(result)
@@ -85,9 +83,7 @@ module RestClient
       begin
         encoding = Encoding.find(charset) if charset
       rescue ArgumentError
-        if response.log
-          response.log << "No such encoding: #{charset.inspect}"
-        end
+        response.log << "No such encoding: #{charset.inspect}" if response.log
       end
 
       return unless encoding

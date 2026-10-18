@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract auth' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       instance_exec(&block)
     end
   end
@@ -78,7 +79,7 @@ RSpec.describe 'RestClient::Contract auth' do
         base 'https://api.test'
         auth api_key: [
           { name: 'access-token', value: -> { 'jwt' } },
-          { name: 'client-id', value: 'cid-42' },
+          { name: 'client-id', value: 'cid-42' }
         ]
         contract :ping, 'GET /ping'
       end
@@ -125,7 +126,7 @@ RSpec.describe 'RestClient::Contract auth' do
     it 'encodes literal credentials' do
       client_class = build_client do
         base 'https://api.test'
-        auth basic: ['alice', 's3cret']
+        auth basic: %w[alice s3cret]
         contract :ping, 'GET /ping'
       end
 
@@ -139,7 +140,7 @@ RSpec.describe 'RestClient::Contract auth' do
     it 'accepts a callable returning the pair' do
       client_class = build_client do
         base 'https://api.test'
-        auth basic: -> { ['u', 'p'] }
+        auth basic: -> { %w[u p] }
         contract :ping, 'GET /ping'
       end
 
@@ -245,42 +246,42 @@ RSpec.describe 'RestClient::Contract auth' do
     end
 
     it 'rejects unknown schemes at definition time' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           auth hmac: 'nope'
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /unknown auth scheme :hmac/
       )
     end
 
     it 'rejects api_key entries without a name' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           auth api_key: { value: 'v' }
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /requires a name/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /requires a name/)
     end
 
     it 'rejects invalid api_key locations' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           auth api_key: { name: 'k', value: 'v', in: :body }
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /must be :header or :query/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /must be :header or :query/)
     end
 
     it 'rejects non-literal, non-callable values' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           auth bearer: 12_345
         end
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /literal or a callable/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /literal or a callable/)
     end
 
     it 'returns nil from the getter form when no auth is configured' do
@@ -292,14 +293,14 @@ RSpec.describe 'RestClient::Contract auth' do
     end
 
     it 'rejects scheme declarations inside a contract block' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             auth bearer: 'tok'
           end
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /contract-level auth only accepts false/
       )

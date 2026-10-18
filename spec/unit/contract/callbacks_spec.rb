@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract callbacks' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       base 'https://api.test'
       instance_exec(&block)
     end
@@ -122,9 +123,9 @@ RSpec.describe 'RestClient::Contract callbacks' do
       end
       stub_request(:get, 'https://api.test/posts').to_return(body: '[1,2]')
 
-      expect {
+      expect do
         klass.new.list_posts
-      }.to raise_error(RestClient::Contract::UnexpectedResponse)
+      end.to raise_error(RestClient::Contract::UnexpectedResponse)
       expect(seen).to be_empty
     end
 
@@ -136,9 +137,9 @@ RSpec.describe 'RestClient::Contract callbacks' do
         contract(:create_post, 'POST /posts') { param :title, String, required: true }
       end
 
-      expect {
+      expect do
         klass.new.create_post
-      }.to raise_error(RestClient::Contract::MissingParam)
+      end.to raise_error(RestClient::Contract::MissingParam)
       expect(seen).to be_empty
     end
   end

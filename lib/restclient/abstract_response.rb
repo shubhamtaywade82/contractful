@@ -3,10 +3,13 @@
 require 'cgi'
 require 'http-cookie'
 
+# Mixin giving responses (and raw responses) their shared accessors and
+# behavior: status/header/body inspection, cookie handling and return
+# semantics.
 module RestClient
-
+  # Response behavior shared by Response and RawResponse: status and header
+  # inspection, cookie handling, redirection history and return semantics.
   module AbstractResponse
-
     attr_reader :net_http_res, :request, :start_time, :end_time, :duration
 
     def inspect
@@ -25,7 +28,7 @@ module RestClient
       res_name = net_http_res.class.to_s.gsub(/\ANet::HTTP/, '')
       content_type = (net_http_res['Content-type'] || '').gsub(/;.*\z/, '')
 
-      log << "# => #{code} #{res_name} | #{content_type} #{size} bytes, #{sprintf('%.2f', duration)}s\n"
+      log << "# => #{code} #{res_name} | #{content_type} #{size} bytes, #{format('%.2f', duration)}s\n"
     end
 
     # HTTP status code
@@ -71,11 +74,7 @@ module RestClient
       @start_time = start_time
       @end_time = Time.now
 
-      if @start_time
-        @duration = @end_time - @start_time
-      else
-        @duration = nil
-      end
+      @duration = @start_time ? @end_time - @start_time : nil
 
       # prime redirection history
       history
@@ -193,17 +192,16 @@ module RestClient
     # @return [Hash]
     #
     def self.beautify_headers(headers)
-      headers.inject({}) do |out, (key, value)|
+      headers.each_with_object({}) do |(key, value), out|
         key_sym = key.tr('-', '_').downcase.to_sym
 
         # Handle Set-Cookie specially since it cannot be joined by comma.
-        if key.downcase == 'set-cookie'
-          out[key_sym] = value
-        else
-          out[key_sym] = value.join(', ')
-        end
-
-        out
+        out[key_sym] =
+          if key.downcase == 'set-cookie'
+            value
+          else
+            value.join(', ')
+          end
       end
     end
 
@@ -216,19 +214,14 @@ module RestClient
     #   existing hash that should not be modified.
     #
     def _follow_redirection(new_args, &block)
-
       # parse location header and merge into existing URL
       url = headers[:location]
 
       # cannot follow redirection if there is no location header
-      unless url
-        raise exception_with_response
-      end
+      raise exception_with_response unless url
 
       # handle relative redirects
-      unless url.start_with?('http')
-        url = URI.parse(request.url).merge(url).to_s
-      end
+      url = URI.parse(request.url).merge(url).to_s unless url.start_with?('http')
       new_args[:url] = url
 
       new_args[:password] = request.password
@@ -250,9 +243,10 @@ module RestClient
     end
 
     def check_max_redirects
-      if request.max_redirects <= 0
-        raise exception_with_response
-      end
+      return unless request.max_redirects <= 0
+
+      raise exception_with_response
+      
     end
 
     def exception_with_response

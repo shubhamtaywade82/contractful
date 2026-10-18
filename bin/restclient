@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-$LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
+$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
 
 require 'rubygems'
 require 'restclient'
@@ -8,13 +8,13 @@ require 'yaml'
 
 def usage(why = nil)
   puts "failed for reason: #{why}" if why
-  puts "usage: restclient [get|put|post|delete] url|name [username] [password]"
+  puts 'usage: restclient [get|put|post|delete] url|name [username] [password]'
   puts "  The verb is optional, if you leave it off you'll get an interactive shell."
-  puts "  put and post both take the input body on stdin."
+  puts '  put and post both take the input body on stdin.'
   exit(1)
 end
 
-POSSIBLE_VERBS = ['get', 'put', 'post', 'delete']
+POSSIBLE_VERBS = %w[get put post delete]
 
 if POSSIBLE_VERBS.include? ARGV.first
   @verb = ARGV.shift
@@ -24,16 +24,22 @@ end
 
 @url = ARGV.shift || 'http://localhost:4567'
 
-config = YAML.load(File.read(ENV['HOME'] + "/.restclient")) rescue {}
+config = begin
+           YAML.load_file(ENV.fetch('HOME') + '/.restclient')
+rescue StandardError
+           {}
+end
 
 if (c = config[@url])
-  @url, @username, @password = [c['url'], c['username'], c['password']]
+  @url = c['url']
+  @username = c['username']
+  @password = c['password']
 else
   @url, @username, @password = [@url, * ARGV]
 end
 
 usage("invalid url '#{@url}") unless @url =~ /^https?/
-usage("too few args") unless ARGV.size < 3
+usage('too few args') unless ARGV.size < 3
 
 def r
   @r ||= RestClient::Resource.new(@url, @username, @password)
@@ -43,8 +49,8 @@ r # force rc to load
 
 if @verb
   begin
-    if %w( put post ).include? @verb
-      puts r.send(@verb, STDIN.read)
+    if %w[put post].include? @verb
+      puts r.send(@verb, $stdin.read)
     else
       puts r.send(@verb)
     end
@@ -61,12 +67,12 @@ POSSIBLE_VERBS.each do |m|
   end
 end
 
-def method_missing(s, * args, & b)
-  if POSSIBLE_VERBS.include? s
+def method_missing(sym, ...)
+  if POSSIBLE_VERBS.include? sym
     begin
-      r.send(s, *args, & b)
+      r.send(sym, ...)
     rescue RestClient::RequestFailed => e
-      print STDERR, e.response.body
+      print $stderr, e.response.body
       raise e
     end
   else
@@ -77,14 +83,10 @@ end
 require 'irb'
 require 'irb/completion'
 
-if File.exist? ".irbrc"
-  ENV['IRBRC'] = ".irbrc"
-end
+ENV['IRBRC'] = '.irbrc' if File.exist? '.irbrc'
 
-rcfile = File.expand_path("~/.restclientrc")
-if File.exist?(rcfile)
-  load(rcfile)
-end
+rcfile = File.expand_path('~/.restclientrc')
+load(rcfile) if File.exist?(rcfile)
 
 ARGV.clear
 

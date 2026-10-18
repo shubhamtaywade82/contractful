@@ -5,7 +5,6 @@ require 'http/accept'
 module RestClient
   # Various utility methods
   module Utils
-
     # Return encoding from an HTTP header hash.
     #
     # We use the RFC 7231 specification and do not impose a default encoding on
@@ -31,7 +30,7 @@ module RestClient
       begin
         _content_type, params = cgi_parse_header(type_header)
       rescue HTTP::Accept::ParseError
-        return nil
+        nil
       else
         params['charset']
       end
@@ -47,9 +46,7 @@ module RestClient
     def self.cgi_parse_header(line)
       types = HTTP::Accept::MediaTypes.parse(line)
 
-      if types.empty?
-        raise HTTP::Accept::ParseError.new("Found no types in header line")
-      end
+      raise HTTP::Accept::ParseError.new('Found no types in header line') if types.empty?
 
       [types.first.mime_type, types.first.parameters]
     end
@@ -125,7 +122,7 @@ module RestClient
     #   => 'foo[a]=1&foo[a]=2'
     #
     def self.encode_query_string(object)
-      flatten_params(object, true).map {|k, v| v.nil? ? k : "#{k}=#{v}" }.join('&')
+      flatten_params(object, true).map { |k, v| v.nil? ? k : "#{k}=#{v}" }.join('&')
     end
 
     # Transform deeply nested param containers into a flat array of [key,
@@ -143,19 +140,17 @@ module RestClient
     # @param uri_escape [Boolean] Whether to URI escape keys and values
     # @param parent_key [String] Should not be passed (used for recursion)
     #
-    def self.flatten_params(object, uri_escape=false, parent_key=nil)
+    def self.flatten_params(object, uri_escape = false, parent_key = nil)
       unless object.is_a?(Hash) || object.is_a?(ParamsArray) ||
              (parent_key && object.is_a?(Array))
         raise ArgumentError.new('expected Hash or ParamsArray, got: ' + object.inspect)
       end
 
       # transform empty collections into nil, where possible
-      if object.empty? && parent_key
-        return [[parent_key, nil]]
-      end
+      return [[parent_key, nil]] if object.empty? && parent_key
 
       # This is essentially .map(), but we need to do += for nested containers
-      object.reduce([]) { |result, item|
+      object.reduce([]) do |result, item|
         if object.is_a?(Array)
           # item is already the value
           k = nil
@@ -175,7 +170,7 @@ module RestClient
           v = escape(v.to_s) if uri_escape && v
           result << [processed_key, v]
         end
-      }
+      end
     end
 
     # Encode string for safe transport by URI or form encoding. This uses a CGI

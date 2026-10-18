@@ -48,14 +48,13 @@ module RestClient
         float: Float,
         boolean: :boolean,
         array: Array,
-        hash: Hash,
+        hash: Hash
       }.freeze
 
       BOOLEAN_TRUTHY = %w[true 1 on yes].freeze
       BOOLEAN_FALSY = %w[false 0 off no].freeze
 
-      attr_reader :name, :type, :inclusion, :description
-      attr_reader :min, :max, :length, :pattern
+      attr_reader :name, :type, :inclusion, :description, :min, :max, :length, :pattern
 
       def initialize(name, type = nil, required: false, default: NO_DEFAULT,
                      inclusion: nil, coerce: true, description: nil,
@@ -131,9 +130,7 @@ module RestClient
           return SYMBOL_TYPES[type]
         end
 
-        if type.equal?(TrueClass) || type.equal?(FalseClass)
-          return :boolean
-        end
+        return :boolean if type.equal?(TrueClass) || type.equal?(FalseClass)
 
         unless type.is_a?(Class) || type.is_a?(Proc)
           raise InvalidDefinition,
@@ -163,10 +160,11 @@ module RestClient
                 "param :#{@name}: length must be an Integer or an Integer " \
                 "Range, got #{@length.inspect}"
         end
-        if @pattern && !@pattern.is_a?(Regexp)
-          raise InvalidDefinition,
-                "param :#{@name}: pattern must be a Regexp, got #{@pattern.inspect}"
-        end
+        return unless @pattern && !@pattern.is_a?(Regexp)
+
+        raise InvalidDefinition,
+              "param :#{@name}: pattern must be a Regexp, got #{@pattern.inspect}"
+        
       end
 
       def valid_length_constraint?(constraint)
@@ -196,10 +194,11 @@ module RestClient
       def validate_inclusion!(value)
         return unless @inclusion
 
-        unless @inclusion.include?(value)
-          raise InvalidParam,
-                "value #{value.inspect} is not in #{@inclusion.inspect}"
-        end
+        return if @inclusion.include?(value)
+
+        raise InvalidParam,
+              "value #{value.inspect} is not in #{@inclusion.inspect}"
+        
       end
 
       # Closed-schema constraints, enforced after coercion: the contract
@@ -228,22 +227,23 @@ module RestClient
                   "value #{value.inspect} is below minimum #{@min.inspect}"
           end
         end
-        if @max
-          unless value.respond_to?(:>)
-            raise InvalidParam,
-                  "cannot enforce max #{@max.inspect} on #{value.class}"
-          end
-          begin
-            above = value > @max
-          rescue StandardError
-            raise InvalidParam,
-                  "cannot compare #{value.inspect} with max #{@max.inspect}"
-          end
-          if above
-            raise InvalidParam,
-                  "value #{value.inspect} is above maximum #{@max.inspect}"
-          end
+        return unless @max
+        unless value.respond_to?(:>)
+          raise InvalidParam,
+                "cannot enforce max #{@max.inspect} on #{value.class}"
         end
+        begin
+          above = value > @max
+        rescue StandardError
+          raise InvalidParam,
+                "cannot compare #{value.inspect} with max #{@max.inspect}"
+        end
+        return unless above
+
+        raise InvalidParam,
+              "value #{value.inspect} is above maximum #{@max.inspect}"
+          
+        
       end
 
       def validate_length!(value)
@@ -252,14 +252,15 @@ module RestClient
         unless value.respond_to?(:length)
           raise InvalidParam,
                 "cannot enforce length on #{value.class} " \
-                "(does not respond to #length)"
+                '(does not respond to #length)'
         end
         actual = value.length
         ok = @length.is_a?(Integer) ? actual == @length : @length.cover?(actual)
-        unless ok
-          raise InvalidParam,
-                "length #{actual} is outside #{@length.inspect}"
-        end
+        return if ok
+
+        raise InvalidParam,
+              "length #{actual} is outside #{@length.inspect}"
+        
       end
 
       def validate_pattern!(value)
@@ -269,10 +270,11 @@ module RestClient
           raise InvalidParam,
                 "pattern requires a String, got #{describe_value(value)}"
         end
-        unless @pattern.match?(value)
-          raise InvalidParam,
-                "value #{value.inspect} does not match #{@pattern.inspect}"
-        end
+        return if @pattern.match?(value)
+
+        raise InvalidParam,
+              "value #{value.inspect} does not match #{@pattern.inspect}"
+        
       end
 
       # Coercion path: convert the value into the declared type where the
@@ -296,9 +298,8 @@ module RestClient
         elsif @type.equal?(Array)
           value.is_a?(Array) ? value : [value]
         elsif @type.equal?(Hash)
-          unless value.is_a?(Hash)
-            raise InvalidParam, "expected Hash, got #{describe_value(value)}"
-          end
+          raise InvalidParam, "expected Hash, got #{describe_value(value)}" unless value.is_a?(Hash)
+
           value
         elsif @type.is_a?(Proc)
           coerce_custom(value)
@@ -321,17 +322,19 @@ module RestClient
         case value
         when Integer then value
         when Float
-          if value == value.to_i
-            value.to_i
-          else
-            raise InvalidParam, "expected Integer, got #{describe_value(value)}"
-          end
+          raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless value == value.to_i
+
+          value.to_i
+          
+            
+          
         when String
-          if /\A[+-]?\d+\z/.match?(value)
-            Integer(value)
-          else
-            raise InvalidParam, "expected Integer, got #{describe_value(value)}"
-          end
+          raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless /\A[+-]?\d+\z/.match?(value)
+
+          Integer(value)
+          
+            
+          
         else
           raise InvalidParam, "expected Integer, got #{describe_value(value)}"
         end
@@ -358,7 +361,7 @@ module RestClient
           downcased = value.downcase
           return true if BOOLEAN_TRUTHY.include?(downcased)
           return false if BOOLEAN_FALSY.include?(downcased)
-        elsif value.is_a?(Integer) && (value == 1 || value == 0)
+        elsif value.is_a?(Integer) && [1, 0].include?(value)
           return value == 1
         end
 
@@ -366,13 +369,13 @@ module RestClient
       end
 
       def coerce_custom(value)
-        begin
-          return @type.call(value)
-        rescue InvalidParam
-          raise
-        rescue StandardError => e
-          raise InvalidParam, "custom coercion failed: #{e.class}: #{e.message}"
-        end
+        
+        @type.call(value)
+      rescue InvalidParam
+        raise
+      rescue StandardError => e
+        raise InvalidParam, "custom coercion failed: #{e.class}: #{e.message}"
+        
       end
 
       def coerce_class(value)
@@ -409,19 +412,23 @@ module RestClient
         if @type.nil?
           value
         elsif @type.equal?(:boolean)
-          if value.equal?(true) || value.equal?(false)
-            value
-          else
+          unless value.equal?(true) || value.equal?(false)
             raise InvalidParam, "expected boolean, got #{describe_value(value)}"
           end
+
+          value
+          
+            
+          
         elsif @type.is_a?(Proc)
           coerce_custom(value)
         elsif @type.is_a?(Class)
-          if value.is_a?(@type)
-            value
-          else
-            raise InvalidParam, "expected #{type_name}, got #{describe_value(value)}"
-          end
+          raise InvalidParam, "expected #{type_name}, got #{describe_value(value)}" unless value.is_a?(@type)
+
+          value
+          
+            
+          
         else
           raise InvalidParam, "unsupported strict type #{type_name}"
         end

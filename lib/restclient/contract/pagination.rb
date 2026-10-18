@@ -74,7 +74,7 @@ module RestClient
           offset_param: options[:offset_param]&.to_sym,
           limit_param: options[:limit_param]&.to_sym,
           items_path: options[:items_path],
-          has_more_path: options[:has_more_path],
+          has_more_path: options[:has_more_path]
         }.freeze
       end
 
@@ -117,12 +117,11 @@ module RestClient
         end
 
         # Resume support: an explicitly supplied cursor/offset drives page 1.
-        resume = nil
-        if pagination[:style] == :cursor
-          resume = params.delete(pagination[:cursor_param])
-        else
-          resume = params.delete(pagination[:offset_param])
-        end
+        resume = if pagination[:style] == :cursor
+                   params.delete(pagination[:cursor_param])
+                 else
+                   params.delete(pagination[:offset_param])
+                 end
 
         pages = 0
         loop do
@@ -149,11 +148,11 @@ module RestClient
 
           break unless continue?(pagination, parsed, items)
 
-          if pagination[:style] == :cursor
-            resume = dig(parsed, pagination[:next_cursor_path])
-          else
-            resume = (resume || 0) + items.length
-          end
+          resume = if pagination[:style] == :cursor
+                     dig(parsed, pagination[:next_cursor_path])
+                   else
+                     (resume || 0) + items.length
+                   end
         end
       end
 
@@ -207,7 +206,11 @@ module RestClient
         dotted_path.to_s.split('.').reduce(data) do |acc, key|
           break nil if acc.nil? || !acc.is_a?(Hash)
 
-          acc.key?(key) ? acc[key] : (acc.key?(key.to_sym) ? acc[key.to_sym] : nil)
+          if acc.key?(key)
+            acc[key]
+          else
+  (acc.key?(key.to_sym) ? acc[key.to_sym] : nil)
+          end
         end
       end
     end

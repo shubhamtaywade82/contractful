@@ -61,15 +61,15 @@ RSpec.describe RestClient::Contract::Sequence do
           call: 'create_order',
           params: { quantity: 10 },
           response: { status: 201, body: { order_id: 'o-1', status: 'open' } },
-          expect_request: { json_include: { quantity: 10, order_type: 'MARKET' } },
+          expect_request: { json_include: { quantity: 10, order_type: 'MARKET' } }
         },
         {
           call: 'get_order',
           params: { order_id: 'o-1' },
           response: { status: 200, body: { order_id: 'o-1', status: 'filled' } },
-          expect_request: { path: '/orders/o-1' },
-        },
-      ],
+          expect_request: { path: '/orders/o-1' }
+        }
+      ]
     }
   end
 
@@ -143,7 +143,7 @@ RSpec.describe RestClient::Contract::Sequence do
     it 'handles raw-string and array response bodies' do
       steps = [
         { call: 'get_health', response: { status: 200, body: 'OK' } },
-        { call: 'list_orders', response: { status: 200, body: [{ order_id: 'o-1' }] } },
+        { call: 'list_orders', response: { status: 200, body: [{ order_id: 'o-1' }] } }
       ]
       results = mod.run(client, { steps: steps })
 
@@ -208,11 +208,11 @@ RSpec.describe RestClient::Contract::Sequence do
           response: { status: 201, body: { order_id: 'o-2' } },
           expect_request: {
             json_include: { quantity: 3, order_type: 'MARKET' },
-            headers_include: { Accept: 'application/json' },
+            headers_include: { Accept: 'application/json' }
           } },
         { call: 'get_order', params: { order_id: 'o-2' },
           response: { status: 200, body: { order_id: 'o-2' } },
-          expect_request: { path: '/orders/o-2' } },
+          expect_request: { path: '/orders/o-2' } }
       ]
       expect(mod.run(client, { steps: steps }).size).to eq 2
     end
@@ -289,9 +289,7 @@ RSpec.describe RestClient::Contract::Sequence do
 
       player.after_step do |index, step, response|
         first_order_id = response.json['order_id'] if index == 1
-        if index == 2
-          expect(step[:params][:order_id]).to eq first_order_id
-        end
+        expect(step[:params][:order_id]).to eq first_order_id if index == 2
       end
 
       expect(player.run.size).to eq 2

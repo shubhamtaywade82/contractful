@@ -6,6 +6,7 @@ RSpec.describe 'RestClient::Contract response validation' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       base 'https://api.test'
       instance_exec(&block)
     end
@@ -31,11 +32,11 @@ RSpec.describe 'RestClient::Contract response validation' do
     it 'raises UnexpectedResponse for a status outside the declared set' do
       stub_request(:get, 'https://api.test/posts').to_return(status: 204)
 
-      expect {
+      expect do
         client.list_posts
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
-        /unexpected status 204 for GET \/posts responds 200 \(expected 200\)/
+        %r{unexpected status 204 for GET /posts responds 200 \(expected 200\)}
       )
     end
 
@@ -55,7 +56,7 @@ RSpec.describe 'RestClient::Contract response validation' do
     it 'accepts ranges as declared statuses' do
       client_class = build_client do
         contract :ping, 'GET /ping' do
-          responds (200..299)
+          responds(200..299)
         end
       end
 
@@ -87,11 +88,11 @@ RSpec.describe 'RestClient::Contract response validation' do
     it 'raises UnexpectedResponse for undeclared error statuses' do
       stub_request(:get, 'https://api.test/widgets/7').to_return(status: 500)
 
-      expect {
+      expect do
         client_class.new.show_widget(id: 7)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
-        /unexpected status 500 for GET \/widgets\/:id \(params: :id\) responds 200, 404 \(expected 200, 404\)/
+        %r{unexpected status 500 for GET /widgets/:id \(params: :id\) responds 200, 404 \(expected 200, 404\)}
       )
     end
   end
@@ -108,9 +109,9 @@ RSpec.describe 'RestClient::Contract response validation' do
     it 'keeps rest-client raising for error statuses' do
       stub_request(:get, 'https://api.test/widgets/7').to_return(status: 404)
 
-      expect {
+      expect do
         client_class.new.show_widget(id: 7)
-      }.to raise_error(RestClient::ResourceNotFound)
+      end.to raise_error(RestClient::ResourceNotFound)
     end
   end
 
@@ -155,11 +156,11 @@ RSpec.describe 'RestClient::Contract response validation' do
       end
       stub_request(:get, 'https://api.test/posts').to_return(body: '[1,2,3]')
 
-      expect {
+      expect do
         client_class.new.list_posts
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
-        /response body does not match Hash for GET \/posts/
+        %r{response body does not match Hash for GET /posts}
       )
     end
 
@@ -171,11 +172,11 @@ RSpec.describe 'RestClient::Contract response validation' do
       end
       stub_request(:get, 'https://api.test/posts').to_return(body: '<html>nope</html>')
 
-      expect {
+      expect do
         client_class.new.list_posts
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
-        /response body is not valid JSON for GET \/posts/
+        %r{response body is not valid JSON for GET /posts}
       )
     end
 
@@ -188,9 +189,9 @@ RSpec.describe 'RestClient::Contract response validation' do
       end
       stub_request(:post, 'https://api.test/posts').to_return(status: 201, body: '')
 
-      expect {
+      expect do
         client_class.new.create_post(title: 'Hi')
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /expected Hash but the response body is empty/
       )
@@ -232,11 +233,11 @@ RSpec.describe 'RestClient::Contract response validation' do
       stub_request(:get, 'https://api.test/posts')
         .to_return(body: '[]', headers: { 'X-Flag' => 'no' })
 
-      expect {
+      expect do
         client_class.new.list_posts
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
-        /verify_response block rejected the response for GET \/posts/
+        %r{verify_response block rejected the response for GET /posts}
       )
     end
 
@@ -255,43 +256,43 @@ RSpec.describe 'RestClient::Contract response validation' do
     it 'lets exceptions raised inside the block propagate' do
       client_class = build_client do
         contract :list_posts, 'GET /posts' do
-          verify_response { |_response, parsed| raise ArgumentError, 'boom' }
+          verify_response { |_response, _parsed| raise ArgumentError, 'boom' }
         end
       end
       stub_request(:get, 'https://api.test/posts').to_return(body: '{}')
 
-      expect {
+      expect do
         client_class.new.list_posts
-      }.to raise_error(ArgumentError, /boom/)
+      end.to raise_error(ArgumentError, /boom/)
     end
   end
 
   describe 'definition-time validation' do
     it 'rejects responds without statuses' do
-      expect {
+      expect do
         build_client { contract(:x, 'GET /x') { responds } }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /responds requires at least one status/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /responds requires at least one status/)
     end
 
     it 'rejects invalid statuses' do
-      expect {
+      expect do
         build_client { contract(:x, 'GET /x') { responds 'ok' } }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /invalid status "ok"/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /invalid status "ok"/)
     end
 
     it 'rejects unsupported response types' do
-      expect {
+      expect do
         build_client { contract(:x, 'GET /x') { responds 200, type: :yaml } }
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /unsupported response type :yaml/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /unsupported response type :yaml/)
     end
 
     it 'rejects verify_response without a block' do
       client_class = build_client do
         contract :x, 'GET /x'
       end
-      expect {
+      expect do
         client_class.__own_contract_config.contracts[:x].verify_response
-      }.to raise_error(RestClient::Contract::InvalidDefinition, /verify_response requires a block/)
+      end.to raise_error(RestClient::Contract::InvalidDefinition, /verify_response requires a block/)
     end
   end
 

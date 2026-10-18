@@ -3,6 +3,12 @@
 require 'yaml'
 require 'json'
 
+# rubocop:disable Naming/MethodParameterName
+# The rendering helpers below follow OpenAPI tooling conventions for the
+# local variables they pass around: `op` for an Operation object, `p` for
+# a parameter, `f` for a response field and `d` for a Definition. The
+# single letters are domain-idiomatic here; long-form names would be
+# repeated dozens of times across these small, well-scoped helpers.
 module RestClient
   module Contract
     # OpenAPI 3.x import helper (REQ-N01) — a development-time, opt-in reader
@@ -105,6 +111,7 @@ module RestClient
 
           item.each do |method, op|
             next unless HTTP_METHODS.include?(method.to_s.downcase)
+
             if method.to_s.downcase == 'trace'
               ctx.note("#{path}: trace operation skipped (unsupported verb)")
               next
@@ -174,7 +181,7 @@ module RestClient
       module Renderer
         RESPONSE_FIELD_TYPE_SOURCES = {
           String => ':string', Integer => ':integer', Float => ':float',
-          Array => ':array', Hash => ':hash',
+          Array => ':array', Hash => ':hash'
         }.freeze
 
         module_function
@@ -285,7 +292,7 @@ module RestClient
           return ':boolean' if type.equal?(:boolean)
           return type.name if type.is_a?(Class)
 
-          raise Error, "cannot render a Proc param type — write it by hand"
+          raise Error, 'cannot render a Proc param type — write it by hand'
         end
 
         def type_source_for_field(type)
@@ -499,12 +506,14 @@ module RestClient
         Array(shared_params).each do |raw|
           p = deref(ctx, raw, "path #{path} shared parameter")
           next unless p
+
           key = [p['in'], p['name']]
           merged[key] = p
         end
         Array(op['parameters']).each do |raw|
           p = deref(ctx, raw, op_label(path, verb))
           next unless p
+
           key = [p['in'], p['name']]
           merged[key] = p
         end
@@ -637,16 +646,13 @@ module RestClient
 
         if (ref = schema['$ref'])
           resolved = resolve_pointer(ctx, schema, ref)
-          unless resolved.is_a?(Hash)
-            return [nil, "unresolvable $ref #{ref.inspect} — left untyped"]
-          end
+          return [nil, "unresolvable $ref #{ref.inspect} — left untyped"] unless resolved.is_a?(Hash)
+
           return map_type(ctx, resolved, label, depth: depth + 1)
         end
 
         %w[oneOf anyOf allOf not].each do |combinator|
-          if schema[combinator]
-            return [nil, "#{combinator} schemas are not representable — left untyped"]
-          end
+          return [nil, "#{combinator} schemas are not representable — left untyped"] if schema[combinator]
         end
 
         case schema['type']
@@ -806,12 +812,12 @@ module RestClient
         fields_schema = nil
         if source
           schema, = json_schema_of(ctx, source[1], source[2])
-          case schema['type']
-          when 'array' then type = :array
-          when 'object' then type = :hash
-          when 'string' then type = :string
-          else type = :json
-          end
+          type = case schema['type']
+                 when 'array' then :array
+                 when 'object' then :hash
+                 when 'string' then :string
+                 else :json
+                 end
           fields_schema = schema if schema['type'] == 'object'
         end
 
@@ -943,3 +949,4 @@ module RestClient
     end
   end
 end
+# rubocop:enable Naming/MethodParameterName

@@ -67,33 +67,32 @@ require File.dirname(__FILE__) + '/restclient/windows'
 #   => "PUT http://rest-test.heroku.com/resource with a 7 byte payload, content type application/x-www-form-urlencoded {\"foo\"=>\"baz\"}"
 #
 module RestClient
-
-  def self.get(url, headers={}, &block)
-    Request.execute(:method => :get, :url => url, :headers => headers, &block)
+  def self.get(url, headers = {}, &block)
+    Request.execute(method: :get, url: url, headers: headers, &block)
   end
 
-  def self.post(url, payload, headers={}, &block)
-    Request.execute(:method => :post, :url => url, :payload => payload, :headers => headers, &block)
+  def self.post(url, payload, headers = {}, &block)
+    Request.execute(method: :post, url: url, payload: payload, headers: headers, &block)
   end
 
-  def self.patch(url, payload, headers={}, &block)
-    Request.execute(:method => :patch, :url => url, :payload => payload, :headers => headers, &block)
+  def self.patch(url, payload, headers = {}, &block)
+    Request.execute(method: :patch, url: url, payload: payload, headers: headers, &block)
   end
 
-  def self.put(url, payload, headers={}, &block)
-    Request.execute(:method => :put, :url => url, :payload => payload, :headers => headers, &block)
+  def self.put(url, payload, headers = {}, &block)
+    Request.execute(method: :put, url: url, payload: payload, headers: headers, &block)
   end
 
-  def self.delete(url, headers={}, &block)
-    Request.execute(:method => :delete, :url => url, :headers => headers, &block)
+  def self.delete(url, headers = {}, &block)
+    Request.execute(method: :delete, url: url, headers: headers, &block)
   end
 
-  def self.head(url, headers={}, &block)
-    Request.execute(:method => :head, :url => url, :headers => headers, &block)
+  def self.head(url, headers = {}, &block)
+    Request.execute(method: :head, url: url, headers: headers, &block)
   end
 
-  def self.options(url, headers={}, &block)
-    Request.execute(:method => :options, :url => url, :headers => headers, &block)
+  def self.options(url, headers = {}, &block)
+    Request.execute(method: :options, url: url, headers: headers, &block)
   end
 
   # A global proxy URL to use for all requests. This can be overridden on a
@@ -126,38 +125,42 @@ module RestClient
   # Create a log that respond to << like a logger
   # param can be 'stdout', 'stderr', a string (then we will log to that file) or a logger (then we return it)
   def self.create_log param
-    if param
-      if param.is_a? String
-        if param == 'stdout'
-          stdout_logger = Class.new do
-            def << obj
-              STDOUT.puts obj
-            end
-          end
-          stdout_logger.new
-        elsif param == 'stderr'
-          stderr_logger = Class.new do
-            def << obj
-              STDERR.puts obj
-            end
-          end
-          stderr_logger.new
-        else
-          file_logger = Class.new do
-            attr_writer :target_file
+    return unless param
 
-            def << obj
-              File.open(@target_file, 'a') { |f| f.puts obj }
-            end
+    if param.is_a? String
+      if param == 'stdout'
+        stdout_logger = Class.new do
+          def << obj
+            # $stdout rather than the STDOUT constant so that logging
+            # follows a reassigned $stdout (matching the stderr logger's
+            # use of Kernel#warn, which writes to the current $stderr).
+            $stdout.puts obj
           end
-          logger = file_logger.new
-          logger.target_file = param
-          logger
         end
+        stdout_logger.new
+      elsif param == 'stderr'
+        stderr_logger = Class.new do
+          def << obj
+            warn obj
+          end
+        end
+        stderr_logger.new
       else
-        param
+        file_logger = Class.new do
+          attr_writer :target_file
+
+          def << obj
+            File.open(@target_file, 'a') { |f| f.puts obj }
+          end
+        end
+        logger = file_logger.new
+        logger.target_file = param
+        logger
       end
+    else
+      param
     end
+    
   end
 
   @@env_log = create_log ENV['RESTCLIENT_LOG']
@@ -174,6 +177,7 @@ module RestClient
   # The proc parameters will be the http request and the request params.
   def self.add_before_execution_proc &proc
     raise ArgumentError.new('block is required') unless proc
+
     @@before_execution_procs << proc
   end
 
@@ -185,5 +189,4 @@ module RestClient
   def self.before_execution_procs # :nodoc:
     @@before_execution_procs
   end
-
 end

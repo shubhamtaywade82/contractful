@@ -12,6 +12,9 @@ rescue LoadError
 end
 
 module RestClient
+  # Payload generation: turns user-provided bodies (strings, hashes,
+  # ParamsArray, IO-like objects) into the object rest-client transmits,
+  # deciding urlencoded vs multipart vs streamed representation.
   module Payload
     extend self
 
@@ -35,29 +38,28 @@ module RestClient
         end
       elsif params.respond_to?(:read)
         Streamed.new(params)
-      else
-        nil
       end
     end
 
     def has_file?(params)
-      unless params.is_a?(Hash)
-        raise ArgumentError.new("Must pass Hash, not #{params.inspect}")
-      end
+      raise ArgumentError.new("Must pass Hash, not #{params.inspect}") unless params.is_a?(Hash)
+
       _has_file?(params)
     end
 
     def _has_file?(obj)
       case obj
       when Hash, ParamsArray
-        obj.any? {|_, v| _has_file?(v) }
+        obj.any? { |_, v| _has_file?(v) }
       when Array
-        obj.any? {|v| _has_file?(v) }
+        obj.any? { |v| _has_file?(v) }
       else
         obj.respond_to?(:path) && obj.respond_to?(:read)
       end
     end
 
+    # Base payload wrapping a readable stream; also the concrete payload
+    # for plain String bodies.
     class Base
       def initialize(params)
         build_stream(params)
@@ -74,19 +76,19 @@ module RestClient
 
       def to_s
         result = read
-        @stream.seek(0)
+        rewind_stream
         result
       end
 
       def headers
-        {'Content-Length' => size.to_s}
+        { 'Content-Length' => size.to_s }
       end
 
       def size
         @stream.size
       end
 
-      alias :length :size
+      alias length size
 
       def close
         @stream.close unless @stream.closed?
@@ -114,6 +116,16 @@ module RestClient
         false
       end
 
+      # Best-effort, silent variant of #rewind used when a non-rewindable
+      # stream is not an error (for example reading the payload for logging).
+      # Streams that cannot be rewound (sockets, pipes, and other non-seekable
+      # objects) are left positioned wherever reading left them.
+      def rewind_stream
+        @stream.seek(0) if @stream.respond_to?(:seek)
+      rescue IOError, SystemCallError
+        nil
+      end
+
       def to_s_inspect
         to_s.inspect
       end
@@ -125,9 +137,10 @@ module RestClient
           to_s_inspect
         end
       end
-
     end
 
+    # Payload for IO-like (streaming) bodies; the stream is consumed
+    # directly and may be non-seekable.
     class Streamed < Base
       def build_stream(params = nil)
         @stream = params
@@ -141,12 +154,13 @@ module RestClient
         end
       end
 
-      # TODO (breaks compatibility): ought to use mime_for() to autodetect the
+      # TODO: (breaks compatibility): ought to use mime_for() to autodetect the
       # Content-Type for stream objects that have a filename.
 
-      alias :length :size
+      alias length size
     end
 
+    # Payload for urlencoded form bodies (Hash/ParamsArray without files).
     class UrlEncoded < Base
       def build_stream(params = nil)
         @stream = StringIO.new(Utils.encode_query_string(params))
@@ -154,10 +168,12 @@ module RestClient
       end
 
       def headers
-        super.merge({'Content-Type' => 'application/x-www-form-urlencoded'})
+        super.merge({ 'Content-Type' => 'application/x-www-form-urlencoded' })
       end
     end
 
+    # Payload for multipart/form-data bodies (Hash/ParamsArray with file
+    # fields, or explicit multipart: true).
     class Multipart < Base
       EOL = "\r\n"
 
@@ -168,20 +184,20 @@ module RestClient
         @stream.binmode
         @stream.write(b + EOL)
 
-        case params
-        when Hash, ParamsArray
-          x = Utils.flatten_params(params)
-        else
-          x = params
-        end
+        x = case params
+            when Hash, ParamsArray
+              Utils.flatten_params(params)
+            else
+              params
+            end
 
         last_index = x.length - 1
         x.each_with_index do |a, index|
-          k, v = * a
-          if v.respond_to?(:read) && v.respond_to?(:path)
-            create_file_field(@stream, k, v)
+          key, value = * a
+          if value.respond_to?(:read) && value.respond_to?(:path)
+            create_file_field(@stream, key, value)
           else
-            create_regular_field(@stream, k, v)
+            create_regular_field(@stream, key, value)
           end
           @stream.write(EOL + b)
           @stream.write(EOL) unless last_index == index
@@ -191,26 +207,24 @@ module RestClient
         @stream.seek(0)
       end
 
-      def create_regular_field(s, k, v)
-        s.write("Content-Disposition: form-data; name=\"#{k}\"")
-        s.write(EOL)
-        s.write(EOL)
-        s.write(v)
+      def create_regular_field(stream, key, value)
+        stream.write("Content-Disposition: form-data; name=\"#{key}\"")
+        stream.write(EOL)
+        stream.write(EOL)
+        stream.write(value)
       end
 
-      def create_file_field(s, k, v)
-        begin
-          s.write("Content-Disposition: form-data;")
-          s.write(" name=\"#{k}\";") unless (k.nil? || k=='')
-          s.write(" filename=\"#{v.respond_to?(:original_filename) ? v.original_filename : File.basename(v.path)}\"#{EOL}")
-          s.write("Content-Type: #{v.respond_to?(:content_type) ? v.content_type : mime_for(v.path)}#{EOL}")
-          s.write(EOL)
-          while (data = v.read(8124))
-            s.write(data)
-          end
-        ensure
-          v.close if v.respond_to?(:close)
+      def create_file_field(stream, key, value)
+        stream.write('Content-Disposition: form-data;')
+        stream.write(" name=\"#{key}\";") unless key.nil? || key == ''
+        stream.write(" filename=\"#{value.respond_to?(:original_filename) ? value.original_filename : File.basename(value.path)}\"#{EOL}")
+        stream.write("Content-Type: #{value.respond_to?(:content_type) ? value.content_type : mime_for(value.path)}#{EOL}")
+        stream.write(EOL)
+        while (data = value.read(8124))
+          stream.write(data)
         end
+      ensure
+        value.close if value.respond_to?(:close)
       end
 
       def mime_for(path)
@@ -246,7 +260,7 @@ module RestClient
       end
 
       def headers
-        super.merge({'Content-Type' => %Q{multipart/form-data; boundary=#{boundary}}})
+        super.merge({ 'Content-Type' => "multipart/form-data; boundary=#{boundary}" })
       end
 
       def close

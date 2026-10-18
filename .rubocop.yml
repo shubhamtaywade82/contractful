@@ -38,3 +38,32 @@ AllCops:
 # way instead of relying on review alone.
 Style/FrozenStringLiteralComment:
   Enabled: true
+
+# --- Documented, permanent decisions (kept out of the auto-generated todo) ---
+
+Lint/RescueException:
+  # request.rb invalidates the pooled connection and re-raises immediately;
+  # catching ::Exception there is deliberate so that even non-StandardError
+  # failures cannot leave a poisoned persistent connection behind.
+  Exclude:
+    - 'lib/restclient/request.rb'
+
+RSpec/RemoveConst:
+  # The to_ruby round-trip spec evaluates generated client source in a
+  # sandbox and must install/remove the top-level Acme namespace around
+  # each example.
+  Exclude:
+    - 'spec/unit/contract/openapi_import_spec.rb'
+
+Naming/VariableNumber:
+  # Symbol names like :TLSv1_2 mirror the OpenSSL constant spellings and are
+  # looked up verbatim (SSL_VERSION_CONSTANTS); do_thing_2 comes from
+  # de-duplicating imported operationIds. Only symbol numbering is exempted.
+  CheckSymbols: false
+
+Naming/PredicatePrefix:
+  # has_file? (Payload) and has_default? (Contract::Param) are public API
+  # since 2.x; renaming them to file?/default? would break consumers.
+  Exclude:
+    - 'lib/restclient/payload.rb'
+    - 'lib/restclient/contract/param.rb'

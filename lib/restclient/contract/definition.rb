@@ -18,7 +18,7 @@ module RestClient
     # Path placeholders (+:owner+, +:repo+) are automatically synthesized as
     # required params unless they were explicitly declared.
     class Definition
-      PATH_PLACEHOLDER = /:([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
+      PATH_PLACEHOLDER = /:([a-zA-Z_][a-zA-Z0-9_]*)/
 
       VALID_VERBS = %i[get head post put patch delete options].freeze
 
@@ -29,12 +29,10 @@ module RestClient
         array: Array,
         hash: Hash,
         string: String,
-        json: :json,
+        json: :json
       }.freeze
 
-      attr_reader :name, :verb, :path_template, :params, :description
-      attr_reader :response_statuses, :response_type, :response_verifier
-      attr_reader :response_fields
+      attr_reader :name, :verb, :path_template, :params, :description, :response_statuses, :response_type, :response_verifier, :response_fields
       # Per-contract strict-params override (nil = inherit the class setting).
       attr_reader :strict
       # Contract-level auth opt-out (nil = inherit, false = disabled).
@@ -109,11 +107,11 @@ module RestClient
                 "responds requires at least one status for :#{@name}"
         end
         statuses.each do |status|
-          unless valid_status?(status)
-            raise InvalidDefinition,
-                  "invalid status #{status.inspect} for :#{@name} " \
-                  '(expected an Integer or an Integer Range)'
-          end
+          next if valid_status?(status)
+
+          raise InvalidDefinition,
+                "invalid status #{status.inspect} for :#{@name} " \
+                '(expected an Integer or an Integer Range)'
         end
         @response_statuses = statuses.freeze
         @response_type = normalize_response_type(type) if type
@@ -156,7 +154,7 @@ module RestClient
       def response_field(name, type = nil, **options)
         if @response_type.equal?(String)
           raise InvalidDefinition,
-                "response_field cannot be used with a String response type " \
+                'response_field cannot be used with a String response type ' \
                 "for :#{@name}"
         end
         key = name.to_sym
@@ -210,20 +208,14 @@ module RestClient
       # One-line description, e.g. <tt>"POST /repos/:owner/:repo/issues (params: :owner, :repo, :title) responds 200, 404 => Hash"</tt>.
       def describe
         parts = ["#{verb.to_s.upcase} #{path_template}"]
-        if @params.any?
-          parts << "(params: #{@params.keys.map { |k| ":#{k}" }.join(', ')})"
-        end
-        if @response_fields.any?
-          parts << "(fields: #{@response_fields.keys.map { |k| ":#{k}" }.join(', ')})"
-        end
+        parts << "(params: #{@params.keys.map { |k| ":#{k}" }.join(', ')})" if @params.any?
+        parts << "(fields: #{@response_fields.keys.map { |k| ":#{k}" }.join(', ')})" if @response_fields.any?
         parts << 'idempotent' if @idempotent
         parts << 'paginated' if @pagination
         if @response_statuses
           rendered = @response_statuses.map { |s| s.is_a?(Range) ? s.inspect : s.to_s }
           response_part = "responds #{rendered.join(', ')}"
-          if @response_type
-            response_part << " => #{response_type_name}"
-          end
+          response_part << " => #{response_type_name}" if @response_type
           parts << response_part
         end
         parts.join(' ')
@@ -246,11 +238,12 @@ module RestClient
       private
 
       def validate_verb!
-        unless VALID_VERBS.include?(@verb)
-          raise InvalidDefinition,
-                "unsupported HTTP verb #{verb.to_s.inspect} for :#{@name} " \
-                "(supported: #{VALID_VERBS.join(', ')})"
-        end
+        return if VALID_VERBS.include?(@verb)
+
+        raise InvalidDefinition,
+              "unsupported HTTP verb #{verb.to_s.inspect} for :#{@name} " \
+              "(supported: #{VALID_VERBS.join(', ')})"
+        
       end
 
       def valid_status?(status)
@@ -269,11 +262,12 @@ module RestClient
       end
 
       def validate_path_template!
-        unless @path_template.start_with?('/')
-          raise InvalidDefinition,
-                "path template #{@path_template.inspect} for :#{@name} must " \
-                'start with "/" (it is resolved against the base URL)'
-        end
+        return if @path_template.start_with?('/')
+
+        raise InvalidDefinition,
+              "path template #{@path_template.inspect} for :#{@name} must " \
+              'start with "/" (it is resolved against the base URL)'
+        
       end
 
       # Every +:placeholder+ in the path template is implicitly a required

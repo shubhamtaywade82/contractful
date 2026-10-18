@@ -12,7 +12,6 @@ module RestClient
   # a Tempfile object at res.file, which contains the path to the raw
   # downloaded request body.
   class RawResponse
-
     include AbstractResponse
 
     attr_reader :file, :request, :start_time, :end_time
@@ -25,7 +24,7 @@ module RestClient
     # @param [Net::HTTPResponse] net_http_res
     # @param [RestClient::Request] request
     # @param [Time] start_time
-    def initialize(tempfile, net_http_res, request, start_time=nil)
+    def initialize(tempfile, net_http_res, request, start_time = nil)
       @file = tempfile
 
       # reopen the tempfile so we can read it
@@ -46,6 +45,5 @@ module RestClient
     def size
       file.size
     end
-
   end
 end

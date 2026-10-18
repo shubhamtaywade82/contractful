@@ -24,7 +24,7 @@ module RestClient
   class RateLimit
     # Leading-integer extraction handles both plain integers ("5000") and
     # the IETF "limit, limit;w=window" description form.
-    LEADING_INTEGER = /\A\s*(\d+)/.freeze
+    LEADING_INTEGER = /\A\s*(\d+)/
 
     attr_reader :limit, :remaining, :reset, :policy
 
@@ -125,7 +125,7 @@ module RestClient
             nil
           end
         end
-      elsif legacy_value && legacy_value.match?(/\A\d+\z/)
+      elsif legacy_value&.match?(/\A\d+\z/)
         Time.at(legacy_value.to_i)
       end
     end

@@ -13,6 +13,7 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
   def build_client(&block)
     Class.new do
       include RestClient::Contract
+
       instance_exec(&block)
     end
   end
@@ -41,49 +42,49 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
   describe 'definition-time validation' do
     it 'rejects unsupported field types' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             response_field :a, :nonsense
           end
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /unsupported response_field type :nonsense/
       )
     end
 
     it 'rejects non-class, non-symbol types' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             response_field :a, 'String'
           end
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /expected a Class or a supported symbol/
       )
     end
 
     it 'rejects inclusion that does not respond to include?' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
             response_field :a, inclusion: 1
           end
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /inclusion must respond to #include\?/
       )
     end
 
     it 'rejects response fields on a String-typed response' do
-      expect {
+      expect do
         build_client do
           base 'https://api.test'
           contract :x, 'GET /x' do
@@ -91,7 +92,7 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
             response_field :a
           end
         end
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::InvalidDefinition,
         /response_field cannot be used with a String response type/
       )
@@ -114,9 +115,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
     it 'raises when a required field is missing' do
       stub_order_response(201, status: 'PENDING')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /field :order_id is required but missing/
       )
@@ -124,9 +125,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
     it 'raises when a required field is null' do
       stub_order_response(201, order_id: nil, status: 'PENDING')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /field :order_id is required but was null/
       )
@@ -138,9 +139,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
       # The user's example: a response where orderId comes back as an
       # integer is a contract violation and raises on return.
       stub_order_response(201, order_id: 12_345, status: 'PENDING')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /field :order_id expected String, got Integer/
       )
@@ -152,16 +153,16 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
         order_id: 'ORD-1', status: 'PENDING',
         avg_price: 150.25, new_vendor_field: { nested: true }
       )
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
     it 'treats nil values of optional fields as additive data' do
       stub_order_response(201, order_id: 'ORD-1', status: nil)
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
     it 'validates booleans and numbers through symbol aliases' do
@@ -206,9 +207,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
     it 'accepts unknown enum members by default (data, not errors)' do
       stub_order_response(201, order_id: 'ORD-1', status: 'SETTLED_PARTIAL')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
     it 'enforces the inclusion set only for fields declared strict: true' do
@@ -230,9 +231,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
     it 'requires a JSON object body when fields are declared' do
       stub_request(:post, 'https://api.test/orders')
         .to_return(body: JSON.generate(%w[an array]))
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /expected a JSON object but got Array/
       )
@@ -240,9 +241,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
     it 'requires a parseable body' do
       stub_request(:post, 'https://api.test/orders').to_return(body: 'ok')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /response body is not valid JSON/
       )
@@ -250,9 +251,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
 
     it 'rejects an empty body' do
       stub_request(:post, 'https://api.test/orders').to_return(body: '')
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse,
         /response body is empty/
       )
@@ -262,9 +263,9 @@ RSpec.describe 'RestClient::Contract response fields (open response schemas)' do
   describe 'aggregate violations' do
     it 'reports every violation in one error' do
       stub_order_response(201, status: 42)
-      expect {
+      expect do
         client.create_order(security_id: '1', quantity: 1)
-      }.to raise_error(
+      end.to raise_error(
         RestClient::Contract::UnexpectedResponse
       ) { |e|
         expect(e.message).to match(/field :order_id is required but missing/)

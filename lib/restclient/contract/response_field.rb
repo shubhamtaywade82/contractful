@@ -33,7 +33,7 @@ module RestClient
         array: Array,
         hash: Hash,
         number: :number,
-        boolean: :boolean,
+        boolean: :boolean
       }.freeze
 
       attr_reader :name, :type, :inclusion, :description
@@ -117,11 +117,12 @@ module RestClient
       end
 
       def validate_definition!
-        if @inclusion && !@inclusion.respond_to?(:include?)
-          raise InvalidDefinition,
-                "response_field :#{@name}: inclusion must respond to #include? " \
-                "(got #{@inclusion.inspect})"
-        end
+        return unless @inclusion && !@inclusion.respond_to?(:include?)
+
+        raise InvalidDefinition,
+              "response_field :#{@name}: inclusion must respond to #include? " \
+              "(got #{@inclusion.inspect})"
+        
       end
 
       def type_violations(value)
@@ -133,13 +134,9 @@ module RestClient
             return ["field :#{@name} expected boolean, got #{value.class}"]
           end
         when :number
-          unless value.is_a?(Numeric)
-            return ["field :#{@name} expected number, got #{value.class}"]
-          end
+          return ["field :#{@name} expected number, got #{value.class}"] unless value.is_a?(Numeric)
         else
-          unless value.is_a?(@type)
-            return ["field :#{@name} expected #{type_name}, got #{value.class}"]
-          end
+          return ["field :#{@name} expected #{type_name}, got #{value.class}"] unless value.is_a?(@type)
         end
         []
       end

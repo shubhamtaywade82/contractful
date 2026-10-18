@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
+# Contract layer: declarative, first-class API definitions compiled into
+# real methods (see docs/adr/0002 and 0003).
 module RestClient
+  # Declaration DSL and metaprogramming machinery for contract clients.
   module Contract
     # Metaprogramming machinery injected into classes that include
     # {RestClient::Contract}.
@@ -64,17 +67,15 @@ module RestClient
       # <tt>auth false</tt> inside the contract block.
 
       def auth(**schemes)
-        if schemes.empty?
-          return __merged_scalar(:auth)
-        end
+        return __merged_scalar(:auth) if schemes.empty?
+
         __own_contract_config.auth = Contract::Auth.new(**schemes)
       end
 
       # Header carrying the idempotency key (default 'Idempotency-Key').
       def idempotency_header(name = nil)
-        if name.nil?
-          return __merged_scalar(:idempotency_header) || 'Idempotency-Key'
-        end
+        return __merged_scalar(:idempotency_header) || 'Idempotency-Key' if name.nil?
+
         __own_contract_config.idempotency_header = name
       end
 
@@ -148,9 +149,7 @@ module RestClient
           raise InvalidDefinition,
                 "update_with must be :patch or :put, got #{update_with.inspect}"
         end
-        if only && except
-          raise InvalidDefinition, 'resource accepts :only or :except, not both'
-        end
+        raise InvalidDefinition, 'resource accepts :only or :except, not both' if only && except
 
         member = (singular || __singularize(plural)).to_sym
         collection_path = path || "/#{plural}"
@@ -161,11 +160,11 @@ module RestClient
         member_path = "#{collection_path.sub(%r{/+\z}, '')}/:id"
 
         actions = {
-          index:   ["GET #{collection_path}", :"list_#{plural}"],
-          show:    ["GET #{member_path}", :"get_#{member}"],
-          create:  ["POST #{collection_path}", :"create_#{member}"],
-          update:  ["#{update_with.to_s.upcase} #{member_path}", :"update_#{member}"],
-          destroy: ["DELETE #{member_path}", :"delete_#{member}"],
+          index: ["GET #{collection_path}", :"list_#{plural}"],
+          show: ["GET #{member_path}", :"get_#{member}"],
+          create: ["POST #{collection_path}", :"create_#{member}"],
+          update: ["#{update_with.to_s.upcase} #{member_path}", :"update_#{member}"],
+          destroy: ["DELETE #{member_path}", :"delete_#{member}"]
         }
         actions = __filter_resource_actions(actions, only, except)
 
@@ -263,7 +262,7 @@ module RestClient
 
       def parse_request_line(line)
         match = line.to_s.match(
-          /\A\s*(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)\s+(\/\S*)\s*\z/i
+          %r{\A\s*(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)\s+(/\S*)\s*\z}i
         )
         unless match
           raise InvalidDefinition,
@@ -278,10 +277,11 @@ module RestClient
           raise InvalidDefinition,
                 "contract name #{name.inspect} is not a valid method name"
         end
-        if RESERVED_NAMES.include?(name)
-          raise InvalidDefinition,
-                "contract name #{name.inspect} is reserved and cannot be used"
-        end
+        return unless RESERVED_NAMES.include?(name)
+
+        raise InvalidDefinition,
+              "contract name #{name.inspect} is reserved and cannot be used"
+        
       end
 
       # Filter resource actions according to :only / :except (already
@@ -312,7 +312,7 @@ module RestClient
 
       IRREGULAR_SINGULARS = {
         people: 'person', children: 'child', men: 'man', women: 'woman',
-        teeth: 'tooth', feet: 'foot', mice: 'mouse', geese: 'goose',
+        teeth: 'tooth', feet: 'foot', mice: 'mouse', geese: 'goose'
       }.freeze
 
       # Deliberately small singularization for the `resource` macro: covers
@@ -324,9 +324,9 @@ module RestClient
 
         if w.match?(/ies\z/)
           w.sub(/ies\z/, 'y')
-        elsif w.match?(/(ss|x|z|ch|sh)es\z/)
-          w.sub(/es\z/, '')
-        elsif w.match?(/ses\z/)
+        elsif w.match?(/(ss|x|z|ch|sh)es\z/) || w.match?(/ses\z/)
+          # both branches strip a trailing 'es' (order-preserving merge of
+          # previously duplicated branches)
           w.sub(/es\z/, '')
         elsif w.match?(/[^s]s\z/)
           w.sub(/s\z/, '')
@@ -365,6 +365,9 @@ module RestClient
       end
     end
 
+    # Instance methods mixed into contract client classes: convenience
+    # dispatch (`call_*`, `*_contract`, `has_*?`) on top of the generated
+    # methods.
     module InstanceMethods
       # Client-level overrides. They take precedence over the class-level
       # configuration; if the class defines its own #initialize it wins (call

@@ -15,6 +15,7 @@ RSpec.describe 'RestClient::Contract integration' do
   let(:client_class) do
     Class.new do
       include RestClient::Contract
+
       base 'https://httpbin.org'
 
       before_request do |ctx|
@@ -55,14 +56,14 @@ RSpec.describe 'RestClient::Contract integration' do
   end
 
   it 'validates response contracts against the live server' do
-    expect {
+    expect do
       client_class.new.anything_get(kind: 'read')
-    }.not_to raise_error
+    end.not_to raise_error
   end
 
   it 'raises MissingParam before any HTTP traffic when a param is absent' do
-    expect {
+    expect do
       client_class.new.anything_post(name: 'no-kind-here')
-    }.to raise_error(RestClient::Contract::MissingParam, /param :kind is required/)
+    end.to raise_error(RestClient::Contract::MissingParam, /param :kind is required/)
   end
 end

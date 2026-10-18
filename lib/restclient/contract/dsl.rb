@@ -46,6 +46,30 @@ module RestClient
         __own_contract_config.payload_style = style
       end
 
+      # Declare the authentication scheme(s) for this client. The contract is
+      # the source of truth for HOW to authenticate; you supply only the
+      # credentials (literals or callables — callables are invoked per
+      # request so tokens stay fresh):
+      #
+      #   auth bearer: -> { ENV['API_TOKEN'] }
+      #   auth api_key: { name: 'access-token', value: -> { token } }
+      #   auth api_key: [
+      #     { name: 'access-token', value: -> { token } },
+      #     { name: 'client-id',    value: client_id },
+      #   ]
+      #   auth basic: -> { [user, pass] }
+      #
+      # Called with no arguments it returns the resolved Auth object (or
+      # nil/false). Individual contracts can opt out with
+      # <tt>auth false</tt> inside the contract block.
+
+      def auth(**schemes)
+        if schemes.empty?
+          return __merged_scalar(:auth)
+        end
+        __own_contract_config.auth = Contract::Auth.new(**schemes)
+      end
+
       # Register a callback executed before the HTTP request is sent. The
       # block receives a mutable context Hash:
       #

@@ -66,6 +66,7 @@ module RestClient
           query: query,
         }
 
+        apply_auth!(ctx, instance, definition)
         instance.__run_before_callbacks(ctx)
 
         request_args = {
@@ -286,6 +287,23 @@ module RestClient
           block.call(response, parsed)
         else
           block.call(response)
+        end
+      end
+
+      # Resolve the contract's auth scheme (unless the contract opted out
+      # with `auth false`) and merge its headers/query into the context.
+      # Auth runs before the before_request callbacks, so callbacks can
+      # still inspect or override the resolved credentials.
+      def apply_auth!(ctx, instance, definition)
+        return if definition.auth.equal?(false)
+
+        auth = instance.class.__merged_scalar(:auth)
+        return unless auth.is_a?(Auth)
+
+        resolved = auth.resolve
+        ctx[:headers] = ctx[:headers].merge(resolved[:headers]) unless resolved[:headers].empty?
+        unless resolved[:query].empty?
+          ctx[:query] = (ctx[:query] || {}).merge(resolved[:query])
         end
       end
 

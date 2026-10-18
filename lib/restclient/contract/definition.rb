@@ -37,6 +37,8 @@ module RestClient
       attr_reader :response_fields
       # Per-contract strict-params override (nil = inherit the class setting).
       attr_reader :strict
+      # Contract-level auth opt-out (nil = inherit, false = disabled).
+      attr_reader :auth
 
       def initialize(name, verb, path_template, description: nil, &block)
         @name = name.to_sym
@@ -47,6 +49,7 @@ module RestClient
         @payload_style = nil
         @strict = nil
         @response_fields = {}
+        @auth = nil
 
         validate_verb!
         validate_path_template!
@@ -108,6 +111,20 @@ module RestClient
         end
         @response_statuses = statuses.freeze
         @response_type = normalize_response_type(type) if type
+      end
+
+      # Opt this contract out of the class-level auth: `auth false`. Called
+      # with no arguments it returns the current setting (nil = inherit,
+      # false = disabled).
+      def auth(flag = NO_DEFAULT)
+        return @auth if flag.equal?(NO_DEFAULT)
+
+        unless flag.equal?(false)
+          raise InvalidDefinition,
+                'contract-level auth only accepts false to opt out of the ' \
+                "class auth scheme; got #{flag.inspect}"
+        end
+        @auth = false
       end
 
       # Declare a field of the response payload. See {ResponseField} for the

@@ -75,6 +75,7 @@ end
 
 require_relative 'contract/param'
 require_relative 'contract/response_field'
+require_relative 'contract/auth'
 require_relative 'contract/definition'
 require_relative 'contract/config'
 require_relative 'contract/executor'

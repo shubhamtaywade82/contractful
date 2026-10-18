@@ -17,7 +17,7 @@ module RestClient
 
       # Scalars are nil until explicitly set, so that "unset" can be
       # distinguished from every meaningful value (including false/{}).
-      attr_reader :base_url, :default_headers, :strict_params, :payload_style
+      attr_reader :base_url, :default_headers, :strict_params, :payload_style, :auth
 
       def initialize
         @contracts = {}
@@ -26,6 +26,7 @@ module RestClient
         @default_headers = nil
         @strict_params = nil
         @payload_style = nil
+        @auth = nil
       end
 
       def base_url=(url)
@@ -51,6 +52,15 @@ module RestClient
                 '(expected :json, :form or :query)'
         end
         @payload_style = style.to_sym
+      end
+
+      def auth=(value)
+        unless value.nil? || value.is_a?(Auth) || value.equal?(false)
+          raise InvalidDefinition,
+                'auth must be a RestClient::Contract::Auth or false, ' \
+                "got #{value.inspect}"
+        end
+        @auth = value
       end
 
       def add_callback(kind, block)

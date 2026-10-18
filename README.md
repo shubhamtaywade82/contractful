@@ -594,6 +594,82 @@ api.has_list_users?  # => true
 Clients also accept instance-level overrides: `GitHubAPI.new(base:
 'https://staging.example.com', headers: { 'X-Env' => 'test' })`.
 
+### Importing an OpenAPI document
+
+If a vendor publishes a machine-readable OpenAPI 3.x document, the opt-in
+import helper converts it into `contract` declarations — a development-time
+tool, not a runtime dependency (it is not loaded by `require 'rest-client'`):
+
+```ruby
+require 'restclient/contract/openapi_import'
+
+# Build Definition objects from a file, YAML/JSON text or a Hash:
+import = RestClient::Contract::OpenAPIImport.import('vendor_openapi.yaml')
+import.definitions   # => { list_users: #<Definition GET /users ...>, ... }
+import.base_url      # from `servers`
+import.notes         # every lossy mapping decision, for review
+
+# Or render a ready-to-paste client class:
+puts RestClient::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
+                                                 class_name: 'Acme::Client')
+```
+
+What is mapped: path/query/body-object params (types, required, defaults,
+enum/min/max/length/pattern constraints), `payload_style` (form for
+urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
+(numeric and `2XX` wildcards), JSON body types and open-schema
+`response_field` bindings, the base URL from `servers`, and auth hints from
+`securitySchemes` (as comments — credentials are never invented).
+
+What is NOT mapped is reported on `import.notes` instead of guessed away:
+header/cookie params, multipart bodies, `oneOf`/`anyOf` unions, `default`
+responses, operation-level server overrides. The generated source
+round-trips: evaluating it yields a class whose contracts `describe`
+exactly like the imported definitions.
+
+### Testing sequences with recorded fixtures
+
+Contracts deliberately do not express ordering, timing or cross-call state
+machines. The opt-in sequence helper replays recorded vendor responses
+through a contract client and fails on the FIRST contract violation with
+the step number attached (test-only — it uses WebMock):
+
+```ruby
+require 'restclient/contract/sequence'
+
+sequence = RestClient::Contract::Sequence.load(client, 'order_lifecycle.yml')
+sequence.after_step do |index, step, response|
+  # stateful rules contracts cannot express: token refresh sequencing,
+  # rate-limit windows (response.rate_limit), cross-step invariants
+end
+sequence.run   # => [#<Result step 1>, ...] or raises Sequence::Failure
+```
+
+Fixture shape (YAML or JSON, under your control):
+
+```yaml
+name: order lifecycle
+steps:
+  - call: create_order
+    params: { quantity: 10 }
+    response: { status: 201, body: { order_id: 'o-1', status: 'open' } }
+    expect_request:
+      json_include: { quantity: 10 }     # assert the OUTGOING payload subset
+  - call: get_order
+    params: { order_id: 'o-1' }
+    response: { status: 200, body: { order_id: 'o-1', status: 'filled' } }
+    expect_request:
+      path: /orders/o-1
+```
+
+Each step stubs its recorded response, invokes the contract method and
+lets the contract's own validation run — a recorded response the contract
+does not declare is a violation at that step. `expect_request` pins
+ordering-sensitive outgoing details (`path`, `query_include`,
+`headers_include`, `json_include` — unknown keys fail the fixture loudly).
+Unknown contract names, malformed steps and missing responses are rejected
+at load time, before anything runs.
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

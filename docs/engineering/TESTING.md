@@ -101,10 +101,14 @@ HTTP interaction) of missing, unknown, wrongly-typed and out-of-constraint
 values. Response-side validation is tested as an **open schema**: required
 fields and types bind, unknown fields pass through untouched, new enum
 members are data, and values are never coerced. What the specs deliberately
-do *not* cover is ordering/timing across calls — that belongs to the
-planned recorded-sequence helper (REQ-N02); if you are adding semantics
-that span calls (like pagination already does), say so explicitly in the
-feature spec and test the sequence with WebMock-orchestrated pages.
+do *not* cover is ordering/timing across calls — that is the recorded-
+sequence helper's job (REQ-N02,
+`require 'restclient/contract/sequence'`): sequence fixtures replay
+recorded vendor responses through a contract client, fail on the first
+violation with the step number attached, and carry stateful rules in
+`before_step`/`after_step` hooks. If you are adding semantics that span
+calls (like pagination already does), say so explicitly in the feature
+spec and test the sequence with WebMock-orchestrated pages.
 
 ## Release QA checklist
 

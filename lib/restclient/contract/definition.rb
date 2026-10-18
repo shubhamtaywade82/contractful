@@ -34,6 +34,8 @@ module RestClient
 
       attr_reader :name, :verb, :path_template, :params, :description
       attr_reader :response_statuses, :response_type, :response_verifier
+      # Per-contract strict-params override (nil = inherit the class setting).
+      attr_reader :strict
 
       def initialize(name, verb, path_template, description: nil, &block)
         @name = name.to_sym
@@ -42,6 +44,7 @@ module RestClient
         @description = description
         @params = {}
         @payload_style = nil
+        @strict = nil
 
         validate_verb!
         validate_path_template!
@@ -72,6 +75,13 @@ module RestClient
                 '(expected :json, :form or :query)'
         end
         @payload_style = style.to_sym
+      end
+
+      # Per-contract strict-params override. Calling this inside a contract
+      # block wins over the class-level `strict_params` macro; generated
+      # (resource) contracts use it to stay open for free-form attributes.
+      def strict_params(flag = true)
+        @strict = flag ? true : false
       end
 
       # Declare the expected responses: one or more status codes (Integers or

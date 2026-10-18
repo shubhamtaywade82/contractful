@@ -286,7 +286,7 @@ module RestClient
 
         unknown = params.keys - definition.params.keys
         if unknown.any?
-          if strict_params?(instance)
+          if strict_params?(instance, definition)
             raise UnknownParam,
                   "unknown param #{unknown.map { |k| ":#{k}" }.join(', ')} " \
                   "for #{definition.describe} " \
@@ -297,7 +297,12 @@ module RestClient
         coerced
       end
 
-      def strict_params?(instance)
+      def strict_params?(instance, definition = nil)
+        # Per-contract override wins over the class-level setting.
+        if definition && !definition.strict.nil?
+          return definition.strict
+        end
+
         value = instance.class.__merged_scalar(:strict_params)
         value.nil? ? true : value
       end

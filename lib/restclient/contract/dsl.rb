@@ -67,6 +67,73 @@ module RestClient
         __own_contract_config.add_callback(:after_response, block)
       end
 
+      # Generate the five standard REST contracts for a collection. The
+      # contracts are registered and method-generated exactly like hand
+      # written ones — they show up in introspection and get `*_url`
+      # builders for free:
+      #
+      #   resource :posts
+      #
+      # is equivalent to declaring:
+      #
+      #   contract :list_posts,   'GET /posts'
+      #   contract :get_post,     'GET /posts/:id'
+      #   contract :create_post,  'POST /posts'
+      #   contract :update_post,  'PATCH /posts/:id'
+      #   contract :delete_post,  'DELETE /posts/:id'
+      #
+      # Generated CRUD contracts are non-strict: undeclared params flow
+      # through to the query string / payload, since CRUD endpoints take
+      # free-form attributes. Declare contracts by hand instead when you want
+      # strict validation for a specific operation.
+      #
+      # @param plural [Symbol] collection name (also the default path segment)
+      # @param path [String] override the collection path (default "/#{plural}")
+      # @param only [Array<Symbol>] restrict to a subset of
+      #   %i[index show create update destroy]
+      # @param except [Array<Symbol>] exclude some of the actions
+      # @param update_with [Symbol] verb for the update action (:patch or :put)
+      # @param singular [Symbol] override the auto-singularized member name
+      #
+      # @return [Hash] action name => generated contract name
+      def resource(plural, path: nil, only: nil, except: nil,
+                   update_with: :patch, singular: nil)
+        plural = plural.to_sym
+        unless plural.to_s.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/)
+          raise InvalidDefinition,
+                "resource name #{plural.inspect} is not a valid identifier"
+        end
+        unless %i[patch put].include?(update_with.to_sym)
+          raise InvalidDefinition,
+                "update_with must be :patch or :put, got #{update_with.inspect}"
+        end
+        if only && except
+          raise InvalidDefinition, 'resource accepts :only or :except, not both'
+        end
+
+        member = (singular || __singularize(plural)).to_sym
+        collection_path = path || "/#{plural}"
+        unless collection_path.start_with?('/')
+          raise InvalidDefinition,
+                "resource path #{collection_path.inspect} must start with \"/\""
+        end
+        member_path = "#{collection_path.sub(%r{/+\z}, '')}/:id"
+
+        actions = {
+          index:   ["GET #{collection_path}", :"list_#{plural}"],
+          show:    ["GET #{member_path}", :"get_#{member}"],
+          create:  ["POST #{collection_path}", :"create_#{member}"],
+          update:  ["#{update_with.to_s.upcase} #{member_path}", :"update_#{member}"],
+          destroy: ["DELETE #{member_path}", :"delete_#{member}"],
+        }
+        actions = __filter_resource_actions(actions, only, except)
+
+        actions.each_value do |request_line, name|
+          contract(name, request_line) { strict_params false }
+        end
+        actions.transform_values(&:last)
+      end
+
       # Declare a contract. The request line is <tt>'VERB /path'</tt>; the
       # optional block is instance_eval'd against the new {Definition}.
       #
@@ -140,6 +207,57 @@ module RestClient
         if RESERVED_NAMES.include?(name)
           raise InvalidDefinition,
                 "contract name #{name.inspect} is reserved and cannot be used"
+        end
+      end
+
+      # Filter resource actions according to :only / :except (already
+      # validated: they are never both present).
+      def __filter_resource_actions(actions, only, except)
+        if only
+          wanted = Array(only).map(&:to_sym)
+          unknown = wanted - actions.keys
+          unless unknown.empty?
+            raise InvalidDefinition,
+                  "unknown resource actions #{unknown.map(&:inspect).join(', ')} " \
+                  "(known: #{actions.keys.map(&:inspect).join(', ')})"
+          end
+          actions.select { |action, _| wanted.include?(action) }
+        elsif except
+          unwanted = Array(except).map(&:to_sym)
+          unknown = unwanted - actions.keys
+          unless unknown.empty?
+            raise InvalidDefinition,
+                  "unknown resource actions #{unknown.map(&:inspect).join(', ')} " \
+                  "(known: #{actions.keys.map(&:inspect).join(', ')})"
+          end
+          actions.reject { |action, _| unwanted.include?(action) }
+        else
+          actions
+        end
+      end
+
+      IRREGULAR_SINGULARS = {
+        people: 'person', children: 'child', men: 'man', women: 'woman',
+        teeth: 'tooth', feet: 'foot', mice: 'mouse', geese: 'goose',
+      }.freeze
+
+      # Deliberately small singularization for the `resource` macro: covers
+      # regular English plurals and the most common irregulars. Override with
+      # the `singular:` option when the guess is wrong.
+      def __singularize(word)
+        w = word.to_s
+        return IRREGULAR_SINGULARS[w.to_sym] if IRREGULAR_SINGULARS.key?(w.to_sym)
+
+        if w.match?(/ies\z/)
+          w.sub(/ies\z/, 'y')
+        elsif w.match?(/(ss|x|z|ch|sh)es\z/)
+          w.sub(/es\z/, '')
+        elsif w.match?(/ses\z/)
+          w.sub(/es\z/, '')
+        elsif w.match?(/[^s]s\z/)
+          w.sub(/s\z/, '')
+        else
+          w
         end
       end
 

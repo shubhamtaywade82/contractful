@@ -1,3 +1,41 @@
+# 2.2.0
+
+Modernization release, reviving the gem after the upstream repository was
+archived in 2019. The public API is unchanged; this release is about modern
+Ruby support, tooling, and a few new request options.
+
+* Support and CI-test Ruby 3.0, 3.1, 3.2, 3.3, 3.4, 4.0 and ruby-head
+  (experimental). `required_ruby_version` is now `>= 3.0`.
+* Add a `:write_timeout` request option, mapping to `Net::HTTP#write_timeout`,
+  to bound time spent sending request bodies.
+* Add `:ssl_min_version` and `:ssl_max_version` request options, mapping to
+  `OpenSSL::SSL::SSLContext#min_version=` / `#max_version=`. This is the modern
+  way to constrain TLS protocol versions (for example `:ssl_min_version =>
+  :TLSv1_2`), complementing the legacy `:ssl_version` option.
+* Reject URIs whose hostname is empty (Ruby 3.4+ returns `''` rather than `nil`
+  for URLs like `http:///`).
+* Remove the legacy Ruby 2.0 code paths from `RestClient::Utils`
+  (`deprecated_cgi_parse_header` and friends); `HTTP::Accept` is now always
+  used for Content-Type parsing.
+* Add `# frozen_string_literal: true` to all library files.
+* Modernize the gemspec: remove the deprecated `test_files` field, add gem
+  metadata (`changelog_uri`, `bug_tracker_uri`, `rubygems_mfa_required`), point
+  the homepage at this maintained fork, and refresh development dependencies
+  (rspec ~> 3.13, webmock >= 3.19 < 5, pry ~> 0.14, rdoc >= 6.0). Drop the
+  stale rubocop 0.49 / pry-doc development dependencies; rubocop tooling can be
+  reintroduced later alongside a dedicated style pass.
+* Fix the Windows gemspec to work when evaluated by modern Bundler, bump its
+  ffi dependency to `~> 1.16`, and add the modern `x64-mingw-ucrt` platform.
+* Replace the dead Travis CI setup with a GitHub Actions workflow that runs the
+  unit and integration suites across the supported Ruby matrix.
+* Update the integration test CA fixtures: www.mozilla.org now chains to Let's
+  Encrypt (ISRG Root X1) rather than DigiCert, so the bundled root certificate
+  and capath fixtures were replaced.
+* Update specs for Ruby 3+ keyword-argument semantics (rspec-mocks now treats
+  bare `with(...)` hashes as keyword arguments) and for Ruby 4.0 removing the
+  `base64` gem from the default gems.
+* The default `rake` task now runs the test suite.
+
 # 2.1.0
 
 - Add a dependency on http-accept for parsing Content-Type charset headers.

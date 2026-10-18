@@ -1,16 +1,22 @@
 # REST Client -- simple DSL for accessing HTTP and REST resources
 
 [![Gem Downloads](https://img.shields.io/gem/dt/rest-client.svg)](https://rubygems.org/gems/rest-client)
-[![Build Status](https://travis-ci.org/rest-client/rest-client.svg?branch=master)](https://travis-ci.org/rest-client/rest-client)
-[![Code Climate](https://codeclimate.com/github/rest-client/rest-client.svg)](https://codeclimate.com/github/rest-client/rest-client)
+[![CI](https://github.com/shubhamtaywade82/rest-client/actions/workflows/ci.yml/badge.svg)](https://github.com/shubhamtaywade82/rest-client/actions/workflows/ci.yml)
 [![Inline docs](http://inch-ci.org/github/rest-client/rest-client.svg?branch=master)](http://www.rubydoc.info/github/rest-client/rest-client/master)
-[![Join the chat at https://gitter.im/ruby-rest-client/community](https://badges.gitter.im/ruby-rest-client/community.svg)](https://gitter.im/ruby-rest-client/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 A simple HTTP and REST client for Ruby, inspired by the Sinatra's microframework style
 of specifying actions: get, put, post, delete.
 
-* Main page: https://github.com/rest-client/rest-client
-* Mailing list: https://groups.io/g/rest-client
+* Main page: https://github.com/shubhamtaywade82/rest-client
+
+### About this fork
+
+The original rest-client gem (https://github.com/rest-client/rest-client) was
+archived by its maintainers in 2019 and had fallen behind modern Ruby releases.
+This fork keeps the gem alive: it supports and is tested against Ruby 3.0
+through 4.0, uses current development tooling, and adds a few long-requested
+options such as `:write_timeout` and `:ssl_min_version` / `:ssl_max_version`.
+See [history.md](history.md) for the full list of changes.
 
 ### New mailing list
 
@@ -29,12 +35,14 @@ http://librelist.com/browser/rest.client
 
 ## Requirements
 
-MRI Ruby 2.0 and newer are supported. Alternative interpreters compatible with
-2.0+ should work as well.
+MRI Ruby 3.0 and newer are supported, including Ruby 4.0. The full test suite
+runs in CI against Ruby 3.0, 3.1, 3.2, 3.3, 3.4, and 4.0 (plus ruby-head on a
+best-effort basis). Alternative interpreters compatible with Ruby 3.0+ such as
+JRuby should work as well.
 
-Earlier Ruby versions such as 1.8.7, 1.9.2, and 1.9.3 are no longer supported. These
-versions no longer have any official support, and do not receive security
-updates.
+Ruby 2.x versions are no longer supported. Ruby 3.0, 3.1, and 3.2 have reached
+end-of-life upstream; they are still covered by this gem's test matrix, but
+users are encouraged to run a maintained Ruby release.
 
 The rest-client gem depends on these other gems for usage at runtime:
 
@@ -801,11 +809,15 @@ RestClient::Request.execute(method: :get, url: 'http://example.com/resource',
                             timeout: 120)
 ```
 
-Additionally, you can set `read_timeout:` and `open_timeout:` separately.
+Additionally, you can set `read_timeout:`, `write_timeout:` and `open_timeout:`
+separately.
 
 ```ruby
 RestClient::Request.execute(method: :get, url: 'http://example.com/resource',
                             read_timeout: 120, open_timeout: 240)
+
+RestClient::Request.execute(method: :post, url: 'http://example.com/upload',
+                            payload: large_body, write_timeout: 30)
 ```
 
 ## Cookies
@@ -841,6 +853,17 @@ default, rest-client will verify certificates using the system's CA store on
 all platforms. (This is intended to be similar to how browsers behave.) You can
 specify an :ssl_ca_file, :ssl_ca_path, or :ssl_cert_store to customize the
 certificate authorities accepted.
+
+You can also constrain the negotiated TLS protocol versions with
+`:ssl_min_version` and `:ssl_max_version`, which map to
+`OpenSSL::SSL::SSLContext#min_version=` and `#max_version=`. Version symbols
+such as `:TLSv1_2` (or `:TLS1_2`) and integers such as
+`OpenSSL::SSL::TLS1_2_VERSION` are accepted:
+
+```ruby
+RestClient::Request.execute(method: :get, url: 'https://example.com/resource',
+                            ssl_min_version: :TLSv1_2)
+```
 
 ### SSL Client Certificates
 

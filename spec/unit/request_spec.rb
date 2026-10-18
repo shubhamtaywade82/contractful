@@ -505,7 +505,7 @@ describe RestClient::Request, :include_helpers do
 
   it "class method execute wraps constructor" do
     req = double("rest request")
-    expect(RestClient::Request).to receive(:new).with(1 => 2).and_return(req)
+    expect(RestClient::Request).to receive(:new).with({1 => 2}).and_return(req)
     expect(req).to receive(:execute)
     RestClient::Request.execute(1 => 2)
   end
@@ -700,6 +700,7 @@ describe RestClient::Request, :include_helpers do
 
       expect(@net).not_to receive(:read_timeout=)
       expect(@net).not_to receive(:open_timeout=)
+      expect(@net).not_to receive(:write_timeout=)
 
       @request.send(:transmit, @uri, 'req', nil)
     end
@@ -787,6 +788,28 @@ describe RestClient::Request, :include_helpers do
 
       expect(@request).to receive(:warn)
       expect(@net).to receive(:open_timeout=).with(nil)
+
+      @request.send(:transmit, @uri, 'req', nil)
+    end
+
+    it 'sets write_timeout' do
+      @request = RestClient::Request.new(:method => :put, :url => 'http://some/resource', :payload => 'payload', :write_timeout => 123)
+      allow(@http).to receive(:request)
+      allow(@request).to receive(:process_result)
+      allow(@request).to receive(:response_log)
+
+      expect(@net).to receive(:write_timeout=).with(123)
+
+      @request.send(:transmit, @uri, 'req', nil)
+    end
+
+    it 'does not set write_timeout if not specified' do
+      @request = RestClient::Request.new(:method => :put, :url => 'http://some/resource', :payload => 'payload')
+      allow(@http).to receive(:request)
+      allow(@request).to receive(:process_result)
+      allow(@request).to receive(:response_log)
+
+      expect(@net).not_to receive(:write_timeout=)
 
       @request.send(:transmit, @uri, 'req', nil)
     end
@@ -889,6 +912,55 @@ describe RestClient::Request, :include_helpers do
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
       @request.send(:transmit, @uri, 'req', 'payload')
+    end
+
+    it "should set the ssl_min_version and ssl_max_version if provided" do
+      @request = RestClient::Request.new(
+        :method => :put,
+        :url => 'https://some/resource',
+        :payload => 'payload',
+        :ssl_min_version => :TLSv1_2,
+        :ssl_max_version => :TLS1_3,
+      )
+      expect(@net).to receive(:min_version=).with(OpenSSL::SSL::TLS1_2_VERSION)
+      expect(@net).to receive(:max_version=).with(OpenSSL::SSL::TLS1_3_VERSION)
+      allow(@http).to receive(:request)
+      allow(@request).to receive(:process_result)
+      allow(@request).to receive(:response_log)
+      @request.send(:transmit, @uri, 'req', 'payload')
+    end
+
+    it "should not set the ssl_min_version or ssl_max_version if not provided" do
+      @request = RestClient::Request.new(
+        :method => :put,
+        :url => 'https://some/resource',
+        :payload => 'payload'
+      )
+      expect(@net).not_to receive(:min_version=)
+      expect(@net).not_to receive(:max_version=)
+      allow(@http).to receive(:request)
+      allow(@request).to receive(:process_result)
+      allow(@request).to receive(:response_log)
+      @request.send(:transmit, @uri, 'req', 'payload')
+    end
+
+    it "normalizes ssl version symbols and strings to protocol version integers" do
+      expect(@request.send(:normalize_ssl_version, :TLSv1_2))
+        .to eq OpenSSL::SSL::TLS1_2_VERSION
+      expect(@request.send(:normalize_ssl_version, 'TLSv1_2'))
+        .to eq OpenSSL::SSL::TLS1_2_VERSION
+      expect(@request.send(:normalize_ssl_version, :TLS1_3))
+        .to eq OpenSSL::SSL::TLS1_3_VERSION
+      expect(@request.send(:normalize_ssl_version, 'TLS1.3'))
+        .to eq OpenSSL::SSL::TLS1_3_VERSION
+    end
+
+    it "passes through integer, :SSLv23 and unknown ssl version values" do
+      expect(@request.send(:normalize_ssl_version, OpenSSL::SSL::TLS1_2_VERSION))
+        .to eq OpenSSL::SSL::TLS1_2_VERSION
+      expect(@request.send(:normalize_ssl_version, :SSLv23)).to eq :SSLv23
+      expect(@request.send(:normalize_ssl_version, :totally_unknown))
+        .to eq :totally_unknown
     end
 
     it "should set the ssl_ciphers if provided" do
@@ -1185,7 +1257,10 @@ describe RestClient::Request, :include_helpers do
 
   describe 'constructor' do
     it 'should reject valid URIs with no hostname' do
-      expect(URI.parse('http:///').hostname).to be_nil
+      # Ruby >= 3.4 returns an empty string (rather than nil) as the hostname
+      # of 'http:///' — either way, RestClient must reject it.
+      hostname = URI.parse('http:///').hostname
+      expect(hostname.nil? || hostname.empty?).to be(true)
 
       expect {
         RestClient::Request.new(method: :get, url: 'http:///')

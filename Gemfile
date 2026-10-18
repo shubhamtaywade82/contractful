@@ -1,10 +1,8 @@
 source "https://rubygems.org"
 
-if !!File::ALT_SEPARATOR
-  gemspec :name => 'rest-client.windows'
-else
-  gemspec :name => 'rest-client'
-end
+# The windows gemspec is only used by `gem build` when releasing platform
+# specific gems (see Rakefile); bundler always uses the main gemspec here.
+gemspec
 
 group :test do
   gem 'rake'

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 require_relative '_lib'
-require 'base64'
 
 describe RestClient do
 
@@ -104,7 +103,10 @@ describe RestClient do
     end
 
     it 'leaves images as binary' do
-      gif = Base64.strict_decode64('R0lGODlhAQABAAAAADs=')
+      # String#unpack1('m') is a strict base64 decode. This replaces the removed
+# `base64` gem (Base64.strict_decode64), which left Ruby's default gems in
+# Ruby 4.0.
+gif = 'R0lGODlhAQABAAAAADs='.unpack1('m')
 
       stub_request(:get, 'www.example.com').to_return(
         body: gif, status: 200, headers: {

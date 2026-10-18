@@ -24,6 +24,22 @@ module RestClient
     #
     # With <tt>coerce: false</tt> the value must already match the declared
     # type exactly (no conversion is attempted).
+    #
+    # Beyond type and inclusion, params can carry the closed-schema
+    # constraints known from JSON Schema / OpenAPI (these are what make a
+    # request schema "closed" — bad input is rejected before the network
+    # call is ever attempted):
+    #
+    #   * +min:+ / +max:+      — inclusive numeric (or any Comparable) bounds,
+    #                            the counterpart of JSON Schema's
+    #                            +minimum+ / +maximum+
+    #   * +length:+            — exact length (Integer) or a Range of valid
+    #                            lengths for String/Array/Hash values
+    #   * +pattern:+           — a Regexp the String value must match
+    #
+    # Constraints are enforced after coercion, so
+    # <tt>param :quantity, Integer, min: 1</tt> rejects the string "0"
+    # exactly like the integer 0.
     class Param
       # Types that may be referenced with a symbol instead of a class.
       SYMBOL_TYPES = {
@@ -39,9 +55,11 @@ module RestClient
       BOOLEAN_FALSY = %w[false 0 off no].freeze
 
       attr_reader :name, :type, :inclusion, :description
+      attr_reader :min, :max, :length, :pattern
 
       def initialize(name, type = nil, required: false, default: NO_DEFAULT,
-                     inclusion: nil, coerce: true, description: nil)
+                     inclusion: nil, coerce: true, description: nil,
+                     min: nil, max: nil, length: nil, pattern: nil)
         @name = name.to_sym
         @type = normalize_type(type)
         @required = required ? true : false
@@ -49,6 +67,10 @@ module RestClient
         @inclusion = inclusion
         @coerce = coerce ? true : false
         @description = description
+        @min = min
+        @max = max
+        @length = length
+        @pattern = pattern
         validate_definition!
       end
 
@@ -76,6 +98,7 @@ module RestClient
       def process!(value)
         coerced = @coerce ? coerce_value(value) : strict_check(value)
         validate_inclusion!(coerced)
+        validate_constraints!(coerced)
         coerced
       rescue InvalidParam => e
         raise InvalidParam, "param :#{@name}: #{e.message}"
@@ -87,6 +110,10 @@ module RestClient
         parts << 'required' if @required
         parts << "default=#{@default.inspect}" if has_default? && !@default.is_a?(Proc)
         parts << "in #{inclusion.inspect}" if @inclusion
+        parts << ">= #{@min.inspect}" if @min
+        parts << "<= #{@max.inspect}" if @max
+        parts << "length #{@length.inspect}" if @length
+        parts << "matching #{@pattern.inspect}" if @pattern
         parts.join(', ')
       end
 
@@ -123,6 +150,29 @@ module RestClient
                 "param :#{@name}: inclusion must respond to #include? " \
                 "(got #{@inclusion.inspect})"
         end
+        if @min && !@min.respond_to?(:<=)
+          raise InvalidDefinition,
+                "param :#{@name}: min must be comparable, got #{@min.inspect}"
+        end
+        if @max && !@max.respond_to?(:>=)
+          raise InvalidDefinition,
+                "param :#{@name}: max must be comparable, got #{@max.inspect}"
+        end
+        if @length && !valid_length_constraint?(@length)
+          raise InvalidDefinition,
+                "param :#{@name}: length must be an Integer or an Integer " \
+                "Range, got #{@length.inspect}"
+        end
+        if @pattern && !@pattern.is_a?(Regexp)
+          raise InvalidDefinition,
+                "param :#{@name}: pattern must be a Regexp, got #{@pattern.inspect}"
+        end
+      end
+
+      def valid_length_constraint?(constraint)
+        constraint.is_a?(Integer) ||
+          (constraint.is_a?(Range) && constraint.min.is_a?(Integer) &&
+           constraint.max.is_a?(Integer))
       end
 
       def type_name
@@ -149,6 +199,79 @@ module RestClient
         unless @inclusion.include?(value)
           raise InvalidParam,
                 "value #{value.inspect} is not in #{@inclusion.inspect}"
+        end
+      end
+
+      # Closed-schema constraints, enforced after coercion: the contract
+      # rejects out-of-range, wrong-length and non-matching input before any
+      # HTTP request is built.
+      def validate_constraints!(value)
+        validate_bounds!(value)
+        validate_length!(value)
+        validate_pattern!(value)
+      end
+
+      def validate_bounds!(value)
+        if @min
+          unless value.respond_to?(:<)
+            raise InvalidParam,
+                  "cannot enforce min #{@min.inspect} on #{value.class}"
+          end
+          begin
+            below = value < @min
+          rescue StandardError
+            raise InvalidParam,
+                  "cannot compare #{value.inspect} with min #{@min.inspect}"
+          end
+          if below
+            raise InvalidParam,
+                  "value #{value.inspect} is below minimum #{@min.inspect}"
+          end
+        end
+        if @max
+          unless value.respond_to?(:>)
+            raise InvalidParam,
+                  "cannot enforce max #{@max.inspect} on #{value.class}"
+          end
+          begin
+            above = value > @max
+          rescue StandardError
+            raise InvalidParam,
+                  "cannot compare #{value.inspect} with max #{@max.inspect}"
+          end
+          if above
+            raise InvalidParam,
+                  "value #{value.inspect} is above maximum #{@max.inspect}"
+          end
+        end
+      end
+
+      def validate_length!(value)
+        return unless @length
+
+        unless value.respond_to?(:length)
+          raise InvalidParam,
+                "cannot enforce length on #{value.class} " \
+                "(does not respond to #length)"
+        end
+        actual = value.length
+        ok = @length.is_a?(Integer) ? actual == @length : @length.cover?(actual)
+        unless ok
+          raise InvalidParam,
+                "length #{actual} is outside #{@length.inspect}"
+        end
+      end
+
+      def validate_pattern!(value)
+        return unless @pattern
+
+        unless value.is_a?(String)
+          raise InvalidParam,
+                "pattern requires a String, got #{describe_value(value)}"
+        end
+        unless @pattern.match?(value)
+          raise InvalidParam,
+                "value #{value.inspect} does not match #{@pattern.inspect}"
         end
       end
 

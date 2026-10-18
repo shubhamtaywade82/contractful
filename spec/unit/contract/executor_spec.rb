@@ -372,4 +372,47 @@ RSpec.describe 'RestClient::Contract executor' do
       }.to raise_error(RestClient::Contract::InvalidDefinition, /not a valid method name/)
     end
   end
+
+  describe 'closed request schemas' do
+    # Mirrors the contract-first principle: `quantity: {type: integer, minimum: 1}`
+    # style constraints are enforced BEFORE the transport is touched — a
+    # violating call must raise without any HTTP request being made.
+    let(:client_class) do
+      build_client do
+        base 'https://api.test'
+
+        contract :create_order, 'POST /orders' do
+          param :security_id, String, required: true
+          param :transaction_type, String, required: true, inclusion: %w[BUY SELL]
+          param :quantity, Integer, required: true, min: 1
+        end
+      end
+    end
+
+    let(:client) { client_class.new }
+
+    it 'accepts input inside the closed schema' do
+      stub = stub_request(:post, 'https://api.test/orders')
+             .with(body: { security_id: '12345', transaction_type: 'BUY', quantity: 10 })
+
+      client.create_order(security_id: '12345', transaction_type: 'BUY', quantity: 10)
+      expect(stub).to have_been_made
+    end
+
+    it 'rejects out-of-range input before the network is touched' do
+      expect {
+        client.create_order(security_id: '12345', transaction_type: 'BUY', quantity: 0)
+      }.to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+
+      expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
+    end
+
+    it 'rejects enum violations before the network is touched' do
+      expect {
+        client.create_order(security_id: '12345', transaction_type: 'HOLD', quantity: 1)
+      }.to raise_error(RestClient::Contract::InvalidParam, /not in \["BUY", "SELL"\]/)
+
+      expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
+    end
+  end
 end

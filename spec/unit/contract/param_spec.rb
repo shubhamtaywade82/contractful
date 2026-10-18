@@ -265,5 +265,146 @@ RSpec.describe RestClient::Contract::Param do
       param = described_class.new(:page, Integer, inclusion: (1..100))
       expect(param.to_s).to eq 'Integer, in 1..100'
     end
+
+    it 'includes constraints when declared' do
+      param = described_class.new(:q, Integer, min: 1, max: 10)
+      expect(param.to_s).to eq 'Integer, >= 1, <= 10'
+    end
+  end
+
+  describe 'closed-schema constraints' do
+    describe 'min / max' do
+      it 'accepts values at and between the bounds' do
+        param = described_class.new(:quantity, Integer, min: 1, max: 5)
+        expect(param.process!(1)).to eq 1
+        expect(param.process!(3)).to eq 3
+        expect(param.process!(5)).to eq 5
+      end
+
+      it 'rejects values below min' do
+        param = described_class.new(:quantity, Integer, min: 1)
+        expect { param.process!(0) }
+          .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+      end
+
+      it 'rejects values above max' do
+        param = described_class.new(:quantity, Integer, max: 100)
+        expect { param.process!(101) }
+          .to raise_error(RestClient::Contract::InvalidParam, /above maximum 100/)
+      end
+
+      it 'applies after coercion, so String input is judged as its coerced value' do
+        param = described_class.new(:quantity, Integer, min: 1)
+        expect(param.process!('5')).to eq 5
+        expect { param.process!('0') }
+          .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+      end
+
+      it 'works on any Comparable, e.g. String dates' do
+        param = described_class.new(:from, String, min: '2026-01-01')
+        expect(param.process!('2026-10-18')).to eq '2026-10-18'
+        expect { param.process!('2025-12-31') }
+          .to raise_error(RestClient::Contract::InvalidParam, /below minimum/)
+      end
+
+      it 'rejects non-comparable values when a bound is declared' do
+        param = described_class.new(:opts, Hash, min: 1)
+        expect { param.process!(a: 1) }
+          .to raise_error(RestClient::Contract::InvalidParam, /cannot compare|cannot enforce min 1 on Hash/)
+      end
+
+      it 'validates bounds at definition time' do
+        expect { described_class.new(:x, Integer, min: Object.new) }
+          .to raise_error(RestClient::Contract::InvalidDefinition, /min must be comparable/)
+        expect { described_class.new(:x, Integer, max: Object.new) }
+          .to raise_error(RestClient::Contract::InvalidDefinition, /max must be comparable/)
+      end
+    end
+
+    describe 'length' do
+      it 'enforces an exact length' do
+        param = described_class.new(:pan, String, length: 10)
+        expect(param.process!('IN12345678')).to eq 'IN12345678'
+        expect { param.process!('short') }
+          .to raise_error(RestClient::Contract::InvalidParam, /length 5 is outside 10/)
+      end
+
+      it 'enforces a Range of lengths' do
+        param = described_class.new(:symbol, String, length: (1..20))
+        expect(param.process!('AAPL')).to eq 'AAPL'
+        expect(param.process!('A')).to eq 'A'
+        expect { param.process!('a' * 21) }
+          .to raise_error(RestClient::Contract::InvalidParam, /length 21 is outside 1\.\.20/)
+      end
+
+      it 'works on Array and Hash values' do
+        arr = described_class.new(:tags, Array, length: (1..3))
+        expect(arr.process!(%w[a b])).to eq %w[a b]
+        expect { arr.process!(%w[a b c d]) }
+          .to raise_error(RestClient::Contract::InvalidParam, /length 4 is outside/)
+
+        hsh = described_class.new(:opts, Hash, length: 2)
+        expect(hsh.process!({ a: 1, b: 2 })).to eq({ a: 1, b: 2 })
+        expect { hsh.process!({ a: 1 }) }
+          .to raise_error(RestClient::Contract::InvalidParam, /length 1 is outside 2/)
+      end
+
+      it 'rejects values without #length' do
+        param = described_class.new(:flag, :boolean, length: (1..2))
+        expect { param.process!(true) }
+          .to raise_error(RestClient::Contract::InvalidParam, /cannot enforce length/)
+      end
+
+      it 'validates the constraint shape at definition time' do
+        expect { described_class.new(:x, String, length: 'ten') }
+          .to raise_error(RestClient::Contract::InvalidDefinition,
+                          /length must be an Integer or an Integer Range/)
+        expect { described_class.new(:x, String, length: ('a'..'z')) }
+          .to raise_error(RestClient::Contract::InvalidDefinition,
+                          /length must be an Integer or an Integer Range/)
+      end
+    end
+
+    describe 'pattern' do
+      let(:pan_pattern) { /\A[A-Z]{5}[0-9]{4}[A-Z]\z/ }
+
+      it 'accepts matching strings' do
+        param = described_class.new(:pan, String, pattern: pan_pattern)
+        expect(param.process!('ABCDE1234F')).to eq 'ABCDE1234F'
+      end
+
+      it 'rejects non-matching strings' do
+        param = described_class.new(:pan, String, pattern: pan_pattern)
+        expect { param.process!('nope') }
+          .to raise_error(RestClient::Contract::InvalidParam, /does not match/)
+      end
+
+      it 'requires a String value' do
+        param = described_class.new(:pan, nil, pattern: pan_pattern)
+        expect { param.process!(12_345) }
+          .to raise_error(RestClient::Contract::InvalidParam, /pattern requires a String/)
+      end
+
+      it 'validates the constraint type at definition time' do
+        expect { described_class.new(:x, String, pattern: 'abc') }
+          .to raise_error(RestClient::Contract::InvalidDefinition, /pattern must be a Regexp/)
+      end
+    end
+
+    it 'combines type, inclusion and constraints on one param' do
+      param = described_class.new(:transaction_type, String,
+                                  inclusion: %w[BUY SELL],
+                                  pattern: /\A[A-Z]{3,4}\z/)
+      expect(param.process!(:BUY)).to eq 'BUY'
+      expect { param.process!('HOLD') }
+        .to raise_error(RestClient::Contract::InvalidParam, /not in/)
+    end
+
+    it 'rejects a constraint violation on an otherwise valid param' do
+      param = described_class.new(:transaction_type, String, length: (3..4))
+      expect(param.process!('BUY')).to eq 'BUY'
+      expect { param.process!('LIQUIDATE') }
+        .to raise_error(RestClient::Contract::InvalidParam, /length 9 is outside 3\.\.4/)
+    end
   end
 end

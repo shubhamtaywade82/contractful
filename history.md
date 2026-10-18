@@ -48,6 +48,16 @@ Documentation and build-integrity release candidate content:
 * Fix the `spec:unit` rake task to use the `spec/unit/**/*_spec.rb` glob —
   the previous pattern skipped the nested `spec/unit/contract/` directory,
   so the contract-first suite never ran under CI's unit job.
+* Add the OpenAPI import helper (REQ-N01): an opt-in, development-time
+  reader (`require 'restclient/contract/openapi_import'`) that converts an
+  OpenAPI 3.x document into `contract` definitions — typed closed-schema
+  params with enum/min/max/length/pattern constraints, `payload_style`
+  inference, response statuses (including `2XX` wildcards), JSON body
+  types and open-schema `response_field` bindings. A notes channel reports
+  every lossy mapping decision (header params, multipart bodies, `oneOf`
+  unions, `default` responses) instead of guessing, `to_ruby` renders a
+  ready-to-paste client class from the built definitions, and the
+  generated source round-trips through `Definition#describe`.
 
 # 2.5.0
 

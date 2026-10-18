@@ -61,6 +61,7 @@ requirement landed.
 | REQ-F12 | CRUD macro (FR-22) | `resource :posts` generates list/get/create/update/delete contracts (non-strict) with only/except/update_with/path/singular options | `spec/unit/contract/resource_spec.rb` | implemented (2.4) |
 | REQ-F13 | Reflection + dispatch (FR-22) | `contracts/contract_names/contract?/contract_for` on class and instance; `call_*`, `*_contract`, `has_*?` via `method_missing` with `respond_to_missing?` | `spec/unit/contract/introspection_spec.rb` | implemented (2.4) |
 | REQ-F14 | Inheritance | Config, contracts, callbacks merge down the ancestor chain; nearest definition wins | `spec/unit/contract/definition_spec.rb`, `spec/unit/contract/callbacks_spec.rb` | implemented (2.4) |
+| REQ-N01 | OpenAPI import helper | `OpenAPIImport.import` converts an OpenAPI 3.x document into Definitions (types, constraints, payload styles, statuses, response fields); every lossy mapping is reported on `#notes`; `to_ruby` output re-evaluates to contracts that `describe` identically; opt-in require, zero runtime deps | `spec/unit/contract/openapi_import_spec.rb` | implemented (2.6) |
 
 ## Platform, packaging, compatibility
 
@@ -75,7 +76,6 @@ requirement landed.
 
 | ID | Requirement | Acceptance criterion (key) | Status |
 | --- | --- | --- | --- |
-| REQ-N01 | OpenAPI import helper | A reader converts an OpenAPI 3.x document into `contract` declarations (opt-in, offline tool) | planned |
 | REQ-N02 | Recorded-sequence test helper | Replays recorded vendor response sequences through contracts for ordering/timing tests contracts cannot express | planned |
 | REQ-N03 | Tags for 2.4.0/2.5.0 after PR #2 merge | `v2.4.0`, `v2.5.0` tags exist on master post-merge | planned |
 

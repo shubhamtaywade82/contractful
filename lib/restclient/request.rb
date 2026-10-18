@@ -75,7 +75,6 @@ module RestClient
   #      proc, like procs from RestClient.before_execution_procs, will be
   #      called with the HTTP request and request params.
   class Request
-
     attr_reader :method, :uri, :url, :headers, :payload, :proxy,
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
@@ -89,9 +88,9 @@ module RestClient
       new(args).execute(& block)
     end
 
-    SSLOptionList = %w{client_cert client_key ca_file ca_path cert_store
-                       version ciphers verify_callback verify_callback_warnings
-                       min_version max_version}
+    SSL_OPTION_LIST = %w[client_cert client_key ca_file ca_path cert_store
+                         version ciphers verify_callback verify_callback_warnings
+                         min_version max_version]
 
     # Maps user-friendly SSL version spellings to the integer constants
     # accepted by OpenSSL::SSL::SSLContext#min_version=/max_version=. Both the
@@ -111,7 +110,7 @@ module RestClient
       'TLS1' => 'TLS1_VERSION',
       'TLS1_1' => 'TLS1_1_VERSION',
       'TLS1_2' => 'TLS1_2_VERSION',
-      'TLS1_3' => 'TLS1_3_VERSION',
+      'TLS1_3' => 'TLS1_3_VERSION'
     }.freeze
 
     # Request headers whose values are credentials. Their values are redacted
@@ -132,7 +131,7 @@ module RestClient
       RestClient::ServerBrokeConnection,
       Errno::ECONNRESET,
       Errno::ECONNABORTED,
-      Errno::EPIPE,
+      Errno::EPIPE
     ].freeze
 
     def inspect
@@ -142,11 +141,12 @@ module RestClient
     def initialize args
       @method = normalize_method(args[:method])
       @headers = (args[:headers] || {}).dup
-      if args[:url]
-        @url = process_url_params(normalize_url(args[:url]), headers)
-      else
-        raise ArgumentError, "must pass :url"
-      end
+      raise ArgumentError, 'must pass :url' unless args[:url]
+
+      @url = process_url_params(normalize_url(args[:url]), headers)
+      
+        
+      
 
       @user = @password = nil
       parse_url_with_auth!(url)
@@ -163,15 +163,9 @@ module RestClient
         @read_timeout = args[:timeout]
         @open_timeout = args[:timeout]
       end
-      if args.include?(:read_timeout)
-        @read_timeout = args[:read_timeout]
-      end
-      if args.include?(:open_timeout)
-        @open_timeout = args[:open_timeout]
-      end
-      if args.include?(:write_timeout)
-        @write_timeout = args[:write_timeout]
-      end
+      @read_timeout = args[:read_timeout] if args.include?(:read_timeout)
+      @open_timeout = args[:open_timeout] if args.include?(:open_timeout)
+      @write_timeout = args[:write_timeout] if args.include?(:write_timeout)
       @block_response = args[:block_response]
       @raw_response = args[:raw_response] || false
       @persistent = args.fetch(:persistent, false)
@@ -179,7 +173,8 @@ module RestClient
       @stream_log_percent = args[:stream_log_percent] || 10
       if @stream_log_percent <= 0 || @stream_log_percent > 100
         raise ArgumentError.new(
-          "Invalid :stream_log_percent #{@stream_log_percent.inspect}")
+          "Invalid :stream_log_percent #{@stream_log_percent.inspect}"
+        )
       end
 
       @proxy = args.fetch(:proxy) if args.include?(:proxy)
@@ -188,37 +183,31 @@ module RestClient
 
       if args.include?(:verify_ssl)
         v_ssl = args.fetch(:verify_ssl)
-        if v_ssl
+        @ssl_opts[:verify_ssl] =
           if v_ssl == true
             # interpret :verify_ssl => true as VERIFY_PEER
-            @ssl_opts[:verify_ssl] = OpenSSL::SSL::VERIFY_PEER
-          else
+            OpenSSL::SSL::VERIFY_PEER
+          elsif v_ssl
             # otherwise pass through any truthy values
-            @ssl_opts[:verify_ssl] = v_ssl
+            v_ssl
+          else
+            # interpret all falsy :verify_ssl values as VERIFY_NONE
+            OpenSSL::SSL::VERIFY_NONE
           end
-        else
-          # interpret all falsy :verify_ssl values as VERIFY_NONE
-          @ssl_opts[:verify_ssl] = OpenSSL::SSL::VERIFY_NONE
-        end
       else
         # if :verify_ssl was not passed, default to VERIFY_PEER
         @ssl_opts[:verify_ssl] = OpenSSL::SSL::VERIFY_PEER
       end
 
-      SSLOptionList.each do |key|
+      SSL_OPTION_LIST.each do |key|
         source_key = ('ssl_' + key).to_sym
-        if args.has_key?(source_key)
-          @ssl_opts[key.to_sym] = args.fetch(source_key)
-        end
+        @ssl_opts[key.to_sym] = args.fetch(source_key) if args.has_key?(source_key)
       end
 
       # Set some other default SSL options, but only if we have an HTTPS URI.
-      if use_ssl?
-
-        # If there's no CA file, CA path, or cert store provided, use default
-        if !ssl_ca_file && !ssl_ca_path && !@ssl_opts.include?(:cert_store)
-          @ssl_opts[:cert_store] = self.class.default_ssl_cert_store
-        end
+      # If there's no CA file, CA path, or cert store provided, use default
+      if use_ssl? && !ssl_ca_file && !ssl_ca_path && !@ssl_opts.include?(:cert_store)
+        @ssl_opts[:cert_store] = self.class.default_ssl_cert_store
       end
 
       @log = args[:log]
@@ -227,29 +216,32 @@ module RestClient
       @max_retries = args.fetch(:max_retries, 0)
       unless @max_retries.is_a?(Integer) && @max_retries >= 0
         raise ArgumentError.new(
-          ":max_retries must be a non-negative Integer, " +
-          "got #{@max_retries.inspect}")
+          ':max_retries must be a non-negative Integer, ' +
+          "got #{@max_retries.inspect}"
+        )
       end
 
       @retry_interval = args.fetch(:retry_interval, 0.5)
       unless @retry_interval.is_a?(Numeric) && @retry_interval >= 0
         raise ArgumentError.new(
-          ":retry_interval must be a non-negative Numeric, " +
-          "got #{@retry_interval.inspect}")
+          ':retry_interval must be a non-negative Numeric, ' +
+          "got #{@retry_interval.inspect}"
+        )
       end
 
       @retry_after = args.fetch(:retry_after, true) ? true : false
       @max_retry_after = args.fetch(:max_retry_after, 60)
       unless @max_retry_after.is_a?(Numeric) && @max_retry_after >= 0
         raise ArgumentError.new(
-          ":max_retry_after must be a non-negative Numeric, " +
-          "got #{@max_retry_after.inspect}")
+          ':max_retry_after must be a non-negative Numeric, ' +
+          "got #{@max_retry_after.inspect}"
+        )
       end
 
       @processed_headers = make_headers headers
-      @processed_headers_lowercase = @processed_headers.map {|k, v|
+      @processed_headers_lowercase = @processed_headers.map do |k, v|
         [k.downcase, v]
-      }.to_h
+      end.to_h
       @args = args
 
       @before_execution_proc = args[:before_execution_proc]
@@ -281,27 +273,27 @@ module RestClient
           end
           break result
         end
-      rescue *RETRIABLE_EXCEPTIONS => err
+      rescue *RETRIABLE_EXCEPTIONS => e
         attempts += 1
         if attempts <= max_retries && rewind_payload!
           delay = retry_backoff_delay(attempts)
-          log_retry(err, attempts, delay)
+          log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
         raise
-      rescue RestClient::ExceptionWithResponse => err
+      rescue RestClient::ExceptionWithResponse => e
         attempts += 1
-        if retry_after && attempts <= max_retries && err.retryable? && rewind_payload!
-          delay = retry_delay_for_response(err.response, attempts)
-          log_retry(err, attempts, delay)
+        if retry_after && attempts <= max_retries && e.retryable? && rewind_payload!
+          delay = retry_delay_for_response(e.response, attempts)
+          log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
         raise
       end
     ensure
-      payload.close if payload
+      payload&.close
     end
 
     # Exceptions that are retried automatically when `:max_retries` is used.
@@ -313,7 +305,7 @@ module RestClient
     def verify_ssl
       @ssl_opts.fetch(:verify_ssl)
     end
-    SSLOptionList.each do |key|
+    SSL_OPTION_LIST.each do |key|
       define_method('ssl_' + key) do
         @ssl_opts[key.to_sym]
       end
@@ -347,10 +339,9 @@ module RestClient
       # find and extract/remove "params" key if the value is a Hash/ParamsArray
       headers.delete_if do |key, value|
         if key.to_s.downcase == 'params' &&
-            (value.is_a?(Hash) || value.is_a?(RestClient::ParamsArray))
-          if url_params
-            raise ArgumentError.new("Multiple 'params' options passed")
-          end
+           (value.is_a?(Hash) || value.is_a?(RestClient::ParamsArray))
+          raise ArgumentError.new("Multiple 'params' options passed") if url_params
+
           url_params = value
           true
         else
@@ -392,9 +383,7 @@ module RestClient
     end
 
     # @return [HTTP::CookieJar]
-    def cookie_jar
-      @cookie_jar
-    end
+    attr_reader :cookie_jar
 
     # Render a Cookie HTTP request header from the contents of the @cookie_jar,
     # or nil if the jar is empty.
@@ -409,7 +398,7 @@ module RestClient
       arr = cookie_jar.cookies(url)
       return nil if arr.empty?
 
-      return HTTP::Cookie.cookie_value(arr)
+      HTTP::Cookie.cookie_value(arr)
     end
 
     # Process cookies passed as hash or as HTTP::CookieJar. For backwards
@@ -461,7 +450,6 @@ module RestClient
     # @return [HTTP::CookieJar] A cookie jar containing the parsed cookies.
     #
     def process_cookie_args!(uri, headers, args)
-
       # Avoid ambiguity in whether options from headers or options from
       # Request#initialize should take precedence by raising ArgumentError when
       # both are present. Prior versions of rest-client claimed to give
@@ -469,41 +457,35 @@ module RestClient
       # Avoid that mess by erroring out instead.
       if headers[:cookies] && args[:cookies]
         raise ArgumentError.new(
-          "Cannot pass :cookies in Request.new() and in headers hash")
+          'Cannot pass :cookies in Request.new() and in headers hash'
+        )
       end
 
       cookies_data = headers.delete(:cookies) || args[:cookies]
 
       # return copy of cookie jar as is
-      if cookies_data.is_a?(HTTP::CookieJar)
-        return cookies_data.dup
-      end
+      return cookies_data.dup if cookies_data.is_a?(HTTP::CookieJar)
 
       # convert cookies hash into a CookieJar
       jar = HTTP::CookieJar.new
 
       (cookies_data || []).each do |key, val|
-
         # Support for Array<HTTP::Cookie> mode:
         # If key is a cookie object, add it to the jar directly and assert that
         # there is no separate val.
         if key.is_a?(HTTP::Cookie)
-          if val
-            raise ArgumentError.new("extra cookie val: #{val.inspect}")
-          end
+          raise ArgumentError.new("extra cookie val: #{val.inspect}") if val
 
           jar.add(key)
           next
         end
 
-        if key.is_a?(Symbol)
-          key = key.to_s
-        end
+        key = key.to_s if key.is_a?(Symbol)
 
         # assume implicit domain from the request URI, and set for_domain to
         # permit subdomains
         jar.add(HTTP::Cookie.new(key, val, domain: uri.hostname.downcase,
-                                 path: '/', for_domain: true))
+                                           path: '/', for_domain: true))
       end
 
       jar
@@ -518,19 +500,24 @@ module RestClient
     #   - headers from the payload object (e.g. Content-Type, Content-Lenth)
     #   - cookie headers from #make_cookie_header
     #
-    # BUG: stringify_headers does not alter the capitalization of headers that
-    # are passed as strings, it only normalizes those passed as symbols. This
-    # behavior will probably remain for a while for compatibility, but it means
-    # that the warnings that attempt to detect accidental header overrides may
-    # not always work.
-    # https://github.com/rest-client/rest-client/issues/599
+    # stringify_headers only normalizes Symbol keys to the canonical
+    # `Content-Type` style capitalization; String keys are passed through
+    # verbatim for backwards compatibility with rest-client 1.x/2.x
+    # (https://github.com/rest-client/rest-client/issues/599). Because
+    # equivalent header names may therefore be spelled with different
+    # casing, the merges below are case-insensitive: a later header whose
+    # name matches an earlier one case-insensitively replaces it (keeping
+    # the casing of the later name) instead of coexisting with it. This both
+    # keeps the accidental-override warnings working across casings and
+    # prevents duplicate headers from reaching the wire.
     #
     # @param [Hash] user_headers User-provided headers to include
     #
     # @return [Hash<String, String>] A hash of HTTP headers => values
     #
     def make_headers(user_headers)
-      headers = stringify_headers(default_headers).merge(stringify_headers(user_headers))
+      headers = merge_headers(stringify_headers(default_headers),
+                              stringify_headers(user_headers))
 
       # override headers from the payload (e.g. Content-Type, Content-Length)
       if @payload
@@ -542,23 +529,21 @@ module RestClient
         # x-www-form-urlencoded but a Content-Type application/json was
         # also supplied by the user.
         payload_headers.each_pair do |key, val|
-          if headers.include?(key) && headers[key] != val
-            warn("warning: Overriding #{key.inspect} header " +
-                 "#{headers.fetch(key).inspect} with #{val.inspect} " +
-                 "due to payload")
-          end
+          next unless (existing = header_key_for(headers, key)) && headers[existing] != val
+
+          warn("warning: Overriding #{key.inspect} header " +
+               "#{headers[existing].inspect} with #{val.inspect} " +
+               'due to payload')
         end
 
-        headers.merge!(payload_headers)
+        headers = merge_headers(headers, payload_headers)
       end
 
       # merge in cookies
       cookies = make_cookie_header
       if cookies && !cookies.empty?
-        if headers['Cookie']
-          warn('warning: overriding "Cookie" header with :cookies option')
-        end
-        headers['Cookie'] = cookies
+        warn('warning: overriding "Cookie" header with :cookies option') if header_key_for(headers, 'Cookie')
+        headers = merge_headers(headers, { 'Cookie' => cookies })
       end
 
       headers
@@ -584,8 +569,6 @@ module RestClient
         else
           false
         end
-      else
-        nil
       end
     end
 
@@ -609,13 +592,14 @@ module RestClient
       Net::HTTP.const_get(method.capitalize, false)
     end
 
-    def net_http_do_request(http, req, body=nil, &block)
-      if body && body.respond_to?(:read)
-        req.body_stream = body
-        return http.request(req, nil, &block)
-      else
-        return http.request(req, body, &block)
-      end
+    def net_http_do_request(http, req, body = nil, &block)
+      return http.request(req, body, &block) unless body&.respond_to?(:read)
+
+      req.body_stream = body
+      http.request(req, nil, &block)
+      
+        
+      
     end
 
     # Normalize a URL by adding a protocol if none is present.
@@ -650,12 +634,12 @@ module RestClient
       # certificates using the win32 API.
       if RestClient::Platform.windows?
         RestClient::Windows::RootCerts.instance.to_a.uniq.each do |cert|
-          begin
-            cert_store.add_cert(cert)
-          rescue OpenSSL::X509::StoreError => err
-            # ignore duplicate certs
-            raise unless err.message == 'cert already in hash table'
-          end
+          
+          cert_store.add_cert(cert)
+        rescue OpenSSL::X509::StoreError => e
+          # ignore duplicate certs
+          raise unless e.message == 'cert already in hash table'
+          
         end
       end
 
@@ -689,9 +673,9 @@ module RestClient
       out << "RestClient.#{method} #{redacted_url.inspect}"
       out << payload.short_inspect if payload
       out << processed_headers.to_a.sort.map { |(k, v)|
-        [k.inspect, log_header_value(k, v).inspect].join("=>")
-      }.join(", ")
-      log << out.join(', ') + "\n"
+        [k.inspect, log_header_value(k, v).inspect].join('=>')
+      }.join(', ')
+      log << (out.join(', ') + "\n")
     end
 
     # Value to render for a header in the request log. Credential-bearing
@@ -708,16 +692,18 @@ module RestClient
 
     # Return a hash of headers whose keys are capitalized strings
     #
-    # BUG: stringify_headers does not fix the capitalization of headers that
-    # are already Strings. Leaving this behavior as is for now for
-    # backwards compatibility.
-    # https://github.com/rest-client/rest-client/issues/599
+    # Design note: only Symbol keys are normalized to `Content-Type` style
+    # capitalization. String keys are passed through verbatim, matching
+    # rest-client 1.x/2.x behavior
+    # (https://github.com/rest-client/rest-client/issues/599). String keys
+    # are therefore not canonicalized (e.g. 'x-custom-header' stays
+    # lowercase on the wire), which some clients depend on; equivalent
+    # header names that differ in casing are treated as the same header at
+    # merge time by #make_headers/#merge_headers.
     #
     def stringify_headers headers
-      headers.inject({}) do |result, (key, value)|
-        if key.is_a? Symbol
-          key = key.to_s.split(/_/).map(&:capitalize).join('-')
-        end
+      headers.each_with_object({}) do |(key, value), result|
+        key = key.to_s.split('_').map(&:capitalize).join('-') if key.is_a? Symbol
         if 'CONTENT-TYPE' == key.upcase
           result[key] = maybe_convert_extension(value.to_s)
         elsif 'ACCEPT' == key.upcase
@@ -727,15 +713,53 @@ module RestClient
           else
             target_values = value.to_s.split ','
           end
-          result[key] = target_values.map { |ext|
+          result[key] = target_values.map do |ext|
             maybe_convert_extension(ext.to_s.strip)
-          }.join(', ')
+          end.join(', ')
         else
           result[key] = value.to_s
         end
-        result
       end
     end
+
+    # Return the key in `headers` that equals `key` case-insensitively, or
+    # nil if there is no match. HTTP header names are case-insensitive
+    # (RFC 7230), and because stringify_headers passes String keys through
+    # verbatim, equivalent names may be spelled with different casing.
+    #
+    # @return [String, nil] the matching key as present in `headers`
+    #
+    def header_key_for(headers, key)
+      headers.each_key do |existing|
+        return existing if existing.casecmp?(key)
+      end
+      nil
+    end
+    private :header_key_for
+
+    # Merge two header hashes, treating keys that differ only in case as the
+    # same header: entries from `later` replace entries from `earlier`,
+    # keeping the casing of the later key. This prevents, for example, a
+    # user-supplied 'content-type' from coexisting with the default
+    # 'Accept'-style capitalized headers and producing a duplicate header on
+    # the wire.
+    #
+    # @param [Hash] earlier headers merged in first
+    # @param [Hash] later headers that win on (case-insensitive) collision
+    #
+    # @return [Hash]
+    #
+    def merge_headers(earlier, later)
+      merged = earlier.dup
+      later.each do |key, val|
+        if (existing = header_key_for(merged, key)) && !existing.eql?(key)
+          merged.delete(existing)
+        end
+        merged[key] = val
+      end
+      merged
+    end
+    private :merge_headers
 
     # Default headers set by RestClient. In addition to these headers, servers
     # will receive headers set by Net::HTTP, such as Accept-Encoding and Host.
@@ -743,8 +767,8 @@ module RestClient
     # @return [Hash<Symbol, String>]
     def default_headers
       {
-        :accept => '*/*',
-        :user_agent => RestClient::Platform.default_user_agent,
+        accept: '*/*',
+        user_agent: RestClient::Platform.default_user_agent
       }
     end
 
@@ -763,11 +787,11 @@ module RestClient
     # Exponential backoff between retries: `:retry_interval` for the first
     # retry, then doubling for each subsequent attempt.
     def retry_backoff_delay(attempt)
-      retry_interval * (2 ** (attempt - 1))
+      retry_interval * (2**(attempt - 1))
     end
 
     def sleep_for_retry(secs)
-      sleep(secs) if secs > 0
+      sleep(secs) if secs.positive?
     end
 
     # Delay before retrying after a retryable HTTP response: honor the
@@ -796,7 +820,7 @@ module RestClient
       return nil unless info&.reset
 
       secs = info.reset_in
-      secs && secs.positive? ? secs : nil
+      secs&.positive? ? secs : nil
     end
 
     # Retry-After: delta-seconds ("120") or HTTP-date ("Wed, 21 Oct 2026 07:28:00 GMT").
@@ -808,7 +832,7 @@ module RestClient
       else
         require 'time'
         delay = Time.httpdate(value) - Time.now
-        delay > 0 ? delay : 0.0
+        delay.positive? ? delay : 0.0
       end
     rescue StandardError
       nil
@@ -817,17 +841,17 @@ module RestClient
     def log_response_retry(response, attempt, delay)
       return unless log
 
-      log << "RestClient retry ##{attempt}/#{max_retries} for " +
+      log << ("RestClient retry ##{attempt}/#{max_retries} for " +
              "#{redacted_url.inspect} after response HTTP #{response.code}: " +
-             "sleeping #{delay}s\n"
+             "sleeping #{delay}s\n")
     end
 
     def log_retry(err, attempt, delay)
       return unless log
 
-      log << "RestClient retry ##{attempt}/#{max_retries} for " +
+      log << ("RestClient retry ##{attempt}/#{max_retries} for " +
              "#{redacted_url.inspect} after #{err.class}: " +
-             "sleeping #{delay}s\n"
+             "sleeping #{delay}s\n")
     end
 
     # Parse the `@url` string into a URI object and save it as
@@ -845,15 +869,11 @@ module RestClient
 
       # Ruby >= 3.4 returns an empty hostname (rather than nil) for URIs
       # such as 'http:///'.
-      if uri.hostname.nil? || uri.hostname.empty?
-        raise URI::InvalidURIError.new("bad URI(no host provided): #{url}")
-      end
+      raise URI::InvalidURIError.new("bad URI(no host provided): #{url}") if uri.hostname.nil? || uri.hostname.empty?
 
       @user = CGI.unescape(uri.user) if uri.user
       @password = CGI.unescape(uri.password) if uri.password
-      if !@user && !@password
-        @user, @password = Netrc.read[uri.hostname]
-      end
+      @user, @password = Netrc.read[uri.hostname] if !@user && !@password
 
       @uri = uri
     end
@@ -885,11 +905,11 @@ module RestClient
     #
     def normalize_method(method)
       raise ArgumentError.new('must pass :method') unless method
+
       method.to_s.downcase
     end
 
     def transmit uri, req, payload, & block
-
       # We set this to true in the net/http block so that we can distinguish
       # read_timeout from open_timeout. Now that we only support Ruby 2.0+,
       # this is only needed for Timeout exceptions thrown outside of Net::HTTP.
@@ -904,9 +924,7 @@ module RestClient
         before_proc.call(req, args)
       end
 
-      if @before_execution_proc
-        @before_execution_proc.call(req, args)
-      end
+      @before_execution_proc.call(req, args) if @before_execution_proc
 
       log_request
 
@@ -937,36 +955,31 @@ module RestClient
         # Process the result only after the connection has been returned to
         # the pool: process_result may raise for HTTP error responses, and
         # those leave the connection perfectly reusable.
-        unless @block_response
-          process_result(res, start_time, tempfile, &block)
-        end
+        process_result(res, start_time, tempfile, &block) unless @block_response
       else
         net.start do |http|
           established_connection = true
 
           res, tempfile = perform_net_http_request(http, req, payload)
-          unless @block_response
-            process_result(res, start_time, tempfile, &block)
-          end
+          process_result(res, start_time, tempfile, &block) unless @block_response
         end
       end
     rescue EOFError
       raise RestClient::ServerBrokeConnection
-    rescue Net::OpenTimeout => err
-      raise RestClient::Exceptions::OpenTimeout.new(nil, err)
-    rescue Net::ReadTimeout => err
-      raise RestClient::Exceptions::ReadTimeout.new(nil, err)
-    rescue Net::WriteTimeout => err
-      raise RestClient::Exceptions::WriteTimeout.new(nil, err)
-    rescue Timeout::Error, Errno::ETIMEDOUT => err
+    rescue Net::OpenTimeout => e
+      raise RestClient::Exceptions::OpenTimeout.new(nil, e)
+    rescue Net::ReadTimeout => e
+      raise RestClient::Exceptions::ReadTimeout.new(nil, e)
+    rescue Net::WriteTimeout => e
+      raise RestClient::Exceptions::WriteTimeout.new(nil, e)
+    rescue Timeout::Error, Errno::ETIMEDOUT => e
       # handling for non-Net::HTTP timeouts
-      if established_connection
-        raise RestClient::Exceptions::ReadTimeout.new(nil, err)
-      else
-        raise RestClient::Exceptions::OpenTimeout.new(nil, err)
-      end
-
-    rescue OpenSSL::SSL::SSLError => error
+      raise RestClient::Exceptions::ReadTimeout.new(nil, e) if established_connection
+        
+      
+      raise RestClient::Exceptions::OpenTimeout.new(nil, e)
+      
+    rescue OpenSSL::SSL::SSLError => e
       # TODO: deprecate and remove RestClient::SSLCertificateNotVerified and just
       # pass through OpenSSL::SSL::SSLError directly.
       #
@@ -981,11 +994,11 @@ module RestClient
       # [1] https://github.com/ruby/ruby/blob/89e70fe8e7/ext/openssl/ossl.c#L238
       # [2] https://github.com/jruby/jruby/issues/597
 
-      if error.message.include?("certificate verify failed")
-        raise SSLCertificateNotVerified.new(error.message)
-      else
-        raise error
-      end
+      raise SSLCertificateNotVerified.new(e.message) if e.message.include?('certificate verify failed')
+        
+      
+      raise e
+      
     end
 
     # Apply the request's SSL settings and timeouts to a Net::HTTP object.
@@ -1013,14 +1026,10 @@ module RestClient
         # Hilariously, jruby only calls the callback when cert_store is set to
         # something, so make sure to set one.
         # https://github.com/jruby/jruby/issues/597
-        if RestClient::Platform.jruby?
-          net.cert_store ||= OpenSSL::X509::Store.new
-        end
+        net.cert_store ||= OpenSSL::X509::Store.new if RestClient::Platform.jruby?
 
-        if ssl_verify_callback_warnings != false
-          if print_verify_callback_warnings
-            warn('pass :ssl_verify_callback_warnings => false to silence this')
-          end
+        if (ssl_verify_callback_warnings != false) && print_verify_callback_warnings
+          warn('pass :ssl_verify_callback_warnings => false to silence this')
         end
       end
 
@@ -1045,10 +1054,11 @@ module RestClient
         @open_timeout = normalize_timeout_value!(@open_timeout)
         net.open_timeout = @open_timeout
       end
-      if defined? @write_timeout
-        @write_timeout = normalize_timeout_value!(@write_timeout)
-        net.write_timeout = @write_timeout
-      end
+      return unless defined? @write_timeout
+
+      @write_timeout = normalize_timeout_value!(@write_timeout)
+      net.write_timeout = @write_timeout
+      
     end
 
     def normalize_timeout_value!(value)
@@ -1071,7 +1081,7 @@ module RestClient
         net_http_do_request(http, req, payload, &@block_response)
         [nil, nil]
       else
-        res = net_http_do_request(http, req, payload) { |http_response|
+        res = net_http_do_request(http, req, payload) do |http_response|
           if @raw_response
             # fetch body into tempfile
             tempfile = fetch_body_to_tempfile(http_response)
@@ -1080,7 +1090,7 @@ module RestClient
             http_response.read_body
           end
           http_response
-        }
+        end
         [res, tempfile]
       end
     end
@@ -1092,21 +1102,21 @@ module RestClient
     # built for every request, so object identity cannot be part of the key).
     def persistent_connection_key(uri)
       proxy_part = proxy_uri ? proxy_uri.to_s : 'direct'
-      cert_fingerprint = ssl_client_cert ?
-        OpenSSL::Digest::SHA256.hexdigest(ssl_client_cert.to_der) : nil
+      cert_fingerprint = (OpenSSL::Digest::SHA256.hexdigest(ssl_client_cert.to_der) if ssl_client_cert)
 
       [
         uri.scheme, uri.host, uri.port, proxy_part, verify_ssl,
         ssl_version, ssl_min_version, ssl_max_version, ssl_ciphers,
         ssl_ca_file, ssl_ca_path, cert_fingerprint,
-        ssl_verify_callback&.object_id,
+        ssl_verify_callback&.object_id
       ].join('|')
     end
 
     def setup_credentials(req)
-      if user && !@processed_headers_lowercase.include?('authorization')
-        req.basic_auth(user, password)
-      end
+      return unless user && !@processed_headers_lowercase.include?('authorization')
+
+      req.basic_auth(user, password)
+      
     end
 
     def fetch_body_to_tempfile(http_response)
@@ -1128,13 +1138,13 @@ module RestClient
           # with embedded basic-auth credentials must not leak into the
           # streaming progress lines.
           if total == 0
-            log << "streaming %s %s (%d of unknown) [0 Content-Length]\n" % [@method.upcase, redacted_url, size]
+            log << format("streaming %s %s (%d of unknown) [0 Content-Length]\n", @method.upcase, redacted_url, size)
           else
             percent = (size * 100) / total
-            current_log_bucket, _ = percent.divmod(@stream_log_percent)
+            current_log_bucket, = percent.divmod(@stream_log_percent)
             if current_log_bucket != stream_log_bucket
               stream_log_bucket = current_log_bucket
-              log << "streaming %s %s %d%% done (%d of %d)\n" % [@method.upcase, redacted_url, (size * 100) / total, size, total]
+              log << format("streaming %s %s %d%% done (%d of %d)\n", @method.upcase, redacted_url, (size * 100) / total, size, total)
             end
           end
         end
@@ -1145,11 +1155,10 @@ module RestClient
 
     # @param res The Net::HTTP response object
     # @param start_time [Time] Time of request start
-    def process_result(res, start_time, tempfile=nil, &block)
+    def process_result(res, start_time, tempfile = nil, &block)
       if @raw_response
-        unless tempfile
-          raise ArgumentError.new('tempfile is required')
-        end
+        raise ArgumentError.new('tempfile is required') unless tempfile
+
         response = RawResponse.new(tempfile, res, self, start_time)
       else
         response = Response.create(res.body, res, self, start_time)
@@ -1157,12 +1166,16 @@ module RestClient
 
       response.log_response
 
+      # Public API (frozen since rest-client 1.x, see docs/adr/0004): the
+      # user block receives the Response (a String subclass), this request,
+      # and the raw Net::HTTP result; the block itself is passed through as
+      # a fourth argument for callers that delegate. Do not change the
+      # arity or the Response inheritance without a major-version plan.
       if block_given?
         block.call(response, self, res, & block)
       else
         response.return!(&block)
       end
-
     end
 
     def parser

@@ -1,3 +1,48 @@
+# 2.4.0
+
+Feature release adding a contract-first architecture layer with heavy
+metaprogramming on top of the classic rest-client API.
+
+* Add `RestClient::Contract`: declare API operations as contracts —
+  `contract :name, 'VERB /path'` with an `instance_eval`'d DSL block — and
+  the gem generates the client methods (`define_method`), `#{name}_url`
+  path builders, parameter validation and a reflection API for you. The
+  contract *is* the implementation.
+* Add a typed parameter engine: `String`, `Integer`, `Float`, `:boolean`,
+  `Array`, `Hash`, arbitrary classes (`is_a?` check, then
+  `Class#restclient_coerce`, then a Kernel cast) and `Proc` coercions, with
+  `required:`, `default:` (lazy procs supported), `inclusion:` and
+  `coerce: false` strict mode. Path placeholders (`:owner`, `:repo`) are
+  auto-synthesized as required params, URI-escaped and consumed out of the
+  query/payload. Violations raise `MissingParam`, `UnknownParam` or
+  `InvalidParam` with precise messages before any HTTP traffic happens.
+* Add response contracts: `responds 200, 404, type: Hash` declares expected
+  statuses (Integers or Ranges) and an optional JSON body type
+  (`:array`/`:hash`/`:string`/`:json`/any class). Declaring 4xx/5xx statuses
+  suppresses the default exception behavior for that contract — expected
+  error responses become normal return values (redirects are still
+  followed). Violations raise `UnexpectedResponse` with the response
+  attached. `verify_response` blocks add custom assertions and receive the
+  JSON-parsed body when declared with two parameters.
+* Add `before_request` / `after_response` callbacks: `before_request`
+  receives a mutable execution context (changing it changes the outgoing
+  request), `after_response` receives the validated response. Both
+  accumulate down the class inheritance chain, root-most first.
+* Add the `resource :posts` macro: metaprograms the five standard REST
+  CRUD contracts (`list_posts`, `get_post`, `create_post`, `update_post`,
+  `delete_post`) with `only:`/`except:` filters, `update_with: :put`,
+  `path:` override and a small English singularizer (`singular:` override).
+  Generated CRUD contracts accept free-form attributes via the new
+  per-contract `strict_params` override.
+* Add reflection and dynamic dispatch: `.contracts`, `.contract_names`,
+  `.contract?`, `.contract_for` (class and instance level,
+  inheritance-aware) plus `method_missing`-powered `call_#{name}`,
+  `#{name}_contract` and `has_#{name}?` with `respond_to_missing?` support.
+* Add per-call meta options for contracts (`_headers`, `_timeout`,
+  `_open_timeout`, `_read_timeout`, `_write_timeout`, `_persistent`,
+  `_max_retries`, `_retry_interval`) and instance-level overrides via
+  `MyAPI.new(base:, headers:)`.
+
 # 2.3.0
 
 Feature release building on the 2.2.0 modernization.

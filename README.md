@@ -238,6 +238,167 @@ How it behaves:
 Call `RestClient.connection_pool.clear!` before forking a process or when you
 know connections have gone stale.
 
+## Contract-first API clients
+
+<em>New in 2.4.</em> `RestClient::Contract` is a contract-first layer built on
+heavy metaprogramming: you *declare* the HTTP shape of an API — verb, path,
+typed parameters, expected responses — and the gem generates the client
+methods, path builders, validation and introspection for you. The contract
+*is* the implementation; there is no imperative request code to write or
+drift.
+
+```ruby
+class GitHubAPI
+  include RestClient::Contract
+
+  base 'https://api.github.com'
+  default_headers 'Accept' => 'application/vnd.github+json'
+
+  before_request do |ctx|
+    ctx[:headers]['Authorization'] = "token #{ENV['GITHUB_TOKEN']}"
+  end
+
+  contract :list_users, 'GET /users' do
+    param :page,     Integer, default: 1
+    param :per_page, Integer, inclusion: (1..100), default: 30
+    responds 200, type: :array
+  end
+
+  contract :create_issue, 'POST /repos/:owner/:repo/issues' do
+    param :owner, String, required: true
+    param :repo,  String, required: true
+    param :title, String, required: true
+    param :labels, Array, default: []
+    responds 201, 422
+  end
+end
+
+api = GitHubAPI.new
+api.list_users(page: 2)
+api.create_issue(owner: 'octo', repo: 'hello', title: 'Hi', labels: ['bug'])
+api.create_issue_url(owner: 'octo', repo: 'hello') # => "https://api.github.com/repos/octo/hello/issues"
+```
+
+### Typed parameters
+
+Every value passed to a contract method is coerced and validated before any
+HTTP traffic happens. Supported types: `String`, `Integer`, `Float`,
+`:boolean`, `Array`, `Hash`, any class (checked with `is_a?`, then
+`Class#restclient_coerce` if defined, then a Kernel cast) and any `Proc`
+(its return value is used). Options: `required:`, `default:` (lazy procs
+allowed), `inclusion:` and `coerce: false` for strict type checking.
+
+```ruby
+contract :search, 'GET /search' do
+  param :q,        String,  required: true
+  param :page,     Integer, default: 1
+  param :per_page, Integer, inclusion: (1..100), default: 25
+  param :sort,     String,  inclusion: %w[asc desc], default: 'desc'
+end
+```
+
+Violations raise a precise error instead of producing a malformed request:
+
+- `RestClient::Contract::MissingParam` — required param absent
+- `RestClient::Contract::UnknownParam` — undeclared param in strict mode
+- `RestClient::Contract::InvalidParam` — value failed coercion/validation
+
+Unknown params are rejected by default (contract-first strictness); opt out
+per class with `strict_params false` or per contract with `strict_params
+false` inside the block. Remaining (declared) params are routed by verb:
+query string for GET/HEAD/DELETE/OPTIONS, JSON body (`Content-Type:
+application/json`) for POST/PUT/PATCH. Override with `payload_style :form`
+or `:query` per contract, or `payload_style :form` at class level.
+
+Path placeholders (`:owner`, `:repo`) are automatically declared as required
+params, interpolated into the path, URI-escaped, and never duplicated into
+the query string or payload.
+
+### Per-call meta options
+
+Underscore-prefixed keyword arguments configure the underlying request
+without polluting the param contract: `_headers`, `_timeout`,
+`_open_timeout`, `_read_timeout`, `_write_timeout`, `_persistent`,
+`_max_retries`, `_retry_interval`.
+
+```ruby
+api.list_users(_headers: { 'X-Request-Id' => SecureRandom.hex(8) },
+               _timeout: 5, _persistent: true)
+```
+
+### Response contracts
+
+`responds` declares what an operation expects back: status codes (Integers or
+Ranges) and an optional JSON body type (`Array`, `Hash`, `String`, any class,
+or `:array`/`:hash`/`:string`/`:json`).
+
+```ruby
+contract :show_widget, 'GET /widgets/:id' do
+  param :id, Integer
+  responds 200, 404          # 404 becomes a normal return value
+end
+
+contract :list_posts, 'GET /posts' do
+  responds (200..299), type: Array
+  verify_response { |_response, parsed| parsed.is_a?(Array) }
+end
+```
+
+Declaring any 4xx/5xx status suppresses rest-client's default
+exception-raising for that contract: the response is returned and judged by
+the contract instead (redirects are still followed). Anything unexpected —
+undeclared status, non-JSON body, wrong shape, failed `verify_response`
+block — raises `RestClient::Contract::UnexpectedResponse` with the offending
+`response` attached. Contracts without any response declaration keep the
+classic rest-client behavior (`ResourceNotFound`, etc.).
+
+### Callbacks
+
+`before_request` receives a *mutable* context
+(`definition:, method:, url:, headers:, payload:, query:`) — mutating it
+changes the outgoing request, which is ideal for auth injection.
+`after_response` receives the validated response. Both accumulate down the
+inheritance chain, root-most first, so a base client class can hold shared
+middleware.
+
+### Generated CRUD resources
+
+`resource :posts` metaprograms the five standard REST contracts —
+`list_posts`, `get_post(id)`, `create_post(attrs)`, `update_post(id, attrs)`,
+`delete_post(id)` — with `only:`/`except:` filters, `update_with: :put`,
+`path:` override and a small English singularizer (override with
+`singular:`). Generated CRUD contracts accept free-form attributes
+(non-strict); declare contracts by hand when you want strict validation.
+
+```ruby
+class BlogAPI
+  include RestClient::Contract
+  base 'https://api.example.com'
+  resource :posts, only: %i[index show create]
+end
+
+BlogAPI.new.create_post(title: 'Hello', body: '...')  # POST /posts
+```
+
+### Reflection and dynamic dispatch
+
+Everything registered through the DSL is introspectable:
+
+```ruby
+GitHubAPI.contract_names          # => [:list_users, :create_issue]
+GitHubAPI.contract?(:list_users)  # => true
+GitHubAPI.contract_for(:list_users)  # => #<RestClient::Contract::Definition GET /users ...>
+GitHubAPI.contract_for(:list_users).describe
+# => "GET /users (params: :page, :per_page) responds 200 => Array"
+
+api.list_users_contract  # the Definition (dynamic dispatch)
+api.call_list_users(page: 1)  # execute by name
+api.has_list_users?  # => true
+```
+
+Clients also accept instance-level overrides: `GitHubAPI.new(base:
+'https://staging.example.com', headers: { 'X-Env' => 'test' })`.
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

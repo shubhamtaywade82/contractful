@@ -175,6 +175,33 @@ RestClient::Request.execute(method: :get, url: 'http://example.com/resource',
 ➔ GET http://example.com/resource?foo=bar
 ```
 
+## Automatic retries
+
+<em>New in 2.3.</em> Requests can be retried automatically when they fail with a
+transient network-level error. Opt in with `:max_retries`; delays between
+attempts grow exponentially from `:retry_interval` (default 0.5s):
+`retry_interval`, `retry_interval * 2`, `retry_interval * 4`, ...
+
+```ruby
+RestClient::Request.execute(method: :get, url: 'http://example.com/resource',
+                            max_retries: 3, retry_interval: 0.5)
+```
+
+Retried failures are network errors only: open/read/write timeouts, a server
+that breaks the connection (`EOFError`), connection reset/abort, and broken
+pipes. HTTP error responses (4xx/5xx) are never retried, and redirects behave
+as usual.
+
+Request payloads are rewound between attempts, so bodies are retransmitted in
+full. If a payload cannot be rewound (for example a non-seekable request
+stream), the request is not retried and the original network error is raised.
+
+```ruby
+# 1st attempt times out, retries after 0.5s, 2nd attempt succeeds
+RestClient::Request.execute(method: :get, url: 'http://example.com',
+                            max_retries: 2, open_timeout: 2)
+```
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

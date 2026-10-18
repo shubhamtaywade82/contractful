@@ -51,4 +51,132 @@ describe RestClient::Request, :include_helpers do
     expect(test_file.closed?).to be true
   end
 
+  describe 'retries' do
+    it 'does not retry transient network failures by default' do
+      stub_request(:get, 'http://some/resource').to_timeout.then.to_return(:body => 'ok')
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get)
+      }.to raise_error(RestClient::Exceptions::OpenTimeout)
+      expect(a_request(:get, 'http://some/resource')).to have_been_made.once
+    end
+
+    it 'retries transient network failures and succeeds' do
+      stub_request(:get, 'http://some/resource').to_timeout.then.to_return(:body => 'ok')
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 2, :retry_interval => 0)
+      ).to eq 'ok'
+      expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
+    end
+
+    it 'raises the network error when retries are exhausted' do
+      stub_request(:get, 'http://some/resource')
+        .to_timeout.then.to_timeout.then.to_return(:body => 'ok')
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 1, :retry_interval => 0)
+      }.to raise_error(RestClient::Exceptions::OpenTimeout)
+      expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
+    end
+
+    it 'retries when the server breaks the connection (EOFError)' do
+      stub_request(:get, 'http://some/resource')
+        .to_raise(EOFError).then.to_return(:body => 'ok')
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 1, :retry_interval => 0)
+      ).to eq 'ok'
+    end
+
+    it 'retries on connection reset errors' do
+      stub_request(:get, 'http://some/resource')
+        .to_raise(Errno::ECONNRESET).then.to_return(:body => 'ok')
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 1, :retry_interval => 0)
+      ).to eq 'ok'
+    end
+
+    it 'does not retry HTTP error responses' do
+      stub = stub_request(:get, 'http://some/resource')
+        .to_return(:status => 404).then.to_return(:body => 'should not happen')
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                    :max_retries => 3, :retry_interval => 0)
+      }.to raise_error(RestClient::ResourceNotFound)
+      expect(stub).to have_been_made.once
+    end
+
+    it 'sleeps with exponential backoff between retries' do
+      stub_request(:get, 'http://some/resource')
+        .to_timeout.then.to_timeout.then.to_return(:body => 'ok')
+
+      delays = []
+      allow_any_instance_of(RestClient::Request).to receive(:sleep_for_retry) do |_, secs|
+        delays << secs
+      end
+
+      RestClient::Request.execute(:url => 'http://some/resource', :method => :get,
+                                  :max_retries => 2, :retry_interval => 0.5)
+
+      expect(delays).to eq([0.5, 1.0])
+    end
+
+    it 'rewinds string payloads so retried requests resend the same body' do
+      stub_request(:post, 'http://some/resource').with(:body => 'payload-data')
+        .to_raise(Errno::ECONNRESET).then.to_return(:body => 'ok')
+      expect(
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :post,
+                                    :payload => 'payload-data',
+                                    :max_retries => 1, :retry_interval => 0)
+      ).to eq 'ok'
+      expect(a_request(:post, 'http://some/resource').with(:body => 'payload-data'))
+        .to have_been_made.twice
+    end
+
+    it 'does not retry when the payload cannot be rewound' do
+      stream = Object.new
+      def stream.read(*args)
+        'payload-data'
+      end
+      def stream.close
+      end
+      def stream.closed?
+        false
+      end
+
+      stub = stub_request(:post, 'http://some/resource').to_raise(Errno::ECONNRESET)
+      expect {
+        RestClient::Request.execute(:url => 'http://some/resource', :method => :post,
+                                    :payload => stream,
+                                    :max_retries => 3, :retry_interval => 0)
+      }.to raise_error(Errno::ECONNRESET)
+      expect(stub).to have_been_made.once
+    end
+
+    it 'rejects invalid :max_retries values' do
+      expect {
+        RestClient::Request.new(:url => 'http://some/resource', :method => :get,
+                                :max_retries => -1)
+      }.to raise_error(ArgumentError, /:max_retries/)
+
+      expect {
+        RestClient::Request.new(:url => 'http://some/resource', :method => :get,
+                                :max_retries => 'three')
+      }.to raise_error(ArgumentError, /:max_retries/)
+    end
+
+    it 'rejects invalid :retry_interval values' do
+      expect {
+        RestClient::Request.new(:url => 'http://some/resource', :method => :get,
+                                :retry_interval => -1)
+      }.to raise_error(ArgumentError, /:retry_interval/)
+
+      expect {
+        RestClient::Request.new(:url => 'http://some/resource', :method => :get,
+                                :retry_interval => 'forever')
+      }.to raise_error(ArgumentError, /:retry_interval/)
+    end
+  end
+
 end

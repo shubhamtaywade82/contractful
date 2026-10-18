@@ -3,6 +3,12 @@
 * Add `Response#json`: parse the response body as JSON with a single call
   (`response.json`, or `response.json(symbolize_names: true)`). Keyword
   arguments are forwarded to `JSON.parse`.
+* Add automatic retries: pass `:max_retries` (plus the optional
+  `:retry_interval`, default 0.5s) to retry requests after transient network
+  failures — connection/read/write timeouts, broken connections, connection
+  resets and broken pipes — with exponential backoff. HTTP error responses are
+  never retried, and payloads are rewound between attempts (non-rewindable
+  payload streams disable retrying).
 * Add `RestClient::Exceptions::WriteTimeout`, raised when `Net::WriteTimeout`
   fires. Previously a write timeout leaked a raw `Net::WriteTimeout` (or was
   misclassified as a read timeout), so the three timeout phases now share the

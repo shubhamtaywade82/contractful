@@ -96,6 +96,24 @@ module RestClient
         @stream.closed?
       end
 
+      # Rewind the payload stream to the beginning so that the payload can be
+      # retransmitted (for example when retrying a request after a network
+      # failure). Returns true if the payload was rewound, or false if the
+      # underlying stream does not support rewinding (e.g. a socket).
+      #
+      # @return [Boolean]
+      #
+      def rewind
+        if @stream.respond_to?(:rewind)
+          @stream.rewind
+          true
+        else
+          false
+        end
+      rescue IOError
+        false
+      end
+
       def to_s_inspect
         to_s.inspect
       end

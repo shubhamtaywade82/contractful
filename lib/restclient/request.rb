@@ -37,6 +37,14 @@ module RestClient
   #     the interval at which download progress is logged. Defaults to every
   #     10% complete.
   # * :max_redirects maximum number of redirections (default to 10)
+  # * :max_retries number of times to retry the request when a transient
+  #     network failure occurs (connection timeouts, broken/reset connections,
+  #     EPIPE). Defaults to 0 (disabled). Retries use exponential backoff and
+  #     are only attempted for network-level failures, never for HTTP error
+  #     responses.
+  # * :retry_interval base delay in seconds between retries (default 0.5).
+  #     The delay doubles with each retry: retry_interval, retry_interval * 2,
+  #     retry_interval * 4, ...
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override RestClient.proxy.
   # * :verify_ssl enable ssl verification, possible values are constants from
@@ -59,7 +67,7 @@ module RestClient
     attr_reader :method, :uri, :url, :headers, :payload, :proxy,
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
-                :ssl_opts
+                :ssl_opts, :max_retries, :retry_interval
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -92,6 +100,18 @@ module RestClient
       'TLS1_2' => 'TLS1_2_VERSION',
       'TLS1_3' => 'TLS1_3_VERSION',
     }.freeze
+
+    # Network-level failures that are considered transient. When the
+    # `:max_retries` request option is greater than zero, requests that fail
+    # with one of these errors are retried automatically (with exponential
+    # backoff). HTTP error responses (4xx/5xx) are never retried.
+    RETRIABLE_EXCEPTIONS = [
+      RestClient::Exceptions::Timeout, # includes Open/Read/WriteTimeout
+      RestClient::ServerBrokeConnection,
+      Errno::ECONNRESET,
+      Errno::ECONNABORTED,
+      Errno::EPIPE,
+    ].freeze
 
     def inspect
       "<RestClient::Request @method=#{@method.inspect}, @url=#{@url.inspect}>"
@@ -180,6 +200,21 @@ module RestClient
 
       @log = args[:log]
       @max_redirects = args[:max_redirects] || 10
+
+      @max_retries = args.fetch(:max_retries, 0)
+      unless @max_retries.is_a?(Integer) && @max_retries >= 0
+        raise ArgumentError.new(
+          ":max_retries must be a non-negative Integer, " +
+          "got #{@max_retries.inspect}")
+      end
+
+      @retry_interval = args.fetch(:retry_interval, 0.5)
+      unless @retry_interval.is_a?(Numeric) && @retry_interval >= 0
+        raise ArgumentError.new(
+          ":retry_interval must be a non-negative Numeric, " +
+          "got #{@retry_interval.inspect}")
+      end
+
       @processed_headers = make_headers headers
       @processed_headers_lowercase = @processed_headers.map {|k, v|
         [k.downcase, v]
@@ -192,9 +227,31 @@ module RestClient
     def execute & block
       # With 2.0.0+, net/http accepts URI objects in requests and handles wrapping
       # IPv6 addresses in [] for use in the Host request header.
-      transmit uri, net_http_request_class(method).new(uri, processed_headers), payload, & block
+      #
+      # The request is rebuilt on each attempt so that Net::HTTP mutations (for
+      # example basic auth headers) and consumed payload streams do not leak
+      # state between attempts.
+      attempts = 0
+      begin
+        req = net_http_request_class(method).new(uri, processed_headers)
+        transmit uri, req, payload, & block
+      rescue *RETRIABLE_EXCEPTIONS => err
+        attempts += 1
+        if attempts <= max_retries && rewind_payload!
+          delay = retry_backoff_delay(attempts)
+          log_retry(err, attempts, delay)
+          sleep_for_retry(delay)
+          retry
+        end
+        raise
+      end
     ensure
       payload.close if payload
+    end
+
+    # Exceptions that are retried automatically when `:max_retries` is used.
+    def self.retriable_exceptions
+      RETRIABLE_EXCEPTIONS
     end
 
     # SSL-related options
@@ -623,6 +680,34 @@ module RestClient
     end
 
     private
+
+    # Rewind the payload so that a retried request can send the body again.
+    # Returns true when there is no payload or it was successfully rewound,
+    # false when the payload cannot be rewound (e.g. a non-rewindable request
+    # stream), in which case retrying would resend a truncated or empty body.
+    def rewind_payload!
+      return true unless payload
+
+      payload.rewind
+    end
+
+    # Exponential backoff between retries: `:retry_interval` for the first
+    # retry, then doubling for each subsequent attempt.
+    def retry_backoff_delay(attempt)
+      retry_interval * (2 ** (attempt - 1))
+    end
+
+    def sleep_for_retry(secs)
+      sleep(secs) if secs > 0
+    end
+
+    def log_retry(err, attempt, delay)
+      return unless log
+
+      log << "RestClient retry ##{attempt}/#{max_retries} for " +
+             "#{redacted_url.inspect} after #{err.class}: " +
+             "sleeping #{delay}s\n"
+    end
 
     # Parse the `@url` string into a URI object and save it as
     # `@uri`. Also save any basic auth user or password as @user and @password.

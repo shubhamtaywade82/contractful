@@ -67,6 +67,16 @@ module Contractful
   # * :retry_rng source of randomness for :retry_jitter — any object
   #     responding to #rand(range) (a seeded <tt>Random.new(seed)</tt>
   #     makes tests deterministic). Defaults to the Random class.
+  # * :breaker host-level circuit breaker, opt-in. true uses the defaults
+  #     ({Contractful::CircuitBreaker::DEFAULT_THRESHOLD} consecutive
+  #     failures, then fail fast for
+  #     {Contractful::CircuitBreaker::DEFAULT_COOLDOWN} seconds); a Hash
+  #     customizes it as <tt>breaker: { threshold: 5, cooldown: 30 }</tt>.
+  #     Failures are network errors and retryable statuses (408/425/429/5xx);
+  #     a request that ultimately fails after its retries counts once.
+  #     While open, requests fail fast with
+  #     {Contractful::CircuitOpenError}. State transitions post a `circuit`
+  #     notification.
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override Contractful.proxy.
   # * :persistent reuse the underlying connection across requests via the
@@ -93,7 +103,8 @@ module Contractful
                 :open_timeout, :raw_response, :processed_headers, :args,
                 :ssl_opts, :max_retries, :retry_interval, :persistent,
                 :retry_after, :max_retry_after,
-                :retry_jitter, :retry_jitter_cap, :retry_rng
+                :retry_jitter, :retry_jitter_cap, :retry_rng,
+                :breaker
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -267,6 +278,17 @@ module Contractful
         )
       end
 
+      @breaker = args.fetch(:breaker, false)
+      case @breaker
+      when false, true, Hash
+        # ok
+      else
+        raise ArgumentError.new(
+          ':breaker must be true, false or a config Hash, ' +
+          "got #{@breaker.inspect}"
+        )
+      end
+
       @retry_after = args.fetch(:retry_after, true) ? true : false
       @max_retry_after = args.fetch(:max_retry_after, 60)
       unless @max_retry_after.is_a?(Numeric) && @max_retry_after >= 0
@@ -294,6 +316,8 @@ module Contractful
       # state between attempts.
       attempts = 0
       started = nil
+      breaker = @breaker ? CircuitBreaker.registry.breaker_for(uri, **breaker_options) : nil
+      breaker&.check!
       begin
         loop do
           req = net_http_request_class(method).new(uri, processed_headers)
@@ -319,6 +343,7 @@ module Contractful
             sleep_for_retry(delay)
             next
           end
+          breaker&.record_response(result)
           break result
         end
       rescue *RETRIABLE_EXCEPTIONS => e
@@ -331,6 +356,7 @@ module Contractful
           sleep_for_retry(delay)
           retry
         end
+        breaker&.record_failure
         raise
       rescue Contractful::ExceptionWithResponse => e
         # Error statuses raise inside transmit, so the response event for a
@@ -349,6 +375,7 @@ module Contractful
           sleep_for_retry(delay)
           retry
         end
+        breaker&.record_failure
         raise
       end
     ensure
@@ -861,6 +888,18 @@ module Contractful
       when :full then @retry_rng.rand(0..delay)
       when :equal then delay + @retry_rng.rand(0..delay)
       when :decorrelated then decorrelated_jitter_delay(attempt)
+      end
+    end
+
+    # Normalize the :breaker option into registry kwargs.
+    def breaker_options
+      case @breaker
+      when Hash
+        { threshold: @breaker.fetch(:threshold, CircuitBreaker::DEFAULT_THRESHOLD),
+          cooldown: @breaker.fetch(:cooldown, CircuitBreaker::DEFAULT_COOLDOWN) }
+      else
+        { threshold: CircuitBreaker::DEFAULT_THRESHOLD,
+          cooldown: CircuitBreaker::DEFAULT_COOLDOWN }
       end
     end
 

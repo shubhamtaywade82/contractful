@@ -219,6 +219,7 @@ RSpec/DescribeClass:
   - spec/unit/rate_limit_spec.rb
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
+  - spec/unit/circuit_breaker_spec.rb
 RSpec/DescribedClass:
   Exclude:
   - spec/integration/integration_spec.rb
@@ -269,6 +270,7 @@ RSpec/ExampleLength:
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
   - spec/unit/retry_jitter_spec.rb
+  - spec/unit/circuit_breaker_spec.rb
 RSpec/ExpectActual:
   Exclude:
   - '**/spec/routing/**/*'
@@ -297,6 +299,7 @@ RSpec/MultipleDescribes:
   - spec/unit/rate_limit_spec.rb
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
+  - spec/unit/circuit_breaker_spec.rb
 RSpec/MultipleExpectations:
   Exclude:
   - spec/integration/contract_spec.rb
@@ -332,6 +335,7 @@ RSpec/MultipleExpectations:
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
   - spec/unit/retry_jitter_spec.rb
+  - spec/unit/circuit_breaker_spec.rb
 RSpec/PredicateMatcher:
   Exclude:
   - spec/unit/payload_spec.rb
@@ -367,6 +371,7 @@ RSpec/SpecFilePathFormat:
   - spec/unit/contractful_spec.rb
   - spec/unit/utils_spec.rb
   - spec/unit/retry_jitter_spec.rb
+  - spec/unit/circuit_breaker_spec.rb
 RSpec/StubbedMock:
   Exclude:
   - spec/unit/abstract_response_spec.rb

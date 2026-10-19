@@ -66,6 +66,7 @@ requirement landed.
 
 | REQ-N04 | Event notifications | `Notifications.subscribe` receives `request`/`response`/`retry` events with method, url, attempt, status, duration and retry cause; subscribers that raise are logged and skipped; `clear!` detaches all; the ActiveSupport bridge re-posts every event as `contractful.<name>` (opt-in require, activesupport not a runtime dep) | `spec/unit/notifications_spec.rb`, `spec/unit/notifications_active_support_spec.rb` | implemented (0.1.0) |
 | REQ-R01 | Retry jitter | `retry_jitter: :full/:equal/:decorrelated` randomizes computed backoff (Retry-After delays untouched); `:decorrelated` samples [retry_interval, min(cap, previous*3)] with `retry_jitter_cap` (default 30); `retry_rng` injects randomness (seeded Random = deterministic tests); contract layer passes `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng` | `spec/unit/retry_jitter_spec.rb` | implemented (0.1.0) |
+| REQ-R02 | Circuit breaker | `breaker: true/{threshold:, cooldown:}` opens a host-level circuit (scheme/host/port key, process-wide, thread-safe) after N consecutive failure requests (network errors + retryable statuses; 4xx is success), fails fast with `CircuitOpenError` (retryable? false) during cooldown, half-open probe decides next state; transitions post `circuit` notifications; contract layer passes `_breaker` | `spec/unit/circuit_breaker_spec.rb` | implemented (0.1.0) |
 ## Platform, packaging, compatibility
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |

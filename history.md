@@ -86,6 +86,13 @@ and the review-hardening fixes that landed on master ahead of the release.
   exactly, and `retry_rng` accepts a seeded Random for deterministic
   tests. Contract clients pass the options through as
   `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng`.
+* Add an opt-in host-level circuit breaker (`breaker: true` or a config
+  Hash): consecutive failure requests — network errors and retryable
+  statuses after retries are exhausted — open a process-wide
+  scheme/host/port circuit that fails fast with
+  `Contractful::CircuitOpenError` for the cooldown, then half-open probes.
+  4xx responses never open a circuit. Transitions post `circuit`
+  notifications; contract clients pass `_breaker` per call.
 
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.

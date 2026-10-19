@@ -305,6 +305,36 @@ How it behaves:
 Call `Contractful.connection_pool.clear!` before forking a process or when you
 know connections have gone stale.
 
+## Circuit breaker
+
+<em>New in 0.1.0.</em> Retries answer transient errors; a circuit breaker
+answers a host that is *down* — without one, every request still pays the
+full timeout and every retry amplifies the load on something that is
+already dying. Opt in per request with `breaker: true` (defaults) or a
+config Hash:
+
+```ruby
+Contractful.get('https://api.example.com/x',
+                breaker: { threshold: 5, cooldown: 30 })
+```
+
+Counted as failures: network errors and retryable statuses (408/425/429/5xx)
+from requests whose retries are exhausted; client errors like 404 never
+open a circuit. After `threshold` consecutive failures every request to
+that scheme/host/port fails fast with `Contractful::CircuitOpenError` for
+`cooldown` seconds; the next request after the cooldown probes the host
+(half-open) and its outcome closes or re-opens the circuit. Breakers are
+process-wide and thread-safe; state transitions post a `circuit`
+notification (see [Event notifications](#event-notifications)), so metrics
+can watch open/half-open/closed as a first-class signal.
+
+```ruby
+Contractful::Notifications.subscribe do |event|
+  next unless event[:name] == 'circuit'
+  puts "circuit #{event[:payload][:key]}: #{event[:payload][:from]} -> #{event[:payload][:state]}"
+end
+```
+
 ## Contract-first API clients
 
 <em>New in 2.4.</em> `Contractful::Contract` is a contract-first layer built on

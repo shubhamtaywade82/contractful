@@ -1,5 +1,35 @@
 # frozen_string_literal: true
 
+# SimpleCov must start before any library code is loaded so every
+# lib/contractful definition is tracked. Coverage is a CI quality gate
+# (see docs/engineering/QUALITY_GATES.md): the unit suite refuses to pass
+# below the configured threshold.
+require 'simplecov'
+
+SimpleCov.start do
+  enable_coverage :line
+  root File.expand_path('..', __dir__)
+
+  add_filter '/spec/'
+  add_filter '/bin/'
+  # Platform-specific code lives behind `if Contractful::Platform.windows?`
+  # guards and can never execute on the Linux CI runners.
+  add_filter '/lib/contractful/windows'
+  # Bundler evaluates the gemspec (which require_relative's version.rb) while
+  # setting up `bundle exec` — before any coverage tracer can attach — so
+  # this file can never register execution. It is fully exercised at load
+  # time; filtering it is measurement hygiene, not a coverage dodge.
+  add_filter '/lib/contractful/version.rb'
+
+  track_files 'lib/**/*.rb'
+
+  # Distinct command names keep the unit and integration resultsets from
+  # merging into one another (they exercise different slices of lib/).
+  command_name "RSpec #{ENV.fetch('COVERAGE_SUITE', 'unit')}"
+
+  minimum_coverage line: 95.0 if ENV['COVERAGE_GATE']
+end
+
 require 'webmock/rspec'
 require 'contractful'
 

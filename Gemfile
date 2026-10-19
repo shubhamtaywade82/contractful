@@ -6,6 +6,9 @@ gemspec
 
 group :test do
   gem 'rake'
+  # Coverage measurement and CI gate (>= 95% line coverage on lib/).
+  # Loaded at the top of spec/spec_helper.rb, before any library code.
+  gem 'simplecov', '~> 0.22', require: false
 end
 
 group :development, :test do

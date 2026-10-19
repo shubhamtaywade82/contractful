@@ -19,6 +19,22 @@ line — same contracts, helpers and test suite — renamed:
 * References to the upstream rest-client repository — issue/PR links in
   code comments and the heritage notes — deliberately keep pointing at the
   original project.
+* The unit suite now runs under simplecov and enforces a 95% line-coverage
+  minimum on `lib/` as CI gate G13 (the `windows/` platform shims and
+  `version.rb` — which Bundler evaluates before a coverage tracer can
+  attach — are filtered with the cause documented in `spec/spec_helper.rb`).
+  Closing the measured gaps added edge-branch specs for `Param` coercion and
+  the OpenAPI import, and surfaced two latent defects that are fixed here:
+  the `Param` Kernel-cast fallback crashed with `NoMethodError` on anonymous
+  classes (now cleanly rejected with `InvalidParam`), and the OpenAPI
+  renderer's "cannot render a Proc default" guard was dead code because
+  `Param#default_value` resolves procs — the guard now keys off the new
+  `Param#lazy_default?` predicate.
+* The gem now ships YARD API documentation: `.yardopts` configures the
+  rendering (markdown, README/history as narrative files, protected
+  methods included), the `Contractful` facade module carries a proper
+  overview doc, and the gemspec links `documentation_uri` to rubydoc.info.
+  `yard` and `redcarpet` are development-only gems.
 
 # 2.6.0
 

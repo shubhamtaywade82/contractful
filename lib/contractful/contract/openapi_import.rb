@@ -261,12 +261,12 @@ module Contractful
           args << 'required: true' if p.required?
 
           if p.has_default?
-            value = p.default_value
-            if value.is_a?(Proc)
+            if p.lazy_default?
               raise Error,
                     "cannot render a Proc default for param :#{p.name} — " \
                     'write it by hand'
             end
+            value = p.default_value
             args << "default: #{value.inspect}"
           end
           args << "inclusion: #{wrap_range(p.inclusion)}" if p.inclusion

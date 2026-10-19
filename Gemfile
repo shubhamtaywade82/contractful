@@ -6,9 +6,17 @@ gemspec
 
 group :test do
   gem 'rake'
+  # Coverage measurement and CI gate (>= 95% line coverage on lib/).
+  # Loaded at the top of spec/spec_helper.rb, before any library code.
+  gem 'simplecov', '~> 0.22', require: false
 end
 
 group :development, :test do
+  # API documentation rendering (`yard doc`, `yard stats`). require: false —
+  # nothing in the runtime or test suite loads it.
+  gem 'redcarpet', '~> 3.6', require: false
+  gem 'yard', '~> 0.9', require: false
+
   # Static analysis baseline (see .rubocop.yml for the adoption strategy).
   # require: false - nothing in the runtime loads these; the Rakefile task
   # and CI lint job require them explicitly.

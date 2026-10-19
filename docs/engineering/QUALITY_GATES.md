@@ -24,28 +24,27 @@ suggestion.
 | G10 | No secrets in diffs (tokens, cookies, credentials, internal URLs) | PR diff inspection; see THREAT_MODEL.md T8 | Reviewer (zero tolerance) |
 | G11 | CI workflow keeps `permissions: contents: read` and does not gain credential movement | Workflow diff inspection | Reviewer |
 | G12 | Exceptions over silent failure: no swallowed errors, no nil-conversion of unexpected responses | PR diff inspection + error-path specs | Reviewer |
+| G13 | Line coverage on `lib/` stays >= 95% (measured by simplecov over the unit suite) | `rake spec:unit` — SimpleCov fails the run below the threshold | CI (blocking) |
 
 ## What CI enforces today
 
 `.github/workflows/ci.yml` blocks merges on: unit specs (including the
-contract suite), integration specs, across Ruby 3.0/3.1/3.2/3.3/3.4/4.0,
-with an experimental non-blocking `ruby-head` job. It runs with
-`permissions: contents: read`. That is the entire automated gate surface —
-everything else is disciplined review, which is honest to say: this project
-prefers a small, sharp CI surface plus rigorous review over a large config
-that nobody audits.
+contract suite), integration specs, RuboCop (pinned, safe-autocorrect only),
+across Ruby 3.0/3.1/3.2/3.3/3.4/4.0, with an experimental non-blocking
+`ruby-head` job. The unit job also enforces the coverage gate (G13): the
+suite runs under simplecov and fails below 95% line coverage on `lib/`
+(the `windows/` platform shims and `version.rb` — which Bundler evaluates
+before any coverage tracer can attach — are filtered with cause documented
+in `spec/spec_helper.rb`). It runs with `permissions: contents: read`.
+That is the entire automated gate surface — everything else is disciplined
+review, which is honest to say: this project prefers a small, sharp CI
+surface plus rigorous review over a large config that nobody audits.
 
 ## What CI does not enforce (yet)
 
 Recorded here deliberately, so nobody mistakes their absence for
 impossibility:
 
-- **Linting/formatting:** no rubocop-style gate exists in 2.x (the 2017
-  rubocop 0.49 pin was removed with the modernization). If reintroduced,
-  it must be pinned, configured once, and applied tree-wide in a dedicated
-  commit — not leak into feature diffs.
-- **Coverage percentage:** enforced by requirement traceability
-  (REQUIREMENTS.md), not by a number.
 - **Contract-breaking-change diffing:** once the planned OpenAPI import
   (REQ-N01) gives the project a machine-readable view of a client's
   contracts, a CI job can diff the previous release's contract set against

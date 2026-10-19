@@ -65,7 +65,7 @@ module Contractful
     #
     # @return [String] A string appropriate for use as an HTTP query string
     #
-    # @see {flatten_params}
+    # @see flatten_params
     #
     # @see URI.encode_www_form
     #

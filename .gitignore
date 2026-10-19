@@ -7,3 +7,6 @@
 /rdoc
 /.yardoc
 /tmp
+
+# SimpleCov output
+/coverage

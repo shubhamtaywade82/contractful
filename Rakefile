@@ -11,14 +11,31 @@ require 'rspec/core/rake_task'
 desc 'Run all specs'
 RSpec::Core::RakeTask.new('spec')
 
-desc 'Run unit specs'
-RSpec::Core::RakeTask.new('spec:unit') do |t|
+# COVERAGE_GATE makes spec_helper enforce the 95% line-coverage minimum
+# (G13); the integration suite exercises a smaller slice of lib/ by design
+# and must not be held to the unit suite's bar. COVERAGE_SUITE keeps the
+# two resultsets from merging. The env vars are set in wrapper tasks because
+# RSpec::Core::RakeTask has no env attribute; the RSpec tasks carry a :run
+# suffix and stay private to this file.
+desc 'Run unit specs (enforces the coverage gate)'
+task 'spec:unit' do
+  ENV['COVERAGE_GATE'] = '1'
+  ENV['COVERAGE_SUITE'] = 'unit'
+  Rake::Task['spec:unit:run'].invoke
+end
+
+RSpec::Core::RakeTask.new('spec:unit:run') do |t|
   # ** so the nested spec/unit/contract/ suite runs too
   t.pattern = 'spec/unit/**/*_spec.rb'
 end
 
 desc 'Run integration specs'
-RSpec::Core::RakeTask.new('spec:integration') do |t|
+task 'spec:integration' do
+  ENV['COVERAGE_SUITE'] = 'integration'
+  Rake::Task['spec:integration:run'].invoke
+end
+
+RSpec::Core::RakeTask.new('spec:integration:run') do |t|
   t.pattern = 'spec/integration/*_spec.rb'
 end
 

@@ -98,6 +98,10 @@ and the review-hardening fixes that landed on master ahead of the release.
   would exceed a configured quota instead of eating 429s — waits post
   `pace` notifications and a wait beyond `max_wait` raises
   `PacingTimeout`. Contract clients pass `_pace` per call.
+* Add OAuth-style token-provider auth (`auth token_provider:`): the
+  provider answers `#token` and `#refresh`; on a 401 the executor
+  refreshes it in one flight (concurrent 401s share a single refresh)
+  and retries exactly once with the fresh credential.
 
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.

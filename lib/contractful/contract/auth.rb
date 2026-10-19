@@ -22,7 +22,7 @@ module Contractful
     #
     # Auth is resolved right before the before_request callbacks run, so
     # callbacks can still inspect or override the resolved credentials.
-    class Auth
+    class Auth # rubocop:disable Metrics/ClassLength
       VALID_LOCATIONS = %i[header query].freeze
 
       attr_reader :schemes
@@ -30,7 +30,7 @@ module Contractful
       def initialize(**schemes)
         if schemes.empty?
           raise InvalidDefinition,
-                'auth requires at least one scheme (bearer:, api_key: or basic:)'
+                'auth requires at least one scheme (bearer:, api_key:, basic: or token_provider:)'
         end
 
         @schemes = []
@@ -39,10 +39,11 @@ module Contractful
           when :bearer then add_bearer(value)
           when :api_key then add_api_keys(value)
           when :basic then add_basic(value)
+          when :token_provider then add_token_provider(value)
           else
             raise InvalidDefinition,
                   "unknown auth scheme #{name.inspect} " \
-                  '(supported: :bearer, :api_key, :basic)'
+                  '(supported: :bearer, :api_key, :basic, :token_provider)'
           end
         end
         freeze_scheme_values!
@@ -58,6 +59,8 @@ module Contractful
         query = {}
         @schemes.each do |scheme|
           case scheme[:scheme]
+          when :token_provider
+            headers['Authorization'] = "Bearer #{scheme[:value].token}"
           when :bearer
             headers['Authorization'] = "Bearer #{credential(scheme[:value])}"
           when :basic
@@ -76,6 +79,14 @@ module Contractful
         { headers: headers, query: query }
       end
 
+      # The token provider object when the contract authenticates with
+      # <tt>auth token_provider:</tt>, otherwise nil. The executor uses this
+      # to drive the refresh-on-401 flow.
+      def token_provider
+        scheme = @schemes.find { |s| s[:scheme] == :token_provider }
+        scheme && scheme[:value]
+      end
+
       def to_s
         @schemes.map { |s| s[:scheme] }.uniq.join('+')
       end
@@ -89,6 +100,18 @@ module Contractful
       def add_bearer(value)
         validate_credential!(value, :bearer)
         @schemes << { scheme: :bearer, value: value }
+      end
+
+      # A token provider is an object, not a callable: it must answer
+      # #token (the current credential) and #refresh (force a new token).
+      # The executor refreshes it in one flight when a 401 arrives.
+      def add_token_provider(value)
+        unless value.respond_to?(:token) && value.respond_to?(:refresh)
+          raise InvalidDefinition,
+                'auth token_provider: expects an object responding to ' \
+                '#token and #refresh, got ' + value.inspect
+        end
+        @schemes << { scheme: :token_provider, value: value }
       end
 
       def add_api_keys(value)
@@ -145,6 +168,37 @@ module Contractful
           scheme[:value].freeze if scheme[:scheme] != :basic && scheme[:value].is_a?(String)
         end
         @schemes.freeze
+      end
+    end
+
+    # One-flight refresh coordination for token providers: concurrent 401s
+    # for the same provider never run #refresh concurrently — the first
+    # caller holds the per-provider mutex while refreshing, later callers
+    # block and then proceed with the fresh token (their #token call sees
+    # the new credential). Refreshes post a `token_refresh` notification.
+    module TokenRefresh
+      @registry = {}
+      @mutex = Mutex.new
+
+      class << self
+        def refresh(provider)
+          lock_for(provider).synchronize do
+            token = provider.refresh
+            Notifications.post('token_refresh',
+                               provider: provider.class.name)
+            token
+          end
+        end
+
+        def clear!
+          @mutex.synchronize { @registry.clear }
+        end
+
+        private
+
+        def lock_for(provider)
+          @mutex.synchronize { @registry[provider] ||= Mutex.new }
+        end
       end
     end
   end

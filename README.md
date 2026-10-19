@@ -541,6 +541,32 @@ class DhanHQClient
 end
 ```
 
+For OAuth-style flows with short-lived tokens, give the contract a
+**token provider** — an object that answers `#token` (the current
+credential) and `#refresh` (force a new one). The client class stays
+credential-free, and a 401 is handled for you:
+
+```ruby
+class TokenStore
+  def token      = @token
+  def refresh
+    @token = fetch_new_token   # your OAuth2 client-credentials flow
+  end
+end
+
+class DhanHQClient
+  include Contractful::Contract
+  base 'https://api.dhan.co'
+  auth token_provider: TokenStore.new
+end
+```
+
+When a request comes back 401, the executor refreshes the provider in
+**one flight** (concurrent 401s share a single refresh — per-provider
+mutex, posting a `token_refresh` notification) and retries the request
+exactly once with the fresh credential. A second 401 is returned or
+raised like any other declared status; there is no refresh loop.
+
 Auth is resolved right before the `before_request` callbacks run, so
 callbacks can still inspect or override the resolved credentials. Individual
 contracts can opt out with `auth false` inside the block. Auth config

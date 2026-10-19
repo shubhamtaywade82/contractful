@@ -1,7 +1,7 @@
 # ADR 0001 — Modernization baseline: supported Ruby range and CI
 
 - **Status:** Accepted (2026-10, shipped as 2.2.0 via PR #1)
-- **Context:** upstream rest-client archived 2019, last release 2.1.0,
+- **Context:** upstream contractful archived 2019, last release 2.1.0,
   unbuildable/untestable on Ruby 3.x/4.x
 - **Deciders:** repository maintainer + implementing agent
 
@@ -41,7 +41,7 @@ needed a maintained fork, not a rewrite.
 
 - **Fork with wide compatibility (Ruby 2.x kept):** rejected — doubles the
   test matrix and preserves code paths nothing modern exercises.
-- **Full rewrite of the client core:** rejected — the value of rest-client
+- **Full rewrite of the client core:** rejected — the value of contractful
   is its stable, familiar API; the core pipeline was sound.
 - **freeze upstream / wait:** rejected — the archive means no movement.
 

@@ -1,6 +1,6 @@
 # API — public surface reference
 
-This document is the normative list of rest-client's public API. Names
+This document is the normative list of contractful's public API. Names
 documented here are covered by semantic versioning: removing or changing one
 requires a major release. Anything not listed here (underscore-prefixed
 machinery like `__own_contract_config`, private helpers) is internal and may
@@ -10,14 +10,14 @@ part of the public surface and follows the same rules.
 ## Module-level entry points
 
 ```ruby
-RestClient.get(url, headers = {})
-RestClient.post(url, payload, headers = {})
-RestClient.put(url, payload, headers = {})
-RestClient.patch(url, payload, headers = {})
-RestClient.delete(url, headers = {})
-RestClient.head(url, headers = {})
-RestClient.options(url, headers = {})
-RestClient::Request.execute(options)   # full option surface, returns Response
+Contractful.get(url, headers = {})
+Contractful.post(url, payload, headers = {})
+Contractful.put(url, payload, headers = {})
+Contractful.patch(url, payload, headers = {})
+Contractful.delete(url, headers = {})
+Contractful.head(url, headers = {})
+Contractful.options(url, headers = {})
+Contractful::Request.execute(options)   # full option surface, returns Response
 ```
 
 Non-2xx responses raise the mapped exception unless a block is given (block
@@ -50,14 +50,14 @@ meta options):
 ## Resource
 
 ```ruby
-site = RestClient::Resource.new('https://api.example.com', user:, password:, headers:)
+site = Contractful::Resource.new('https://api.example.com', user:, password:, headers:)
 site['orders'].get                      # nested path resources
 site['orders'].post(payload_hash)       # same option surface as Request
 ```
 
 ## Response
 
-`RestClient::Response` is a String-like object (`#body`, `#to_s`) plus:
+`Contractful::Response` is a String-like object (`#body`, `#to_s`) plus:
 
 | Method | Meaning |
 | --- | --- |
@@ -73,7 +73,7 @@ site['orders'].post(payload_hash)       # same option surface as Request
 ## Exceptions
 
 ```text
-RestClient::Exception < RuntimeError          # .response .http_code .http_body .http_headers .retryable?
+Contractful::Exception < RuntimeError          # .response .http_code .http_body .http_headers .retryable?
 ├── ExceptionWithResponse                      # retryable? = status in RETRIABLE_STATUSES
 │   ├── RequestFailed                          # unmapped failure statuses
 │   │   └── one class per HTTP status: NotFound, Unauthorized, Conflict,
@@ -84,13 +84,13 @@ RestClient::Exception < RuntimeError          # .response .http_code .http_body 
 └── SSLCertificateNotVerified
 ```
 
-Classification: `RestClient::Exceptions::RETRIABLE_STATUSES` is
+Classification: `Contractful::Exceptions::RETRIABLE_STATUSES` is
 `[408, 425, 429, 500, 502, 503, 504]`; `Exceptions.retryable?(status_or_exception)`
 also classifies network errors (`SocketError`, `Errno::*`, `Net::*Timeout`,
 `::Timeout::Error`). All other statuses are terminal — retrying will not fix
 a bad token or a bad payload.
 
-## Contract DSL (`RestClient::Contract`)
+## Contract DSL (`Contractful::Contract`)
 
 Class-level macros (on the client class):
 
@@ -132,7 +132,7 @@ pages) and `all_name(**params)` (flat collector). Reflection:
 `has_*?` with `respond_to_missing?` support. Instance-level overrides:
 `Client.new(base:, headers:)`.
 
-Contract errors, all rooted at `RestClient::Contract::Error`:
+Contract errors, all rooted at `Contractful::Contract::Error`:
 `InvalidDefinition` (declaration time), `MissingBaseUrl`, `MissingParam`,
 `UnknownParam`, `InvalidParam` (pre-flight), `UnexpectedResponse`
 (`#response` attached; response-contract violations), `PaginationError`

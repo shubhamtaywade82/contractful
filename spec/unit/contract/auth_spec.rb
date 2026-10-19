@@ -2,10 +2,10 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract auth' do
+RSpec.describe 'Contractful::Contract auth' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       instance_exec(&block)
     end
@@ -241,7 +241,7 @@ RSpec.describe 'RestClient::Contract auth' do
 
   describe 'getter and validation' do
     it 'returns the resolved Auth object when called without arguments' do
-      expect(client_class.auth).to be_a(RestClient::Contract::Auth)
+      expect(client_class.auth).to be_a(Contractful::Contract::Auth)
       expect(client_class.auth.to_s).to eq 'bearer'
     end
 
@@ -252,7 +252,7 @@ RSpec.describe 'RestClient::Contract auth' do
           auth hmac: 'nope'
         end
       end.to raise_error(
-        RestClient::Contract::InvalidDefinition,
+        Contractful::Contract::InvalidDefinition,
         /unknown auth scheme :hmac/
       )
     end
@@ -263,7 +263,7 @@ RSpec.describe 'RestClient::Contract auth' do
           base 'https://api.test'
           auth api_key: { value: 'v' }
         end
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /requires a name/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /requires a name/)
     end
 
     it 'rejects invalid api_key locations' do
@@ -272,7 +272,7 @@ RSpec.describe 'RestClient::Contract auth' do
           base 'https://api.test'
           auth api_key: { name: 'k', value: 'v', in: :body }
         end
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /must be :header or :query/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /must be :header or :query/)
     end
 
     it 'rejects non-literal, non-callable values' do
@@ -281,7 +281,7 @@ RSpec.describe 'RestClient::Contract auth' do
           base 'https://api.test'
           auth bearer: 12_345
         end
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /literal or a callable/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /literal or a callable/)
     end
 
     it 'returns nil from the getter form when no auth is configured' do
@@ -301,7 +301,7 @@ RSpec.describe 'RestClient::Contract auth' do
           end
         end
       end.to raise_error(
-        RestClient::Contract::InvalidDefinition,
+        Contractful::Contract::InvalidDefinition,
         /contract-level auth only accepts false/
       )
     end

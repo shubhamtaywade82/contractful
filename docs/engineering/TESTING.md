@@ -1,6 +1,6 @@
 # TESTING — strategy, organization and commands
 
-rest-client's correctness story is its test suite: a fast offline unit
+contractful's correctness story is its test suite: a fast offline unit
 suite covering every module (including the full contract DSL), an
 integration suite with WebMock-stubbed HTTP behavior plus a small
 deliberate live component, and packaging verification via gem builds. If a
@@ -74,7 +74,7 @@ Traps that have actually bitten this codebase — codify, don't rediscover:
    use `String#unpack1('m')` for basic-auth-style decoding.
 4. **`URI.parse('http:///').hostname`** is `''` on Ruby 3.4+, `nil` before —
    version-agnostic specs assert `hostname.to_s.empty?`.
-5. **Constant shadowing inside `RestClient::Request`:** `Exception` and
+5. **Constant shadowing inside `Contractful::Request`:** `Exception` and
    `Timeout` resolve to the gem's own constants; specs that stub top-level
    network errors must reference `::Timeout::Error` and friends explicitly.
 6. **Redirect-following in the suppression path:** when a contract declares
@@ -103,7 +103,7 @@ fields and types bind, unknown fields pass through untouched, new enum
 members are data, and values are never coerced. What the specs deliberately
 do *not* cover is ordering/timing across calls — that is the recorded-
 sequence helper's job (REQ-N02,
-`require 'restclient/contract/sequence'`): sequence fixtures replay
+`require 'contractful/contract/sequence'`): sequence fixtures replay
 recorded vendor responses through a contract client, fail on the first
 violation with the step number attached, and carry stateful rules in
 `before_step`/`after_step` hooks. If you are adding semantics that span

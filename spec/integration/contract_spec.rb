@@ -3,7 +3,7 @@
 require_relative '_lib'
 
 # Live integration tests for the contract-first DSL against httpbin.org.
-RSpec.describe 'RestClient::Contract integration' do
+RSpec.describe 'Contractful::Contract integration' do
   before(:all) do
     WebMock.disable!
   end
@@ -14,7 +14,7 @@ RSpec.describe 'RestClient::Contract integration' do
 
   let(:client_class) do
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       base 'https://httpbin.org'
 
@@ -64,6 +64,6 @@ RSpec.describe 'RestClient::Contract integration' do
   it 'raises MissingParam before any HTTP traffic when a param is absent' do
     expect do
       client_class.new.anything_post(name: 'no-kind-here')
-    end.to raise_error(RestClient::Contract::MissingParam, /param :kind is required/)
+    end.to raise_error(Contractful::Contract::MissingParam, /param :kind is required/)
   end
 end

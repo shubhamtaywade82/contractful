@@ -2,10 +2,10 @@
 
 require_relative '_lib'
 
-describe RestClient::Payload, :include_helpers do
+describe Contractful::Payload, :include_helpers do
   context 'Base Payload' do
     it 'resets stream after to_s' do
-      payload = RestClient::Payload::Base.new('foobar')
+      payload = Contractful::Payload::Base.new('foobar')
       expect(payload.to_s).to eq 'foobar'
       expect(payload.to_s).to eq 'foobar'
     end
@@ -13,79 +13,79 @@ describe RestClient::Payload, :include_helpers do
 
   context 'A regular Payload' do
     it 'uses standard enctype as default content-type' do
-      expect(RestClient::Payload::UrlEncoded.new({}).headers['Content-Type'])
+      expect(Contractful::Payload::UrlEncoded.new({}).headers['Content-Type'])
         .to eq 'application/x-www-form-urlencoded'
     end
 
     it 'forms properly encoded params' do
-      expect(RestClient::Payload::UrlEncoded.new({ foo: 'bar' }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: 'bar' }).to_s)
         .to eq 'foo=bar'
       expect(['foo=bar&baz=qux', 'baz=qux&foo=bar']).to include(
-        RestClient::Payload::UrlEncoded.new({ foo: 'bar', baz: 'qux' }).to_s
+        Contractful::Payload::UrlEncoded.new({ foo: 'bar', baz: 'qux' }).to_s
       )
     end
 
     it 'escapes parameters' do
-      expect(RestClient::Payload::UrlEncoded.new({ 'foo + bar' => 'baz' }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ 'foo + bar' => 'baz' }).to_s)
         .to eq 'foo+%2B+bar=baz'
     end
 
     it 'properlies handle hashes as parameter' do
-      expect(RestClient::Payload::UrlEncoded.new({ foo: { bar: 'baz' } }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: { bar: 'baz' } }).to_s)
         .to eq 'foo[bar]=baz'
-      expect(RestClient::Payload::UrlEncoded.new({ foo: { bar: { baz: 'qux' } } }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: { bar: { baz: 'qux' } } }).to_s)
         .to eq 'foo[bar][baz]=qux'
     end
 
     it 'handles many attributes inside a hash' do
-      parameters = RestClient::Payload::UrlEncoded.new({ foo: { bar: 'baz', baz: 'qux' } }).to_s
+      parameters = Contractful::Payload::UrlEncoded.new({ foo: { bar: 'baz', baz: 'qux' } }).to_s
       expect(parameters).to eq 'foo[bar]=baz&foo[baz]=qux'
     end
 
     it 'handles attributes inside an array inside an hash' do
-      parameters = RestClient::Payload::UrlEncoded.new({ 'foo' => [{ 'bar' => 'baz' }, { 'bar' => 'qux' }] }).to_s
+      parameters = Contractful::Payload::UrlEncoded.new({ 'foo' => [{ 'bar' => 'baz' }, { 'bar' => 'qux' }] }).to_s
       expect(parameters).to eq 'foo[][bar]=baz&foo[][bar]=qux'
     end
 
     it 'handles arrays inside a hash inside a hash' do
-      parameters = RestClient::Payload::UrlEncoded.new({ 'foo' => { 'even' => [0, 2], 'odd' => [1, 3] } }).to_s
+      parameters = Contractful::Payload::UrlEncoded.new({ 'foo' => { 'even' => [0, 2], 'odd' => [1, 3] } }).to_s
       expect(parameters).to eq 'foo[even][]=0&foo[even][]=2&foo[odd][]=1&foo[odd][]=3'
     end
 
     it 'forms properly use symbols as parameters' do
-      expect(RestClient::Payload::UrlEncoded.new({ foo: :bar }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: :bar }).to_s)
         .to eq 'foo=bar'
-      expect(RestClient::Payload::UrlEncoded.new({ foo: { bar: :baz } }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: { bar: :baz } }).to_s)
         .to eq 'foo[bar]=baz'
     end
 
     it 'properlies handle arrays as repeated parameters' do
-      expect(RestClient::Payload::UrlEncoded.new({ foo: ['bar'] }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: ['bar'] }).to_s)
         .to eq 'foo[]=bar'
-      expect(RestClient::Payload::UrlEncoded.new({ foo: %w[bar baz] }).to_s)
+      expect(Contractful::Payload::UrlEncoded.new({ foo: %w[bar baz] }).to_s)
         .to eq 'foo[]=bar&foo[]=baz'
     end
 
     it 'does not close if stream already closed' do
-      p = RestClient::Payload::UrlEncoded.new({ 'foo ' => 'bar' })
+      p = Contractful::Payload::UrlEncoded.new({ 'foo ' => 'bar' })
       expect { 3.times { p.close } }.not_to raise_error
     end
   end
 
   context 'A multipart Payload' do
     it 'uses standard enctype as default content-type' do
-      m = RestClient::Payload::Multipart.new({})
+      m = Contractful::Payload::Multipart.new({})
       allow(m).to receive(:boundary).and_return(123)
       expect(m.headers['Content-Type']).to eq 'multipart/form-data; boundary=123'
     end
 
     it 'does not error on close if stream already closed' do
-      m = RestClient::Payload::Multipart.new(file: File.new(test_image_path))
+      m = Contractful::Payload::Multipart.new(file: File.new(test_image_path))
       expect { 3.times { m.close } }.not_to raise_error
     end
 
     it 'forms properly separated multipart data' do
-      m = RestClient::Payload::Multipart.new([[:bar, 'baz'], [:foo, 'bar']])
+      m = Contractful::Payload::Multipart.new([[:bar, 'baz'], [:foo, 'bar']])
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="bar"\r
@@ -100,7 +100,7 @@ describe RestClient::Payload, :include_helpers do
     end
 
     it 'does not escape parameters names' do
-      m = RestClient::Payload::Multipart.new([['bar ', 'baz']])
+      m = Contractful::Payload::Multipart.new([['bar ', 'baz']])
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="bar "\r
@@ -112,7 +112,7 @@ describe RestClient::Payload, :include_helpers do
 
     it 'forms properly separated multipart data' do
       f = File.new(test_image_path)
-      m = RestClient::Payload::Multipart.new({ foo: f })
+      m = Contractful::Payload::Multipart.new({ foo: f })
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="foo"; filename="ISS.jpg"\r
@@ -125,7 +125,7 @@ describe RestClient::Payload, :include_helpers do
 
     it "ignores the name attribute when it's not set" do
       f = File.new(test_image_path)
-      m = RestClient::Payload::Multipart.new({ nil => f })
+      m = Contractful::Payload::Multipart.new({ nil => f })
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; filename="ISS.jpg"\r
@@ -140,7 +140,7 @@ describe RestClient::Payload, :include_helpers do
       f = File.new(test_image_path)
       expect(f).to receive(:content_type).and_return('text/plain')
       expect(f).to receive(:original_filename).and_return('foo.txt')
-      m = RestClient::Payload::Multipart.new({ foo: f })
+      m = Contractful::Payload::Multipart.new({ foo: f })
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="foo"; filename="foo.txt"\r
@@ -152,7 +152,7 @@ describe RestClient::Payload, :include_helpers do
     end
 
     it 'handles hash in hash parameters' do
-      m = RestClient::Payload::Multipart.new({ bar: { baz: 'foo' } })
+      m = Contractful::Payload::Multipart.new({ bar: { baz: 'foo' } })
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="bar[baz]"\r
@@ -164,7 +164,7 @@ describe RestClient::Payload, :include_helpers do
       f = File.new(test_image_path)
       f.instance_eval "def content_type; 'text/plain'; end", __FILE__, __LINE__
       f.instance_eval "def original_filename; 'foo.txt'; end", __FILE__, __LINE__
-      m = RestClient::Payload::Multipart.new({ foo: { bar: f } })
+      m = Contractful::Payload::Multipart.new({ foo: { bar: f } })
       expect(m.to_s).to eq <<~EOS
         --#{m.boundary}\r
         Content-Disposition: form-data; name="foo[bar]"; filename="foo.txt"\r
@@ -178,7 +178,7 @@ describe RestClient::Payload, :include_helpers do
     it 'correctlies format hex boundary' do
       allow(SecureRandom).to receive(:base64).with(12).and_return('TGs89+ttw/xna6TV')
       f = File.new(test_image_path)
-      m = RestClient::Payload::Multipart.new({ foo: f })
+      m = Contractful::Payload::Multipart.new({ foo: f })
       expect(m.boundary).to eq(('-' * 4) + 'RubyFormBoundary' + 'TGs89AttwBxna6TV')
     end
   end
@@ -186,22 +186,22 @@ describe RestClient::Payload, :include_helpers do
   context 'streamed payloads' do
     it 'properlies determine the size of file payloads' do
       f = File.new(test_image_path)
-      payload = RestClient::Payload.generate(f)
+      payload = Contractful::Payload.generate(f)
       expect(payload.size).to eq 72_463
       expect(payload.length).to eq 72_463
     end
 
     it 'properlies determine the size of other kinds of streaming payloads' do
       s = StringIO.new 'foo'
-      payload = RestClient::Payload.generate(s)
+      payload = Contractful::Payload.generate(s)
       expect(payload.size).to eq 3
       expect(payload.length).to eq 3
 
       begin
-        f = Tempfile.new 'rest-client'
+        f = Tempfile.new 'contractful'
         f.write 'foo bar'
 
-        payload = RestClient::Payload.generate(f)
+        payload = Contractful::Payload.generate(f)
         expect(payload.size).to eq 7
         expect(payload.length).to eq 7
       ensure
@@ -211,7 +211,7 @@ describe RestClient::Payload, :include_helpers do
 
     it 'has a closed? method' do
       f = File.new(test_image_path)
-      payload = RestClient::Payload.generate(f)
+      payload = Contractful::Payload.generate(f)
       expect(payload.closed?).to be_falsey
       payload.close
       expect(payload.closed?).to be_truthy
@@ -232,15 +232,15 @@ describe RestClient::Payload, :include_helpers do
       end
 
       it 'does not raise when reading to_s from a reader without #seek' do
-        payload = RestClient::Payload.generate(plain_reader)
-        expect(payload).to be_a(RestClient::Payload::Streamed)
+        payload = Contractful::Payload.generate(plain_reader)
+        expect(payload).to be_a(Contractful::Payload::Streamed)
 
         expect(payload.to_s).to eq 'chunk-1chunk-2'
         expect { payload.to_s }.not_to raise_error
       end
 
       it 'does not raise when rewinding a reader without #rewind' do
-        payload = RestClient::Payload.generate(plain_reader)
+        payload = Contractful::Payload.generate(plain_reader)
         expect(payload.rewind).to be_falsey
       end
 
@@ -249,7 +249,7 @@ describe RestClient::Payload, :include_helpers do
         begin
           wr.write('pipe-data')
           wr.close
-          payload = RestClient::Payload.generate(rd)
+          payload = Contractful::Payload.generate(rd)
           # IO responds to #seek, but seeking a pipe raises Errno::ESPIPE.
           expect(rd.respond_to?(:seek)).to be_truthy
           expect(payload.to_s).to eq 'pipe-data'
@@ -261,7 +261,7 @@ describe RestClient::Payload, :include_helpers do
       end
 
       it 'logs small non-seekable payloads without crashing (short_inspect path)' do
-        payload = RestClient::Payload.generate(plain_reader)
+        payload = Contractful::Payload.generate(plain_reader)
         expect { payload.short_inspect }.not_to raise_error
       end
     end
@@ -269,45 +269,45 @@ describe RestClient::Payload, :include_helpers do
 
   context 'Payload generation' do
     it 'recognizes standard urlencoded params' do
-      expect(RestClient::Payload.generate({ 'foo' => 'bar' })).to be_kind_of(RestClient::Payload::UrlEncoded)
+      expect(Contractful::Payload.generate({ 'foo' => 'bar' })).to be_kind_of(Contractful::Payload::UrlEncoded)
     end
 
     it 'recognizes multipart params' do
       f = File.new(test_image_path)
-      expect(RestClient::Payload.generate({ 'foo' => f })).to be_kind_of(RestClient::Payload::Multipart)
+      expect(Contractful::Payload.generate({ 'foo' => f })).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'is multipart if forced' do
-      expect(RestClient::Payload.generate({ 'foo' => 'bar', :multipart => true })).to be_kind_of(RestClient::Payload::Multipart)
+      expect(Contractful::Payload.generate({ 'foo' => 'bar', :multipart => true })).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'handles deeply nested multipart' do
       f = File.new(test_image_path)
-      params = { foo: RestClient::ParamsArray.new({ nested: f }) }
-      expect(RestClient::Payload.generate(params)).to be_kind_of(RestClient::Payload::Multipart)
+      params = { foo: Contractful::ParamsArray.new({ nested: f }) }
+      expect(Contractful::Payload.generate(params)).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'returns data if no of the above' do
-      expect(RestClient::Payload.generate('data')).to be_kind_of(RestClient::Payload::Base)
+      expect(Contractful::Payload.generate('data')).to be_kind_of(Contractful::Payload::Base)
     end
 
     it 'recognizes nested multipart payloads in hashes' do
       f = File.new(test_image_path)
-      expect(RestClient::Payload.generate({ 'foo' => { 'file' => f } })).to be_kind_of(RestClient::Payload::Multipart)
+      expect(Contractful::Payload.generate({ 'foo' => { 'file' => f } })).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'recognizes nested multipart payloads in arrays' do
       f = File.new(test_image_path)
-      expect(RestClient::Payload.generate({ 'foo' => [f] })).to be_kind_of(RestClient::Payload::Multipart)
+      expect(Contractful::Payload.generate({ 'foo' => [f] })).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'recognizes file payloads that can be streamed' do
       f = File.new(test_image_path)
-      expect(RestClient::Payload.generate(f)).to be_kind_of(RestClient::Payload::Streamed)
+      expect(Contractful::Payload.generate(f)).to be_kind_of(Contractful::Payload::Streamed)
     end
 
     it 'recognizes other payloads that can be streamed' do
-      expect(RestClient::Payload.generate(StringIO.new('foo'))).to be_kind_of(RestClient::Payload::Streamed)
+      expect(Contractful::Payload.generate(StringIO.new('foo'))).to be_kind_of(Contractful::Payload::Streamed)
     end
 
     # hashery gem introduces Hash#read convenience method. Existence of #read method used to determine of content is streameable :/
@@ -318,30 +318,30 @@ describe RestClient::Payload, :include_helpers do
       def hash_that_reads.read(*)
         'looks like a stream'
       end
-      expect(RestClient::Payload.generate(hash_that_reads)).to be_kind_of(RestClient::Payload::UrlEncoded)
+      expect(Contractful::Payload.generate(hash_that_reads)).to be_kind_of(Contractful::Payload::UrlEncoded)
     end
 
     it 'recognizes multipart payload wrapped in ParamsArray' do
       f = File.new(test_image_path)
-      params = RestClient::ParamsArray.new([[:image, f]])
-      expect(RestClient::Payload.generate(params)).to be_kind_of(RestClient::Payload::Multipart)
+      params = Contractful::ParamsArray.new([[:image, f]])
+      expect(Contractful::Payload.generate(params)).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'handles non-multipart payload wrapped in ParamsArray' do
-      params = RestClient::ParamsArray.new([[:arg, 'value1'], [:arg, 'value2']])
-      expect(RestClient::Payload.generate(params)).to be_kind_of(RestClient::Payload::UrlEncoded)
+      params = Contractful::ParamsArray.new([[:arg, 'value1'], [:arg, 'value2']])
+      expect(Contractful::Payload.generate(params)).to be_kind_of(Contractful::Payload::UrlEncoded)
     end
 
     it 'passes through Payload::Base and subclasses unchanged' do
       payloads = [
-        RestClient::Payload::Base.new('foobar'),
-        RestClient::Payload::UrlEncoded.new({ foo: 'bar' }),
-        RestClient::Payload::Streamed.new(File.new(test_image_path)),
-        RestClient::Payload::Multipart.new({ myfile: File.new(test_image_path) })
+        Contractful::Payload::Base.new('foobar'),
+        Contractful::Payload::UrlEncoded.new({ foo: 'bar' }),
+        Contractful::Payload::Streamed.new(File.new(test_image_path)),
+        Contractful::Payload::Multipart.new({ myfile: File.new(test_image_path) })
       ]
 
       payloads.each do |payload|
-        expect(RestClient::Payload.generate(payload)).to equal(payload)
+        expect(Contractful::Payload.generate(payload)).to equal(payload)
       end
     end
   end

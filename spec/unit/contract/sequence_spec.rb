@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'restclient/contract/sequence'
+require 'contractful/contract/sequence'
 
-RSpec.describe RestClient::Contract::Sequence do
+RSpec.describe Contractful::Contract::Sequence do
   subject(:mod) { described_class }
 
   let(:client_class) do
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       base 'https://seq.test'
       default_headers 'Accept' => 'application/json'

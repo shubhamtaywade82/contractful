@@ -1,16 +1,16 @@
 # PRD — Product Requirements Document
 
-rest-client is a simple HTTP and REST client for Ruby, inspired by the
+contractful is a simple HTTP and REST client for Ruby, inspired by the
 Sinatra microframework style of specifying actions (`get`, `post`, `put`,
 `delete`). The upstream gem was archived in 2019; this fork keeps it alive
 and carries it forward with two product goals: run flawlessly on modern Ruby
 (3.0–4.0 and beyond), and give API SDK authors a **contract-first layer**
-(`RestClient::Contract`) that turns interface declarations into generated,
+(`Contractful::Contract`) that turns interface declarations into generated,
 validated client code.
 
 ## Goals
 
-1. **Reliable simplicity.** The one-liner `RestClient.get(url)` must keep
+1. **Reliable simplicity.** The one-liner `Contractful.get(url)` must keep
    working exactly as users expect, with sane defaults and precise
    exceptions when things go wrong.
 2. **Modern Ruby, verified.** Every commit is tested on Ruby 3.0, 3.1, 3.2,
@@ -40,7 +40,7 @@ validated client code.
 - **API SDK authors** who wrap a vendor API (a trading platform, a SaaS
   product) and want typed, validated, documented client methods generated
   from declarations.
-- **Maintainers of long-lived Ruby apps** stuck on old rest-client 1.x/2.x
+- **Maintainers of long-lived Ruby apps** stuck on old contractful 1.x/2.x
   who need a drop-in that works on modern Rubies.
 
 ## Feature requirements
@@ -51,7 +51,7 @@ each to acceptance criteria and specs.
 
 | ID | Feature | Since |
 | --- | --- | --- |
-| FR-1 | One-liner DSL: `RestClient.get/post/put/patch/delete/head/options` | 1.x |
+| FR-1 | One-liner DSL: `Contractful.get/post/put/patch/delete/head/options` | 1.x |
 | FR-2 | `Resource` / ActiveResource-style nesting | 1.x |
 | FR-3 | Payloads: form-encoded, JSON, raw, multipart file upload, streaming | 1.x |
 | FR-4 | Headers, params (`ParamsArray` for repeated keys), cookies | 1.x |
@@ -59,7 +59,7 @@ each to acceptance criteria and specs.
 | FR-6 | SSL/TLS control: CA file, client certs, `ssl_min_version`/`ssl_max_version` | 1.x / 2.2 |
 | FR-7 | Redirect following (GET/HEAD by default; opt-in for others) | 1.x |
 | FR-8 | Exception-per-status error model with the response attached | 1.x |
-| FR-9 | Logging hook (`RestClient.log`, `RESTCLIENT_LOG`) | 1.x |
+| FR-9 | Logging hook (`Contractful.log`, `CONTRACTFUL_LOG`) | 1.x |
 | FR-10 | Proxy support (ENV-based and per-request) | 1.x |
 | FR-11 | Automatic retries with exponential backoff, honoring `Retry-After` | 2.3 |
 | FR-12 | Persistent connections via a thread-safe connection pool | 2.3 |
@@ -80,7 +80,7 @@ each to acceptance criteria and specs.
 
 - CI matrix green on every push (hard gate; a red matrix blocks merge).
 - Zero open bug reports about Ruby 3.x/4.x incompatibility after a release.
-- The public API stays drop-in compatible for rest-client 2.x users; breaking
+- The public API stays drop-in compatible for contractful 2.x users; breaking
   changes require a major version and a documented migration path.
 - Contract-layer features require no new runtime dependencies (checked at
   every release).

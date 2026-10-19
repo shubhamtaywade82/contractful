@@ -11,19 +11,19 @@
 # SupportedStyles: Gemfile, gems.rb, gemspec
 Gemspec/DevelopmentDependencies:
   Exclude:
-    - 'rest-client.gemspec'
+    - 'contractful.gemspec'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: TreatCommentsAsGroupSeparators, ConsiderPunctuation.
 Gemspec/OrderedDependencies:
   Exclude:
-    - 'rest-client.gemspec'
+    - 'contractful.gemspec'
 
 # Offense count: 1
 Gemspec/RequiredRubyVersion:
   Exclude:
-    - 'rest-client.windows.gemspec'
+    - 'contractful.windows.gemspec'
 
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
@@ -31,7 +31,7 @@ Gemspec/RequiredRubyVersion:
 # SupportedStylesAlignWith: either, start_of_block, start_of_line
 Layout/BlockAlignment:
   Exclude:
-    - 'lib/restclient/connection_pool.rb'
+    - 'lib/contractful/connection_pool.rb'
     - 'spec/unit/contract/idempotency_spec.rb'
     - 'spec/unit/contract/param_spec.rb'
 
@@ -40,13 +40,13 @@ Layout/BlockAlignment:
 # Configuration parameters: EmptyLineBetweenMethodDefs, EmptyLineBetweenClassDefs, EmptyLineBetweenModuleDefs, DefLikeMacros, AllowAdjacentOneLineDefs, NumberOfEmptyLines.
 Layout/EmptyLineBetweenDefs:
   Exclude:
-    - 'lib/restclient/contract/config.rb'
+    - 'lib/contractful/contract/config.rb'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLines:
   Exclude:
-    - 'lib/restclient/contract/config.rb'
+    - 'lib/contractful/contract/config.rb'
 
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
@@ -54,7 +54,7 @@ Layout/EmptyLines:
 # SupportedStyles: normal, indented_internal_methods
 Layout/IndentationConsistency:
   Exclude:
-    - 'lib/restclient/connection_pool.rb'
+    - 'lib/contractful/connection_pool.rb'
     - 'spec/unit/contract/idempotency_spec.rb'
     - 'spec/unit/contract/param_spec.rb'
 
@@ -64,9 +64,9 @@ Layout/IndentationConsistency:
 # SupportedStylesAlignWith: start_of_line, relative_to_receiver
 Layout/IndentationWidth:
   Exclude:
-    - 'bin/restclient'
-    - 'lib/restclient/connection_pool.rb'
-    - 'lib/restclient/contract/pagination.rb'
+    - 'bin/contractful'
+    - 'lib/contractful/connection_pool.rb'
+    - 'lib/contractful/contract/pagination.rb'
     - 'spec/unit/contract/idempotency_spec.rb'
     - 'spec/unit/contract/param_spec.rb'
 
@@ -76,16 +76,16 @@ Layout/IndentationWidth:
 Layout/TrailingWhitespace:
   Exclude:
     - 'Rakefile'
-    - 'lib/restclient.rb'
-    - 'lib/restclient/abstract_response.rb'
-    - 'lib/restclient/connection_pool.rb'
-    - 'lib/restclient/contract/auth.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/response_field.rb'
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/abstract_response.rb'
+    - 'lib/contractful/connection_pool.rb'
+    - 'lib/contractful/contract/auth.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/response_field.rb'
+    - 'lib/contractful/request.rb'
     - 'spec/unit/contract/idempotency_spec.rb'
     - 'spec/unit/contract/param_spec.rb'
 
@@ -94,7 +94,7 @@ Layout/TrailingWhitespace:
 # DelegatingMethods: delegate
 Lint/DuplicateMethods:
   Exclude:
-    - 'lib/restclient/contract/definition.rb'
+    - 'lib/contractful/contract/definition.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -109,38 +109,38 @@ Lint/InterpolationCheck:
 # AdditionalNilMethods: present?, blank?, try, try!
 Lint/RedundantSafeNavigation:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 1
 # Configuration parameters: IgnoreImplicitReferences.
 Lint/ShadowedArgument:
   Exclude:
-    - 'lib/restclient/contract/openapi_import.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
 
 # Offense count: 1
 Lint/UselessConstantScoping:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
+    - 'lib/contractful/contract/dsl.rb'
 
 # Offense count: 59
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes, Max.
 Metrics/AbcSize:
   Exclude:
-    - 'lib/restclient.rb'
-    - 'lib/restclient/abstract_response.rb'
-    - 'lib/restclient/contract/auth.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/pagination.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/sequence.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/rate_limit.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/resource.rb'
-    - 'lib/restclient/utils.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/abstract_response.rb'
+    - 'lib/contractful/contract/auth.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/pagination.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/sequence.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/rate_limit.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/resource.rb'
+    - 'lib/contractful/utils.rb'
 
 # Offense count: 6
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns, inherit_mode.
@@ -148,96 +148,96 @@ Metrics/AbcSize:
 Metrics/BlockLength:
   Exclude:
     - 'Rakefile'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/sequence.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/sequence.rb'
 
 # Offense count: 6
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ClassLength:
   Exclude:
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/response_field.rb'
-    - 'lib/restclient/contract/sequence.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/resource.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/response_field.rb'
+    - 'lib/contractful/contract/sequence.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/resource.rb'
 
 # Offense count: 44
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/CyclomaticComplexity:
   Exclude:
-    - 'lib/restclient/contract/auth.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/pagination.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/response_field.rb'
-    - 'lib/restclient/contract/sequence.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/rate_limit.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/utils.rb'
+    - 'lib/contractful/contract/auth.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/pagination.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/response_field.rb'
+    - 'lib/contractful/contract/sequence.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/rate_limit.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/utils.rb'
 
 # Offense count: 89
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
   Exclude:
-    - 'lib/restclient.rb'
-    - 'lib/restclient/abstract_response.rb'
-    - 'lib/restclient/contract/auth.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/pagination.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/response_field.rb'
-    - 'lib/restclient/contract/sequence.rb'
-    - 'lib/restclient/exceptions.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/rate_limit.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/utils.rb'
-    - 'lib/restclient/windows/root_certs.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/abstract_response.rb'
+    - 'lib/contractful/contract/auth.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/pagination.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/response_field.rb'
+    - 'lib/contractful/contract/sequence.rb'
+    - 'lib/contractful/exceptions.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/rate_limit.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/utils.rb'
+    - 'lib/contractful/windows/root_certs.rb'
     - 'spec/unit/contract/sequence_spec.rb'
 
 # Offense count: 7
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ModuleLength:
   Exclude:
-    - 'lib/restclient/abstract_response.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/pagination.rb'
-    - 'lib/restclient/contract/sequence.rb'
+    - 'lib/contractful/abstract_response.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/pagination.rb'
+    - 'lib/contractful/contract/sequence.rb'
 
 # Offense count: 4
 # Configuration parameters: Max, CountKeywordArgs, MaxOptionalParameters.
 Metrics/ParameterLists:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/response_field.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/response_field.rb'
 
 # Offense count: 35
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/PerceivedComplexity:
   Exclude:
-    - 'lib/restclient/contract/auth.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/openapi_import.rb'
-    - 'lib/restclient/contract/pagination.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/contract/sequence.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/utils.rb'
+    - 'lib/contractful/contract/auth.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
+    - 'lib/contractful/contract/pagination.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/contract/sequence.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/utils.rb'
 
 # Offense count: 1
 # Configuration parameters: ExpectMatchingDefinition, CheckDefinitionPathHierarchy, CheckDefinitionPathHierarchyRoots, Regex, IgnoreExecutableScripts, AllowedAcronyms.
@@ -246,7 +246,7 @@ Metrics/PerceivedComplexity:
 Naming/FileName:
   Exclude:
     - 'Rakefile.rb'
-    - 'lib/rest-client.rb'
+    - 'lib/contractful.rb'
 
 # Offense count: 8
 # Configuration parameters: ForbiddenDelimiters.
@@ -262,7 +262,7 @@ Naming/HeredocDelimiterNaming:
 # SupportedStylesForLeadingUnderscores: disallowed, required, optional
 Naming/MemoizedInstanceVariableName:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
+    - 'lib/contractful/contract/dsl.rb'
 
 # Offense count: 3
 RSpec/AnyInstance:
@@ -357,7 +357,7 @@ RSpec/DescribedClass:
     - 'spec/unit/request_spec.rb'
     - 'spec/unit/resource_spec.rb'
     - 'spec/unit/response_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'
     - 'spec/unit/utils_spec.rb'
 
 # Offense count: 1
@@ -472,7 +472,7 @@ RSpec/MultipleExpectations:
     - 'spec/unit/request_spec.rb'
     - 'spec/unit/resource_spec.rb'
     - 'spec/unit/response_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'
     - 'spec/unit/utils_spec.rb'
 
 # Offense count: 9
@@ -523,7 +523,7 @@ RSpec/SpecFilePathFormat:
     - 'spec/unit/request_spec.rb'
     - 'spec/unit/resource_spec.rb'
     - 'spec/unit/response_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'
     - 'spec/unit/utils_spec.rb'
 
 # Offense count: 43
@@ -533,7 +533,7 @@ RSpec/StubbedMock:
     - 'spec/unit/contract/executor_spec.rb'
     - 'spec/unit/payload_spec.rb'
     - 'spec/unit/request_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -552,12 +552,12 @@ RSpec/VerifiedDoubles:
     - 'spec/unit/raw_response_spec.rb'
     - 'spec/unit/request_spec.rb'
     - 'spec/unit/response_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'
 
 # Offense count: 1
 Security/Eval:
   Exclude:
-    - 'rest-client.windows.gemspec'
+    - 'contractful.windows.gemspec'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -565,7 +565,7 @@ Security/Eval:
 # SupportedStyles: separated, grouped
 Style/AccessorGrouping:
   Exclude:
-    - 'lib/restclient/contract/config.rb'
+    - 'lib/contractful/contract/config.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -573,22 +573,22 @@ Style/AccessorGrouping:
 # SupportedStyles: always, conditionals
 Style/AndOr:
   Exclude:
-    - 'lib/restclient/resource.rb'
-    - 'lib/restclient/windows/root_certs.rb'
+    - 'lib/contractful/resource.rb'
+    - 'lib/contractful/windows/root_certs.rb'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AllowOnConstant, AllowOnSelfClass.
 Style/CaseEquality:
   Exclude:
-    - 'lib/restclient/contract/executor.rb'
+    - 'lib/contractful/contract/executor.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: MinBranchesCount.
 Style/CaseLikeIf:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
+    - 'lib/contractful/contract/dsl.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -598,12 +598,12 @@ Style/CaseLikeIf:
 # SupportedStylesForModules: ~, nested, compact
 Style/ClassAndModuleChildren:
   Exclude:
-    - 'lib/restclient/windows/root_certs.rb'
+    - 'lib/contractful/windows/root_certs.rb'
 
 # Offense count: 5
 Style/ClassVars:
   Exclude:
-    - 'lib/restclient.rb'
+    - 'lib/contractful.rb'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -611,21 +611,21 @@ Style/ClassVars:
 # SupportedStyles: assign_to_condition, assign_inside_condition
 Style/ConditionalAssignment:
   Exclude:
-    - 'bin/restclient'
-    - 'lib/restclient/request.rb'
+    - 'bin/contractful'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/EnvHome:
   Exclude:
-    - 'bin/restclient'
+    - 'bin/contractful'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AllowedVariables, DefaultToNil.
 Style/FetchEnvVar:
   Exclude:
-    - 'lib/restclient.rb'
+    - 'lib/contractful.rb'
 
 # Offense count: 8
 # This cop supports safe autocorrection (--autocorrect).
@@ -643,53 +643,53 @@ Style/FrozenStringLiteralComment:
     - '**/*.arb'
     - 'Gemfile'
     - 'Rakefile'
-    - 'bin/restclient'
-    - 'rest-client.windows.gemspec'
+    - 'bin/contractful'
+    - 'contractful.windows.gemspec'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: MinBodyLength, AllowConsecutiveConditionals.
 Style/GuardClause:
   Exclude:
-    - 'lib/restclient/contract/openapi_import.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashExcept:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
+    - 'lib/contractful/contract/dsl.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashSlice:
   Exclude:
-    - 'lib/restclient/contract/dsl.rb'
+    - 'lib/contractful/contract/dsl.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: InverseMethods, InverseBlocks.
 Style/InverseMethods:
   Exclude:
-    - 'lib/restclient/contract/executor.rb'
-    - 'lib/restclient/contract/sequence.rb'
+    - 'lib/contractful/contract/executor.rb'
+    - 'lib/contractful/contract/sequence.rb'
 
 # Offense count: 9
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/LineEndConcatenation:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/MapJoin:
   Exclude:
-    - 'lib/restclient/version.rb'
+    - 'lib/contractful/version.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/MapToHash:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 12
 # This cop supports safe autocorrection (--autocorrect).
@@ -697,15 +697,15 @@ Style/MapToHash:
 # SupportedStyles: require_parentheses, require_no_parentheses, require_no_parentheses_except_multiline
 Style/MethodDefParentheses:
   Exclude:
-    - 'lib/restclient.rb'
-    - 'lib/restclient/exceptions.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/exceptions.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 1
 Style/MissingRespondToMissing:
   Exclude:
-    - 'bin/restclient'
+    - 'bin/contractful'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -713,7 +713,7 @@ Style/MissingRespondToMissing:
 # SupportedStyles: module_function, extend_self, forbidden
 Style/ModuleFunction:
   Exclude:
-    - 'lib/restclient/payload.rb'
+    - 'lib/contractful/payload.rb'
 
 # Offense count: 6
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -722,9 +722,9 @@ Style/ModuleFunction:
 Style/MutableConstant:
   Exclude:
     - 'Rakefile'
-    - 'bin/restclient'
-    - 'lib/restclient/exceptions.rb'
-    - 'lib/restclient/request.rb'
+    - 'bin/contractful'
+    - 'lib/contractful/exceptions.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -733,17 +733,17 @@ Style/MutableConstant:
 Style/NumericPredicate:
   Exclude:
     - 'spec/**/*'
-    - 'lib/restclient/rate_limit.rb'
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/rate_limit.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 3
 # Configuration parameters: AllowedMethods.
 # AllowedMethods: respond_to_missing?
 Style/OptionalBooleanParameter:
   Exclude:
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/contract/dsl.rb'
-    - 'lib/restclient/utils.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/contract/dsl.rb'
+    - 'lib/contractful/utils.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -751,7 +751,7 @@ Style/OptionalBooleanParameter:
 # SupportedStyles: short, verbose
 Style/PreferredHashMethods:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 20
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -759,13 +759,13 @@ Style/PreferredHashMethods:
 # SupportedStyles: compact, exploded
 Style/RaiseArgs:
   Exclude:
-    - 'lib/restclient.rb'
-    - 'lib/restclient/abstract_response.rb'
-    - 'lib/restclient/connection_pool.rb'
-    - 'lib/restclient/params_array.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/utils.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/abstract_response.rb'
+    - 'lib/contractful/connection_pool.rb'
+    - 'lib/contractful/params_array.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/utils.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -773,22 +773,22 @@ Style/RaiseArgs:
 # AllowedMethods: present?, blank?, presence, try, try!
 Style/SafeNavigation:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 37
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: Mode.
 Style/StringConcatenation:
   Exclude:
-    - 'bin/restclient'
-    - 'lib/rest-client.rb'
-    - 'lib/rest_client.rb'
-    - 'lib/restclient.rb'
-    - 'lib/restclient/contract/param.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/request.rb'
-    - 'lib/restclient/response.rb'
-    - 'lib/restclient/utils.rb'
+    - 'bin/contractful'
+    - 'lib/contractful.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/contract/param.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/request.rb'
+    - 'lib/contractful/response.rb'
+    - 'lib/contractful/utils.rb'
     - 'spec/helpers.rb'
     - 'spec/integration/httpbin_spec.rb'
     - 'spec/unit/payload_spec.rb'
@@ -799,7 +799,7 @@ Style/StringConcatenation:
 # AllowedMethods: define_method
 Style/SymbolProc:
   Exclude:
-    - 'lib/restclient/contract/openapi_import.rb'
+    - 'lib/contractful/contract/openapi_import.rb'
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -807,7 +807,7 @@ Style/SymbolProc:
 # SupportedStyles: forbid_for_all_comparison_operators, forbid_for_equality_operators_only, require_for_all_comparison_operators, require_for_equality_operators_only
 Style/YodaCondition:
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 # Offense count: 78
 # This cop supports safe autocorrection (--autocorrect).
@@ -815,11 +815,11 @@ Style/YodaCondition:
 # URISchemes: http, https
 Layout/LineLength:
   Exclude:
-    - 'lib/restclient.rb'
-    - 'lib/restclient/contract/definition.rb'
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/request.rb'
-    - 'rest-client.gemspec'
+    - 'lib/contractful.rb'
+    - 'lib/contractful/contract/definition.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/request.rb'
+    - 'contractful.gemspec'
     - 'spec/unit/abstract_response_spec.rb'
     - 'spec/unit/contract/param_spec.rb'
     - 'spec/unit/payload_spec.rb'
@@ -827,4 +827,4 @@ Layout/LineLength:
     - 'spec/unit/request_spec.rb'
     - 'spec/unit/resource_spec.rb'
     - 'spec/unit/response_spec.rb'
-    - 'spec/unit/restclient_spec.rb'
+    - 'spec/unit/contractful_spec.rb'

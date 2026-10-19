@@ -2,7 +2,7 @@
 
 require_relative '../spec_helper'
 
-RSpec.describe RestClient::RateLimit do
+RSpec.describe Contractful::RateLimit do
   describe '.from_headers' do
     it 'parses the IETF RateLimit-* headers' do
       info = described_class.from_headers(
@@ -95,8 +95,8 @@ RSpec.describe 'response rate-limit integration' do
                    'RateLimit-Reset' => '60'
                  })
 
-    response = RestClient.get('http://some/resource')
-    expect(response.rate_limit).to be_a(RestClient::RateLimit)
+    response = Contractful.get('http://some/resource')
+    expect(response.rate_limit).to be_a(Contractful::RateLimit)
     expect(response.rate_limit.remaining).to eq 98
     expect(response.rate_limited?).to be false
   end
@@ -104,7 +104,7 @@ RSpec.describe 'response rate-limit integration' do
   it 'returns nil rate_limit when the server sends no headers' do
     stub_request(:get, 'http://some/resource').to_return(body: 'ok')
 
-    response = RestClient.get('http://some/resource')
+    response = Contractful.get('http://some/resource')
     expect(response.rate_limit).to be_nil
     expect(response.rate_limited?).to be false
   end
@@ -112,8 +112,8 @@ RSpec.describe 'response rate-limit integration' do
   it 'flags rate_limited? for a 429 even without headers' do
     stub_request(:get, 'http://some/resource').to_return(status: 429, body: '')
 
-    response = RestClient::Request.execute(url: 'http://some/resource',
-                                           method: :get) { |r| r }
+    response = Contractful::Request.execute(url: 'http://some/resource',
+                                            method: :get) { |r| r }
     expect(response.rate_limited?).to be true
   end
 
@@ -121,7 +121,7 @@ RSpec.describe 'response rate-limit integration' do
     stub_request(:get, 'http://some/resource')
       .to_return(body: 'ok', headers: { 'X-RateLimit-Remaining' => '0' })
 
-    response = RestClient.get('http://some/resource')
+    response = Contractful.get('http://some/resource')
     expect(response.rate_limited?).to be true
   end
 
@@ -131,12 +131,12 @@ RSpec.describe 'response rate-limit integration' do
       .then.to_return(body: 'ok')
 
     delays = []
-    allow_any_instance_of(RestClient::Request).to receive(:sleep_for_retry) do |_, secs|
+    allow_any_instance_of(Contractful::Request).to receive(:sleep_for_retry) do |_, secs|
       delays << secs
     end
 
-    RestClient::Request.execute(url: 'http://some/resource', method: :get,
-                                max_retries: 1, retry_interval: 0.5)
+    Contractful::Request.execute(url: 'http://some/resource', method: :get,
+                                 max_retries: 1, retry_interval: 0.5)
     expect(delays.first).to be_between(1.0, 2.5)
   end
 end

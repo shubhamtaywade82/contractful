@@ -1,6 +1,6 @@
 # ERROR HANDLING — exception model and design rules
 
-rest-client's error philosophy is stated in [DESIGN.md](../../DESIGN.md)
+contractful's error philosophy is stated in [DESIGN.md](../../DESIGN.md)
 and enforced here: **exceptions are the default**, every raise is a precise
 class, response-bearing errors carry the full response, and nothing in the
 library swallows an error or converts an unexpected result into `nil`. This
@@ -9,7 +9,7 @@ document is the reference for what raises, when, and what it carries.
 ## The transport error tree
 
 ```text
-RestClient::Exception < RuntimeError
+Contractful::Exception < RuntimeError
   attributes: .response  .original_exception
               .http_code .http_headers .http_body
               .retryable?
@@ -43,7 +43,7 @@ Part of the error model itself, not caller folklore:
 | Terminal | everything else — 401, 403, 404, 409, 422, 501, ... | Retrying cannot fix a bad credential, missing resource or bad payload |
 
 APIs: `exception.retryable?` on instances, and
-`RestClient::Exceptions.retryable?(status_or_exception)` for integers and
+`Contractful::Exceptions.retryable?(status_or_exception)` for integers and
 foreign network errors. The automatic retry machinery (2.3+) uses exactly
 this classification, honors server `Retry-After` (delta-seconds or
 HTTP-date, capped by `:max_retry_after`), and falls back to
@@ -51,11 +51,11 @@ HTTP-date, capped by `:max_retry_after`), and falls back to
 
 ## The contract error tree
 
-Rooted separately at `RestClient::Contract::Error` because contract
+Rooted separately at `Contractful::Contract::Error` because contract
 violations are semantic, not transport:
 
 ```text
-RestClient::Contract::Error < StandardError
+Contractful::Contract::Error < StandardError
 ├── InvalidDefinition        # declaration-time: bad request line, verb,
 │                            #   name, param options, response types
 ├── MissingBaseUrl           # execution-time: no base configured
@@ -108,14 +108,14 @@ Do not log-and-reraise inside the library; the caller owns logging
 4. Preserve the thread of causality when wrapping (`original_exception`),
    as the timeout classes do for `Net::*Timeout`.
 5. Beware lexical shadowing inside `Request`: `Exception` there is
-   `RestClient::Exception`, not `::Exception` — the retry loop must (and
+   `Contractful::Exception`, not `::Exception` — the retry loop must (and
    does) scope top-level constants explicitly.
 
 ## Guidance for library users
 
-- Rescue `RestClient::Exception` for transport-shaped failures, specific
-  status classes (`RestClient::NotFound`) for specific handling, and
-  `RestClient::Contract::Error` around contract clients; narrow down as
+- Rescue `Contractful::Exception` for transport-shaped failures, specific
+  status classes (`Contractful::NotFound`) for specific handling, and
+  `Contractful::Contract::Error` around contract clients; narrow down as
   needed. Use `retryable?` for policy, not message matching.
 - Prefer declaring expected failure statuses in contracts (`responds 200,
   404`) over rescuing `ResourceNotFound` — the contract makes the

@@ -4,7 +4,7 @@ require_relative '_lib'
 
 # Sample class implementing AbstractResponse used for testing.
 class MyAbstractResponse
-  include RestClient::AbstractResponse
+  include Contractful::AbstractResponse
 
   attr_accessor :size
 
@@ -13,7 +13,7 @@ class MyAbstractResponse
   end
 end
 
-describe RestClient::AbstractResponse, :include_helpers do
+describe Contractful::AbstractResponse, :include_helpers do
   before do
     @net_http_res = res_double
     @request = request_double(url: 'http://example.com', method: 'get')
@@ -33,23 +33,23 @@ describe RestClient::AbstractResponse, :include_helpers do
 
   describe '.beautify_headers' do
     it 'beautifies the headers by turning the keys to symbols' do
-      h = RestClient::AbstractResponse.beautify_headers('content-type' => ['x'])
+      h = Contractful::AbstractResponse.beautify_headers('content-type' => ['x'])
       expect(h.keys.first).to eq :content_type
     end
 
     it 'beautifies the headers by turning the values to strings instead of one-element arrays' do
-      h = RestClient::AbstractResponse.beautify_headers('x' => ['text/html'])
+      h = Contractful::AbstractResponse.beautify_headers('x' => ['text/html'])
       expect(h.values.first).to eq 'text/html'
     end
 
     it 'joins multiple header values by comma' do
-      expect(RestClient::AbstractResponse.beautify_headers(
+      expect(Contractful::AbstractResponse.beautify_headers(
                { 'My-Header' => %w[one two] }
              )).to eq({ my_header: 'one, two' })
     end
 
     it 'leaves set-cookie headers as array' do
-      expect(RestClient::AbstractResponse.beautify_headers(
+      expect(Contractful::AbstractResponse.beautify_headers(
                { 'Set-Cookie' => ['cookie1=foo', 'cookie2=bar'] }
              )).to eq({ set_cookie: ['cookie1=foo', 'cookie2=bar'] })
     end
@@ -116,14 +116,14 @@ describe RestClient::AbstractResponse, :include_helpers do
 
     it 'raises RequestFailed on unknown codes' do
       expect(@net_http_res).to receive(:code).and_return('1000')
-      expect { @response.return! }.to raise_error RestClient::RequestFailed
+      expect { @response.return! }.to raise_error Contractful::RequestFailed
     end
 
     it 'raises an error on a redirection after non-GET/HEAD requests' do
       expect(@net_http_res).to receive(:code).and_return('301')
       expect(@request).to receive(:method).and_return('put')
       expect(@response).not_to receive(:follow_redirection)
-      expect { @response.return! }.to raise_error RestClient::RequestFailed
+      expect { @response.return! }.to raise_error Contractful::RequestFailed
     end
 
     it 'follows 302 redirect' do
@@ -138,7 +138,7 @@ describe RestClient::AbstractResponse, :include_helpers do
       @request = request_double
       @response = MyAbstractResponse.new(@net_http_res, @request)
       expect(@response).to receive(:check_max_redirects).and_return('fake-check')
-      expect { @response.return! }.to raise_error RestClient::Found
+      expect { @response.return! }.to raise_error Contractful::Found
     end
   end
 end

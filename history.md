@@ -1,3 +1,25 @@
+# 0.1.0
+
+First release published as **contractful**. The version restarts at 0.1.0
+because the gem name changed: the `rest-client` name on RubyGems belongs to
+the original project this codebase modernized, and none of the versions
+below were ever published under it. The code itself is the current master
+line — same contracts, helpers and test suite — renamed:
+
+* Renamed the gem, the require path and the module: `rest-client` →
+  `contractful`, `require 'restclient'` → `require 'contractful'`,
+  `RestClient` → `Contractful`, and the CLI with it (`bin/contractful`).
+  The backward-compat entry shims (`rest-client.rb`, `rest_client.rb`) are
+  gone along with the old-name requires they existed for.
+* `RESTCLIENT_LOG` → `CONTRACTFUL_LOG`.
+* The GitHub repository moved to
+  [shubhamtaywade82/contractful](https://github.com/shubhamtaywade82/contractful);
+  old links redirect. Gemspec metadata, badges and the documentation set
+  point at the new location.
+* References to the upstream rest-client repository — issue/PR links in
+  code comments and the heritage notes — deliberately keep pointing at the
+  original project.
+
 # 2.6.0
 
 Roadmap-helpers release: the two planned development-time companions to
@@ -16,7 +38,7 @@ and the review-hardening fixes that landed on master ahead of the release.
   the previous pattern skipped the nested `spec/unit/contract/` directory,
   so the contract-first suite never ran under CI's unit job.
 * Add the OpenAPI import helper (REQ-N01): an opt-in, development-time
-  reader (`require 'restclient/contract/openapi_import'`) that converts an
+  reader (`require 'contractful/contract/openapi_import'`) that converts an
   OpenAPI 3.x document into `contract` definitions — typed closed-schema
   params with enum/min/max/length/pattern constraints, `payload_style`
   inference, response statuses (including `2XX` wildcards), JSON body
@@ -26,7 +48,7 @@ and the review-hardening fixes that landed on master ahead of the release.
   ready-to-paste client class from the built definitions, and the
   generated source round-trips through `Definition#describe`.
 * Add the recorded-sequence test helper (REQ-N02): an opt-in, test-only
-  module (`require 'restclient/contract/sequence'`) that replays recorded
+  module (`require 'contractful/contract/sequence'`) that replays recorded
   vendor response sequences through a contract client under WebMock. Each
   fixture step stubs its recorded response, invokes the contract method
   and runs the contract's own validation — the first violation fails with
@@ -40,7 +62,7 @@ Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.
 
 * Redact credential-bearing request headers from the request log. The
-  request log line (`RestClient.get "http://...", "Accept"=>...`) now
+  request log line (`Contractful.get "http://...", "Accept"=>...`) now
   renders `Authorization`, `Proxy-Authorization` and `Cookie` values as
   `[REDACTED]`, honoring the promise in
   `docs/operations/OBSERVABILITY.md` ("auth headers are not logged") and
@@ -54,7 +76,7 @@ contract layer robustness, spec hygiene). No public API changes.
   `__contract_effective_headers` when a contract client subclass defines
   its own `initialize` without calling `super`.
 * Bound the custom-class param coercion fallback to Kernel casts. The last
-  resort cast in `RestClient::Contract::Param` used to `send` a method
+  resort cast in `Contractful::Contract::Param` used to `send` a method
   named after the type class on the param object itself (unbounded dynamic
   dispatch); it now only attempts public `Kernel` module functions
   (`Float`, `Complex`, ...).
@@ -77,7 +99,7 @@ contract layer robustness, spec hygiene). No public API changes.
   spelled `'content-type'` now replaces (instead of coexisting with) the
   default `'Content-Type'`, so duplicate headers no longer reach the wire, and
   the payload-override and Cookie-override warnings fire across casings.
-  String header keys still pass through verbatim (rest-client 1.x/2.x
+  String header keys still pass through verbatim (contractful 1.x/2.x
   compatibility, upstream issue #599); both behaviors are pinned by specs.
 * Document the finalized design decisions from the repository review in
   `docs/adr/0004-review-observations-resolution.md` (non-seekable payload
@@ -124,7 +146,7 @@ beyond shapes.
   inherits down the class chain, and individual contracts can opt out with
   `auth false`.
 * Add retryable vs terminal error classification:
-  `RestClient::Exceptions::RETRIABLE_STATUSES` (408, 425, 429, 500, 502,
+  `Contractful::Exceptions::RETRIABLE_STATUSES` (408, 425, 429, 500, 502,
   503, 504), `Exception#retryable?` and `Exceptions.retryable?` (which also
   classifies plain network errors like `SocketError`/`Errno::*`). Requests
   now retry retryable HTTP statuses — not just network failures — when
@@ -142,10 +164,10 @@ beyond shapes.
   limit_param:, has_more_path:`. Every paginated contract gets two
   metaprogrammed methods — `#{name}_pages` (lazy Enumerator of validated
   page responses) and `all_#{name}` (flat collector). A `_max_pages` guard
-  (default 1000) raises `RestClient::Contract::PaginationError` instead of
+  (default 1000) raises `Contractful::Contract::PaginationError` instead of
   looping forever, and page 1 can resume from an explicitly supplied
   cursor or offset.
-* Add rate-limit header parsing: `RestClient::RateLimit` reads the IETF
+* Add rate-limit header parsing: `Contractful::RateLimit` reads the IETF
   `RateLimit-*` headers and the legacy `X-RateLimit-*` convention
   (preferring IETF), handling integer/HTTP-date/epoch resets and the
   "limit, limit;w=window" description form. Every response exposes
@@ -157,16 +179,16 @@ beyond shapes.
 # 2.4.0
 
 Feature release adding a contract-first architecture layer with heavy
-metaprogramming on top of the classic rest-client API.
+metaprogramming on top of the classic contractful API.
 
-* Add `RestClient::Contract`: declare API operations as contracts —
+* Add `Contractful::Contract`: declare API operations as contracts —
   `contract :name, 'VERB /path'` with an `instance_eval`'d DSL block — and
   the gem generates the client methods (`define_method`), `#{name}_url`
   path builders, parameter validation and a reflection API for you. The
   contract *is* the implementation.
 * Add a typed parameter engine: `String`, `Integer`, `Float`, `:boolean`,
   `Array`, `Hash`, arbitrary classes (`is_a?` check, then
-  `Class#restclient_coerce`, then a Kernel cast) and `Proc` coercions, with
+  `Class#contractful_coerce`, then a Kernel cast) and `Proc` coercions, with
   `required:`, `default:` (lazy procs supported), `inclusion:` and
   `coerce: false` strict mode. Path placeholders (`:owner`, `:repo`) are
   auto-synthesized as required params, URI-escaped and consumed out of the
@@ -208,8 +230,8 @@ Feature release building on the 2.2.0 modernization.
   arguments are forwarded to `JSON.parse`.
 * Add optional persistent connections (HTTP keep-alive): pass
   `persistent: true` to reuse the underlying connection across requests via
-  the new thread-safe `RestClient::ConnectionPool` (also available as
-  `RestClient.connection_pool`). Connections are pooled per host/proxy/SSL
+  the new thread-safe `Contractful::ConnectionPool` (also available as
+  `Contractful.connection_pool`). Connections are pooled per host/proxy/SSL
   settings, never shared concurrently, discarded after network failures, and
   re-established when the server closed them.
 * Add automatic retries: pass `:max_retries` (plus the optional
@@ -218,10 +240,10 @@ Feature release building on the 2.2.0 modernization.
   resets and broken pipes — with exponential backoff. HTTP error responses are
   never retried, and payloads are rewound between attempts (non-rewindable
   payload streams disable retrying).
-* Add `RestClient::Exceptions::WriteTimeout`, raised when `Net::WriteTimeout`
+* Add `Contractful::Exceptions::WriteTimeout`, raised when `Net::WriteTimeout`
   fires. Previously a write timeout leaked a raw `Net::WriteTimeout` (or was
   misclassified as a read timeout), so the three timeout phases now share the
-  common `RestClient::Exceptions::Timeout` rescue target.
+  common `Contractful::Exceptions::Timeout` rescue target.
 
 # 2.2.0
 
@@ -239,7 +261,7 @@ Ruby support, tooling, and a few new request options.
   :TLSv1_2`), complementing the legacy `:ssl_version` option.
 * Reject URIs whose hostname is empty (Ruby 3.4+ returns `''` rather than `nil`
   for URLs like `http:///`).
-* Remove the legacy Ruby 2.0 code paths from `RestClient::Utils`
+* Remove the legacy Ruby 2.0 code paths from `Contractful::Utils`
   (`deprecated_cgi_parse_header` and friends); `HTTP::Accept` is now always
   used for Content-Type parsing.
 * Add `# frozen_string_literal: true` to all library files.
@@ -283,11 +305,11 @@ Ruby support, tooling, and a few new request options.
   `Accept-Encoding` header, rely instead on Net::HTTP defaults. (#597)
   - Note: this changes behavior for compressed responses when using
     `:raw_response => true`. Previously the raw response would not have been
-    uncompressed by rest-client, but now Net::HTTP will uncompress it.
+    uncompressed by contractful, but now Net::HTTP will uncompress it.
 - The previous fix to avoid having Netrc username/password override an
   Authorization header was case-sensitive and incomplete. Fix this by
   respecting existing Authorization headers, regardless of letter case. (#550)
-- Handle ParamsArray payloads. Previously, rest-client would silently drop a
+- Handle ParamsArray payloads. Previously, contractful would silently drop a
   ParamsArray passed as the payload. Instead, automatically use
   Payload::Multipart if the ParamsArray contains a file handle, or use
   Payload::UrlEncoded if it doesn't. (#508)
@@ -319,19 +341,19 @@ This release is largely API compatible, but makes several breaking changes.
 - Drop support for Ruby 1.9
 - Allow mime-types as new as 3.x (requires ruby 2.0)
 - Respect Content-Type charset header provided by server. Previously,
-  rest-client would not override the string encoding chosen by Net::HTTP. Now
+  contractful would not override the string encoding chosen by Net::HTTP. Now
   responses that specify a charset will yield a body string in that encoding.
   For example, `Content-Type: text/plain; charset=EUC-JP` will return a String
   encoded with `Encoding::EUC_JP`. (#361)
 - Change exceptions raised on request timeout. Instead of
-  `RestClient::RequestTimeout` (which is still used for HTTP 408), network
-  timeouts will now raise either `RestClient::Exceptions::ReadTimeout` or
-  `RestClient::Exceptions::OpenTimeout`, both of which inherit from
-  `RestClient::Exceptions::Timeout`. For backwards compatibility, this still
-  inherits from `RestClient::RequestTimeout` so existing uses will still work.
+  `Contractful::RequestTimeout` (which is still used for HTTP 408), network
+  timeouts will now raise either `Contractful::Exceptions::ReadTimeout` or
+  `Contractful::Exceptions::OpenTimeout`, both of which inherit from
+  `Contractful::Exceptions::Timeout`. For backwards compatibility, this still
+  inherits from `Contractful::RequestTimeout` so existing uses will still work.
   This may change in a future major release. These new timeout classes also
   make the original wrapped exception available as `#original_exception`.
-- Unify request exceptions under `RestClient::RequestFailed`, which still
+- Unify request exceptions under `Contractful::RequestFailed`, which still
   inherits from `ExceptionWithResponse`. Previously, HTTP 304, 401, and 404
   inherited directly from `ExceptionWithResponse` rather than from
   `RequestFailed`. Now _all_ HTTP status code exceptions inherit from both.
@@ -347,7 +369,7 @@ This release is largely API compatible, but makes several breaking changes.
 - `Response` objects are now a subclass of `String` rather than a `String` that
   mixes in the response functionality. Most of the methods remain unchanged,
   but this makes it much easier to understand what is happening when you look
-  at a RestClient response object. There are a few additional changes:
+  at a Contractful response object. There are a few additional changes:
   - Response objects now implement `.inspect` to make this distinction clearer.
   - `Response#to_i` will now behave like `String#to_i` instead of returning the
     HTTP response code, which was very surprising behavior.
@@ -366,7 +388,7 @@ This release is largely API compatible, but makes several breaking changes.
   complaints about the previously broken behavior: (#498)
   - The `:cookies` option may now be a Hash of Strings, an Array of
     HTTP::Cookie objects, or a full HTTP::CookieJar.
-  - Add `RestClient::Request#cookie_jar` and reimplement `Request#cookies` to
+  - Add `Contractful::Request#cookie_jar` and reimplement `Request#cookies` to
     be a wrapper around the cookie jar.
   - Still support passing the `:cookies` option in the headers hash, but now
     raise ArgumentError if that option is also passed to `Request#initialize`.
@@ -378,17 +400,17 @@ This release is largely API compatible, but makes several breaking changes.
     by the cookie jar.
 - Don't set basic auth header if explicit `Authorization` header is specified
 - Add `:proxy` option to requests, which can be used for thread-safe
-  per-request proxy configuration, overriding `RestClient.proxy`
+  per-request proxy configuration, overriding `Contractful.proxy`
 - Allow overriding `ENV['http_proxy']` to disable proxies by setting
-  `RestClient.proxy` to a falsey value. Previously there was no way in Ruby 2.x
+  `Contractful.proxy` to a falsey value. Previously there was no way in Ruby 2.x
   to turn off a proxy specified in the environment without changing `ENV`.
-- Add actual support for streaming request payloads. Previously rest-client
-  would call `.to_s` even on RestClient::Payload::Streamed objects. Instead,
+- Add actual support for streaming request payloads. Previously contractful
+  would call `.to_s` even on Contractful::Payload::Streamed objects. Instead,
   treat any object that responds to `.read` as a streaming payload and pass it
   through to `.body_stream=` on the Net:HTTP object. This massively reduces the
   memory required for large file uploads.
 - Changes to redirection behavior: (#381, #484)
-  - Remove `RestClient::MaxRedirectsReached` in favor of the normal
+  - Remove `Contractful::MaxRedirectsReached` in favor of the normal
     `ExceptionWithResponse` subclasses. This makes the response accessible on
     the exception object as `.response`, making it possible for callers to tell
     what has actually happened when the redirect limit is reached.
@@ -396,10 +418,10 @@ This release is largely API compatible, but makes several breaking changes.
     the response object as `.history`. This makes it possible to access the
     original response headers and body before the redirection was followed.
   - Follow redirection consistently, regardless of whether the HTTP method was
-    passed as a symbol or string. Under the hood rest-client now normalizes the
+    passed as a symbol or string. Under the hood contractful now normalizes the
     HTTP request method to a lowercase string.
-- Add `:before_execution_proc` option to `RestClient::Request`. This makes it
-  possible to add procs like `RestClient.add_before_execution_proc` to a single
+- Add `:before_execution_proc` option to `Contractful::Request`. This makes it
+  possible to add procs like `Contractful.add_before_execution_proc` to a single
   request without global state.
 - Run tests on Travis's beta OS X support.
 - Make `Request#transmit` a private method, along with a few others.
@@ -409,12 +431,12 @@ This release is largely API compatible, but makes several breaking changes.
   - Add new convention for handling URL params containing deeply nested arrays
     and hashes, unify handling of null/empty values, and use the same code for
     GET and POST params. (#437)
-  - Add the RestClient::ParamsArray class, a simple array-like container that
+  - Add the Contractful::ParamsArray class, a simple array-like container that
     can be used to pass multiple keys with same name or keys where the ordering
     is significant.
 - Add a few more exception classes for obscure HTTP status codes.
 - Multipart: use a much more robust multipart boundary with greater entropy.
-- Make `RestClient::Payload::Base#inspect` stop pretending to be a String.
+- Make `Contractful::Payload::Base#inspect` stop pretending to be a String.
 - Add `Request#redacted_uri` and `Request#redacted_url` to display the URI
   with any password redacted.
 
@@ -422,9 +444,9 @@ This release is largely API compatible, but makes several breaking changes.
 
 Changes in the release candidate that did not persist through the final 2.0.0
 release:
-- RestClient::Exceptions::Timeout was originally going to be a direct subclass
-  of RestClient::Exception in the release candidate. This exception tree was
-  made a subclass of RestClient::RequestTimeout prior to the final release.
+- Contractful::Exceptions::Timeout was originally going to be a direct subclass
+  of Contractful::Exception in the release candidate. This exception tree was
+  made a subclass of Contractful::RequestTimeout prior to the final release.
 
 # 1.8.0
 
@@ -473,7 +495,7 @@ release:
   - Add support for SSL ciphers, and choose secure ones by default
 - Run tests under travis
 - Several other bugfixes and test improvements
-  - Convert Errno::ETIMEDOUT to RestClient::RequestTimeout
+  - Convert Errno::ETIMEDOUT to Contractful::RequestTimeout
   - Handle more HTTP response codes from recent standards
   - Save raw responses to binary mode tempfile (#110)
   - Disable timeouts with :timeout => nil rather than :timeout => -1
@@ -483,7 +505,7 @@ release:
 
 - This release is unchanged from 1.6.9. It was published in order to supersede
   the malicious 1.6.10-13 versions, even for users who are still pinning to the
-  legacy 1.6.x series. All users are encouraged to upgrade to rest-client 2.x.
+  legacy 1.6.x series. All users are encouraged to upgrade to contractful 2.x.
 
 # 1.6.10, 1.6.11, 1.6.12, 1.6.13 (CVE-2019-15224)
 
@@ -521,7 +543,7 @@ release:
 
 # 1.6.4
 
-- fix restclient script compatibility with 1.9.2
+- fix contractful script compatibility with 1.9.2
 - fix unlinking temp file (patch provided by Evan Smith)
 - monkeypatching ruby for http patch method (patch provided by Syl Turner)
 
@@ -539,14 +561,14 @@ release:
 - limit number of redirections (patch provided by Chris Dinn)
 - close and unlink the temp file created by playload (patch provided by Chris Green)
 - make gemspec Rubygems 1.8 compatible (patch provided by David Backeus)
-- added RestClient.reset_before_execution_procs (patch provided by Cloudify)
+- added Contractful.reset_before_execution_procs (patch provided by Cloudify)
 - added PATCH method (patch provided by Jeff Remer)
 - hack for HTTP servers that use raw DEFLATE compression, see http://www.ruby-forum.com/topic/136825 (path provided by James Reeves)
 
 # 1.6.1
 
 - add response body in Exception#inspect
-- add support for RestClient.options
+- add support for Contractful.options
 - fix tests for 1.9.2 (patch provided by Niko Dittmann)
 - block passing in Resource#[] (patch provided by Niko Dittmann)
 - cookies set in a response should be kept in a redirect
@@ -555,7 +577,7 @@ release:
 
 # 1.6.0
 
-- forgot to include rest-client.rb in the gem
+- forgot to include contractful.rb in the gem
 - user, password and user-defined headers should survive a redirect
 - added all missing status codes
 - added parameter passing for get request using the :param key in header
@@ -570,7 +592,7 @@ release:
 - only converts headers keys which are Symbols
 - use CGI for cookie parsing instead of custom code
 - unescape user and password before using them (patch provided by Lars Gierth)
-- expand ~ in ~/.restclientrc (patch provided by Mike Fletcher)
+- expand ~ in ~/.contractfulrc (patch provided by Mike Fletcher)
 - ssl verification raise an exception when the ca certificate is incorrect (patch provided by Braintree)
 
 # 1.5.0
@@ -586,7 +608,7 @@ release:
 
 # 1.4.2
 
-- fixed RestClient.add_before_execution_proc (patch provided by Nicholas Wieland)
+- fixed Contractful.add_before_execution_proc (patch provided by Nicholas Wieland)
 - fixed error when an exception is raised without a response (patch provided by Caleb Land)
 
 # 1.4.1
@@ -596,11 +618,11 @@ release:
 # 1.4.0
 
 - Response is no more a String, and the mixin is replaced by an abstract_response, existing calls are redirected to response body with a warning.
-- enable repeated parameters  RestClient.post 'http://example.com/resource', :param1 => ['one', 'two', 'three'], => :param2 => 'foo' (patch provided by Rodrigo Panachi)
+- enable repeated parameters  Contractful.post 'http://example.com/resource', :param1 => ['one', 'two', 'three'], => :param2 => 'foo' (patch provided by Rodrigo Panachi)
 - fixed the redirect code concerning relative path and query string combination (patch provided by Kevin Read)
 - redirection code moved to Response so redirection can be customized using the block syntax
 - only get and head redirections are now followed by default, as stated in the specification
-- added RestClient.add_before_execution_proc to hack the http request, like for oauth
+- added Contractful.add_before_execution_proc to hack the http request, like for oauth
 
 The response change may be breaking in rare cases.
 
@@ -623,14 +645,14 @@ The only breaking change should be the exception classes, but as the new classes
 
 - formatting changed from tabs to spaces
 - logged requests now include generated headers
-- accept and content-type headers can now be specified using extentions: RestClient.post "http://example.com/resource", { 'x' => 1 }.to_json, :content_type => :json, :accept => :json
+- accept and content-type headers can now be specified using extentions: Contractful.post "http://example.com/resource", { 'x' => 1 }.to_json, :content_type => :json, :accept => :json
 - should be 1.1.1 but renamed to 1.2.0 because 1.1.X versions has already been packaged on Debian
 
 # 1.1.0
 
-- new maintainer: Archiloque, the working repo is now at http://github.com/archiloque/rest-client
+- new maintainer: Archiloque, the working repo is now at http://github.com/archiloque/contractful
 - a mailing list has been created at rest.client@librelist.com and an freenode irc channel #rest-client
-- François Beausoleil' multipart code from http://github.com/francois/rest-client has been merged
+- François Beausoleil' multipart code from http://github.com/francois/contractful has been merged
 - ability to use hash in hash as payload
 - the mime-type code now rely on the mime-types gem http://mime-types.rubyforge.org/ instead of an internal partial list
 - 204 response returns a Response instead of nil (patch provided by Elliott Draper)

@@ -1,7 +1,7 @@
 # RUNBOOK — symptom → diagnosis → fix
 
 Field guide for failures users and contributors actually hit with
-rest-client. Format: symptom, diagnosis, fix. Contributions: add entries
+contractful. Format: symptom, diagnosis, fix. Contributions: add entries
 for real incidents only, with the Ruby/gem versions where observed.
 
 ## TLS / certificate failures
@@ -18,15 +18,15 @@ for real incidents only, with the Ruby/gem versions where observed.
   (ISRG Root X1 pattern — see `spec/integration/certs/`).
 - **Never** "fix" this by disabling verification.
 
-### `RestClient::SSLCertificateNotVerified`
+### `Contractful::SSLCertificateNotVerified`
 
 - **Diagnosis:** verification ran and failed explicitly (hostname or chain).
 - **Fix:** same as above; if a proxy is intercepting, install the proxy's
-  root into the trust you hand to rest-client.
+  root into the trust you hand to contractful.
 
 ## Timeouts
 
-### `RestClient::Exceptions::OpenTimeout` — connecting hangs
+### `Contractful::Exceptions::OpenTimeout` — connecting hangs
 
 - **Diagnosis:** unreachable host, firewall, wrong port, or DNS resolving
   to a black hole.
@@ -34,7 +34,7 @@ for real incidents only, with the Ruby/gem versions where observed.
   legitimately slow to accept; remember retries will re-hit the same wall —
   `retryable?` is true, so pair `:max_retries` with a sane `open_timeout`.
 
-### `RestClient::Exceptions::ReadTimeout` — response stalls
+### `Contractful::Exceptions::ReadTimeout` — response stalls
 
 - **Diagnosis:** server accepted the request but stopped sending (slow
   endpoint, huge report generation).
@@ -42,7 +42,7 @@ for real incidents only, with the Ruby/gem versions where observed.
   `raw_response`; check server-side. 429/5xx-style stalls are better
   handled by retries (`:max_retries`, `Retry-After` honored).
 
-### `RestClient::Exceptions::WriteTimeout` — upload stalls (2.3+)
+### `Contractful::Exceptions::WriteTimeout` — upload stalls (2.3+)
 
 - **Diagnosis:** large uploads to slow/constrained links.
 - **Fix:** raise `write_timeout`, or chunk/stream the payload.
@@ -64,7 +64,7 @@ for real incidents only, with the Ruby/gem versions where observed.
 - **Diagnosis:** `Location` chain that never settles (bad relative
   redirects, auth loops where each 302 re-asks). Once `:max_redirects`
   (default 10) is exhausted, the library raises the mapped 3xx exception
-  (for example `RestClient::Found`) carrying the final redirect response.
+  (for example `Contractful::Found`) carrying the final redirect response.
 - **Fix:** inspect `e.response.history` for the chain; usually an auth
   problem dressed as a redirect problem — check credentials before raising
   `:max_redirects`.
@@ -104,14 +104,14 @@ for real incidents only, with the Ruby/gem versions where observed.
 
 - **Diagnosis:** the platform gem loads the Windows certificate store via
   ffi; if the gem isn't the platform build, no store is loaded.
-- **Fix:** install `rest-client` for the `x64-mingw-ucrt` platform (the
+- **Fix:** install `contractful` for the `x64-mingw-ucrt` platform (the
   windows gemspec), keep `ffi ~> 1.16`.
 
 ## Proxy environments
 
 ### Requests fail only inside the corporate network
 
-- **Diagnosis:** proxies. rest-client honors `http_proxy`/`https_proxy`/
+- **Diagnosis:** proxies. contractful honors `http_proxy`/`https_proxy`/
   `no_proxy` ENV by default.
 - **Fix:** set the ENV vars properly, override per request with the
   `:proxy` option, or `proxy: nil` to bypass; TLS-intercepting proxies need
@@ -120,7 +120,7 @@ for real incidents only, with the Ruby/gem versions where observed.
 ## When to escalate
 
 If the runbook does not resolve it: open an issue per CONTRIBUTING.md with
-`ruby -v`, `RestClient.version`, a redacted reproduction, the full
+`ruby -v`, `Contractful.version`, a redacted reproduction, the full
 exception (class + message + `.http_code`), and which of the above entries
 you already ruled out. Security-classified surprises (verification
 silently skipped, credentials in unexpected places) go to the private

@@ -1,6 +1,6 @@
 # OBSERVABILITY — proving the library (and its callers) are healthy
 
-rest-client is a library: it does not run a process, hold metrics or ship
+contractful is a library: it does not run a process, hold metrics or ship
 dashboards. Observability here has two layers — what the gem exposes for
 **host applications** to observe with, and what the **project itself** uses
 to prove its own health (CI, specs, packaging). There is deliberately no
@@ -10,7 +10,7 @@ telemetry (INTEGRATIONS.md policy): the gem reports only to whoever asks.
 
 ### Logging
 
-- `RestClient.log = logger` sets a process-wide logger; the `RESTCLIENT_LOG`
+- `Contractful.log = logger` sets a process-wide logger; the `CONTRACTFUL_LOG`
   environment variable initializes it (values like `stdout`/`stderr`).
   Per-request override via the `:log` option.
 - Logged content: the request line (method, URL, payload summary) and the
@@ -67,7 +67,7 @@ invasive (transport swapping) is deliberately not offered (ARCHITECTURE.md).
 
 1. Reproduce with a spec or a snippet using the local library
    (`ruby -Ilib`).
-2. Enable logging: `RESTCLIENT_LOG=stdout` or `RestClient.log =
+2. Enable logging: `CONTRACTFUL_LOG=stdout` or `Contractful.log =
    Logger.new($stdout)` — read the request/response lines, not guesses.
 3. Inspect the exception: class, `.response`, `.original_exception`.
 4. Contract clients: `client.contract_for(:name).describe` to confirm what

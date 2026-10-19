@@ -2,9 +2,9 @@
 
 require_relative '../_lib'
 
-describe 'RestClient::Windows::RootCerts',
-         if: RestClient::Platform.windows? do
-  let(:x509_store) { RestClient::Windows::RootCerts.instance.to_a }
+describe 'Contractful::Windows::RootCerts',
+         if: Contractful::Platform.windows? do
+  let(:x509_store) { Contractful::Windows::RootCerts.instance.to_a }
 
   it 'returns at least one X509 certificate' do
     expect(x509_store.to_a.size).to be >= 1

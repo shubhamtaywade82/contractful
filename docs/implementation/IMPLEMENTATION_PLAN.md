@@ -40,7 +40,7 @@ verify matrix on master, then the release cadence in DELIVERY.md. Note:
 
 A separate, opt-in reader that converts an OpenAPI 3.x document into
 `contract` declarations (source-to-source, run at development time, not a
-runtime dependency). Shipped as `require 'restclient/contract/openapi_import'`:
+runtime dependency). Shipped as `require 'contractful/contract/openapi_import'`:
 `.import` builds Definitions (typed params with closed-schema constraints,
 payload styles, statuses incl. `2XX` wildcards, open-schema response
 fields), `.to_ruby` renders a client class from those same definitions and
@@ -51,7 +51,7 @@ decision is reported on `Import#notes`. Verified by
 ### W4 — Recorded-sequence test helper (REQ-N02, status: shipped, 2.6.0)
 
 Contracts deliberately do not express ordering, timing or cross-call state
-machines. Shipped as `require 'restclient/contract/sequence'`: a sequence
+machines. Shipped as `require 'contractful/contract/sequence'`: a sequence
 fixture (YAML/JSON under the consumer's control) drives the contract
 client through N recorded interactions with WebMock, failing on the first
 contract violation with the step number attached. `expect_request`

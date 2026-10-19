@@ -1,7 +1,7 @@
 # THREAT MODEL — assets, boundaries, mitigations
 
-Scope: the rest-client gem itself — the code users load into their
-applications. rest-client has no server, no state store and no privileges
+Scope: the contractful gem itself — the code users load into their
+applications. contractful has no server, no state store and no privileges
 beyond its host process; its threat model is therefore about **being a
 correct, safe conduit between a trusting application and a hostile
 network**, plus the supply chain that delivers it. This model follows the
@@ -24,7 +24,7 @@ issues are reported privately — see CONTRIBUTING.md.
 ## Trust boundaries
 
 ```text
-[ caller application ] ──(trusted)──► [ rest-client ] ──(UNTRUSTED)──► [ network/server ]
+[ caller application ] ──(trusted)──► [ contractful ] ──(UNTRUSTED)──► [ network/server ]
                                              ▲
                               (semi-trusted) │
                               env vars, netrc, CA files, gem source

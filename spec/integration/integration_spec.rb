@@ -2,11 +2,11 @@
 
 require_relative '_lib'
 
-describe RestClient do
+describe Contractful do
   it 'a simple request' do
     body = 'abc'
     stub_request(:get, 'www.example.com').to_return(body: body, status: 200)
-    response = RestClient.get 'www.example.com'
+    response = Contractful.get 'www.example.com'
     expect(response.code).to eq 200
     expect(response.body).to eq body
   end
@@ -15,9 +15,9 @@ describe RestClient do
     body = "Ho hai ! I'm not here !"
     stub_request(:get, 'www.example.com').to_return(body: body, status: 404)
     begin
-      RestClient.get 'www.example.com'
+      Contractful.get 'www.example.com'
       raise
-    rescue RestClient::ResourceNotFound => e
+    rescue Contractful::ResourceNotFound => e
       expect(e.http_code).to eq 404
       expect(e.response.code).to eq 404
       expect(e.response.body).to eq body
@@ -33,7 +33,7 @@ describe RestClient do
           'Content-Type' => 'text/plain; charset=UTF-8'
         }
       )
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       expect(response.encoding).to eq Encoding::UTF_8
       expect(response.valid_encoding?).to eq true
     end
@@ -45,7 +45,7 @@ describe RestClient do
           'Content-Type' => 'text/plain; charset=windows-1252'
         }
       )
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       expect(response.encoding).to eq Encoding::WINDOWS_1252
       expect(response.encode('utf-8')).to eq 'ÿ'
       expect(response.valid_encoding?).to eq true
@@ -58,7 +58,7 @@ describe RestClient do
           'Content-Type' => 'application/octet-stream; charset=binary'
         }
       )
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       expect(response.encoding).to eq Encoding::BINARY
       expect do
         response.encode('utf-8')
@@ -77,7 +77,7 @@ describe RestClient do
           'Content-Type' => 'text/plain; charset=EUC-JP'
         }
       )
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       expect(response.encoding).to eq Encoding::EUC_JP
       expect(response.valid_encoding?).to eq true
       expect(response.length).to eq 5
@@ -91,7 +91,7 @@ describe RestClient do
         }
       )
 
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       # expect(response.encoding).to eq Encoding.default_external
       expect(response.encoding).to eq Encoding::UTF_8
     end
@@ -103,7 +103,7 @@ describe RestClient do
         }
       )
 
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       # expect(response.encoding).to eq Encoding.default_external
       expect(response.encoding).to eq Encoding::UTF_8
     end
@@ -120,7 +120,7 @@ describe RestClient do
         }
       )
 
-      response = RestClient.get 'www.example.com'
+      response = Contractful.get 'www.example.com'
       expect(response.encoding).to eq Encoding::BINARY
     end
   end

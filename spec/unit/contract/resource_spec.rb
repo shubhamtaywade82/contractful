@@ -2,10 +2,10 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract resource macro' do
+RSpec.describe 'Contractful::Contract resource macro' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       base 'https://api.test'
       instance_exec(&block)
@@ -67,7 +67,7 @@ RSpec.describe 'RestClient::Contract resource macro' do
 
     it 'raises MissingParam when :id is absent' do
       expect { client.get_post }.to raise_error(
-        RestClient::Contract::MissingParam, /param :id is required/
+        Contractful::Contract::MissingParam, /param :id is required/
       )
     end
 
@@ -109,13 +109,13 @@ RSpec.describe 'RestClient::Contract resource macro' do
     it 'rejects using only: and except: together' do
       expect do
         build_client { resource :posts, only: [:index], except: [:show] }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /accepts :only or :except, not both/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /accepts :only or :except, not both/)
     end
 
     it 'rejects unknown action names' do
       expect do
         build_client { resource :posts, only: %i[index upsert] }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /unknown resource actions :upsert/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /unknown resource actions :upsert/)
     end
 
     it 'supports update_with: :put' do
@@ -128,7 +128,7 @@ RSpec.describe 'RestClient::Contract resource macro' do
     it 'rejects other update verbs' do
       expect do
         build_client { resource :posts, update_with: :post }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /update_with must be :patch or :put/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /update_with must be :patch or :put/)
     end
 
     it 'supports a custom collection path' do
@@ -143,7 +143,7 @@ RSpec.describe 'RestClient::Contract resource macro' do
     it 'rejects paths that do not start with a slash' do
       expect do
         build_client { resource :posts, path: 'v2/posts' }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, %r{must start with "/"})
+      end.to raise_error(Contractful::Contract::InvalidDefinition, %r{must start with "/"})
     end
 
     it 'supports an explicit singular name' do
@@ -176,7 +176,7 @@ RSpec.describe 'RestClient::Contract resource macro' do
     it 'rejects invalid resource names' do
       expect do
         build_client { resource 'not a name' }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /not a valid identifier/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /not a valid identifier/)
     end
   end
 end

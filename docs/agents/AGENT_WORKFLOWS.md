@@ -1,7 +1,7 @@
 # Agent workflows — how agents execute work in this repository
 
 This document defines the phase-by-phase workflow AI agents follow for
-non-trivial tasks in rest-client. The stable rules live in
+non-trivial tasks in contractful. The stable rules live in
 [AGENTS.md](../../AGENTS.md) at the repository root; this file is the
 operational playbook. The phases are sequential, but small fixes may collapse
 them — what may never collapse is the verification and review phase.
@@ -66,7 +66,7 @@ stop — that requires an ADR and operator approval.
 Follow the hard rules in [AGENTS.md](../../AGENTS.md): Ruby >= 3.0 syntax,
 `frozen_string_literal: true`, exceptions over silent failure, closed
 request / open response semantics, explicit top-level constant scoping inside
-`RestClient::Request`. Write the failing spec first for bug fixes, then make
+`Contractful::Request`. Write the failing spec first for bug fixes, then make
 it pass. Keep generated and hand-written code distinguishable: contract
 methods come from `define_method` in one place
 (`Contract::ClassMethods#__define_contract_methods`), never from ad-hoc
@@ -77,8 +77,8 @@ methods come from `define_method` in one place
 ```sh
 mise exec -- bundle exec rake spec:unit
 mise exec -- bundle exec rake spec:integration
-mise exec -- gem build rest-client.gemspec && rm rest-client-*.gem
-mise exec -- gem build rest-client.windows.gemspec && rm rest-client-*.gem
+mise exec -- gem build contractful.gemspec && rm contractful-*.gem
+mise exec -- gem build contractful.windows.gemspec && rm contractful-*.gem
 ```
 
 Report the actual counts (`N examples, M failures`). Never claim a run that
@@ -117,7 +117,7 @@ Feature/fix: <one line>
 Branch/commit: <sha>
 Requirements updated: <REQ-IDs and new status>
 Specs: <unit> unit, <integration> integration — all green
-Gemspecs: both build rest-client <version>
+Gemspecs: both build contractful <version>
 Docs updated: <list>
 Assumptions made: <list or "none">
 Follow-ups: <list or "none">

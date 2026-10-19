@@ -77,6 +77,14 @@ module Contractful
   #     While open, requests fail fast with
   #     {Contractful::CircuitOpenError}. State transitions post a `circuit`
   #     notification.
+  # * :pace proactive rate-limit enforcement (opt-in). true uses the
+  #     defaults ({Contractful::Pacer::DEFAULT_LIMIT} requests per
+  #     {Contractful::Pacer::DEFAULT_WINDOW}s per scheme/host/port across
+  #     the process); a Hash customizes it:
+  #     <tt>pace: { limit: 100, window: 60, max_wait: 10 }</tt>. When the
+  #     window is full the request sleeps until a slot frees (posting a
+  #     `pace` notification); a wait beyond `max_wait` raises
+  #     {Contractful::PacingTimeout}. Retries acquire a slot per attempt.
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override Contractful.proxy.
   # * :persistent reuse the underlying connection across requests via the
@@ -104,7 +112,8 @@ module Contractful
                 :ssl_opts, :max_retries, :retry_interval, :persistent,
                 :retry_after, :max_retry_after,
                 :retry_jitter, :retry_jitter_cap, :retry_rng,
-                :breaker
+                :breaker,
+                :pace
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -289,6 +298,17 @@ module Contractful
         )
       end
 
+      @pace = args.fetch(:pace, false)
+      case @pace
+      when false, true, Hash
+        # ok
+      else
+        raise ArgumentError.new(
+          ':pace must be true, false or a config Hash, ' +
+          "got #{@pace.inspect}"
+        )
+      end
+
       @retry_after = args.fetch(:retry_after, true) ? true : false
       @max_retry_after = args.fetch(:max_retry_after, 60)
       unless @max_retry_after.is_a?(Numeric) && @max_retry_after >= 0
@@ -318,9 +338,11 @@ module Contractful
       started = nil
       breaker = @breaker ? CircuitBreaker.registry.breaker_for(uri, **breaker_options) : nil
       breaker&.check!
+      pacer = @pace ? Pacer.registry.pacer_for(uri, **pace_options) : nil
       begin
         loop do
           req = net_http_request_class(method).new(uri, processed_headers)
+          pacer&.acquire
           Notifications.post('request', method: method, url: uri.to_s, attempt: attempts + 1)
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           result = transmit uri, req, payload, & block
@@ -888,6 +910,19 @@ module Contractful
       when :full then @retry_rng.rand(0..delay)
       when :equal then delay + @retry_rng.rand(0..delay)
       when :decorrelated then decorrelated_jitter_delay(attempt)
+      end
+    end
+
+    # Normalize the :pace option into registry kwargs.
+    def pace_options
+      case @pace
+      when Hash
+        { limit: @pace.fetch(:limit, Pacer::DEFAULT_LIMIT),
+          window: @pace.fetch(:window, Pacer::DEFAULT_WINDOW),
+          max_wait: @pace.fetch(:max_wait, Pacer::DEFAULT_MAX_WAIT) }
+      else
+        { limit: Pacer::DEFAULT_LIMIT, window: Pacer::DEFAULT_WINDOW,
+          max_wait: Pacer::DEFAULT_MAX_WAIT }
       end
     end
 

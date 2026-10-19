@@ -335,6 +335,26 @@ Contractful::Notifications.subscribe do |event|
 end
 ```
 
+## Rate-limit pacing
+
+<em>New in 0.1.0.</em> The breaker reacts to failure; pacing prevents the
+429s in the first place. Opt in per request with `pace: true` (defaults:
+600 requests per 60s window) or a config Hash:
+
+```ruby
+Contractful.get('https://api.example.com/x',
+                pace: { limit: 100, window: 60, max_wait: 10 })
+```
+
+Pacing is per scheme/host/port across the whole process (all threads
+included) using a sliding window: every attempt — retries included —
+acquires a slot before the request leaves. A full window makes the request
+sleep until the oldest slot expires (posting a `pace` notification with
+the delay); a wait longer than `max_wait` raises
+`Contractful::PacingTimeout` instead of stalling silently. Callers that
+cannot tolerate waiting should set a small `max_wait` and treat the
+timeout as their own backpressure signal.
+
 ## Contract-first API clients
 
 <em>New in 2.4.</em> `Contractful::Contract` is a contract-first layer built on

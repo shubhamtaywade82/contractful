@@ -93,6 +93,11 @@ and the review-hardening fixes that landed on master ahead of the release.
   `Contractful::CircuitOpenError` for the cooldown, then half-open probes.
   4xx responses never open a circuit. Transitions post `circuit`
   notifications; contract clients pass `_breaker` per call.
+* Add proactive rate-limit pacing (`pace: true` or a config Hash): a
+  process-wide sliding window per scheme/host/port delays requests that
+  would exceed a configured quota instead of eating 429s — waits post
+  `pace` notifications and a wait beyond `max_wait` raises
+  `PacingTimeout`. Contract clients pass `_pace` per call.
 
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.

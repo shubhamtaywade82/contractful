@@ -22,7 +22,7 @@ module Contractful
       META_OPTIONS = %i[
         _headers _timeout _open_timeout _read_timeout _write_timeout
         _persistent _max_retries _retry_interval _idempotency_key
-        _retry_jitter _retry_jitter_cap _retry_rng _breaker
+        _retry_jitter _retry_jitter_cap _retry_rng _breaker _pace
       ].freeze
 
       META_MAP = {
@@ -36,7 +36,8 @@ module Contractful
         _retry_jitter: :retry_jitter,
         _retry_jitter_cap: :retry_jitter_cap,
         _retry_rng: :retry_rng,
-        _breaker: :breaker
+        _breaker: :breaker,
+        _pace: :pace
       }.freeze
 
       # Verbs whose params are sent as a query string by default.

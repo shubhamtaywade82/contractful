@@ -22,6 +22,38 @@ require File.dirname(__FILE__) + '/contractful/payload'
 require File.dirname(__FILE__) + '/contractful/contract'
 require File.dirname(__FILE__) + '/contractful/windows'
 
+# Contractful is a contract-first HTTP client for Ruby.
+#
+# Two layers share one request pipeline:
+#
+# * {Contractful} (this module) — the raw HTTP facade: one-liner verb
+#   methods ({Contractful.get}, {Contractful.post}, ...) returning a
+#   String-like {Contractful::Response}, with automatic retries, persistent
+#   connections, proxies, redirects, cookies and a retryable-vs-terminal
+#   error classification ({Contractful::Exceptions}).
+# * {Contractful::Contract} — the contract-first layer: declare verb, path,
+#   typed parameters and expected responses, and client methods, path
+#   builders, validation and introspection are generated for you. See the
+#   "Contract-first API clients" section of the README.
+#
+# @example Raw HTTP
+#   Contractful.get('https://api.example.com/users', accept: 'application/json')
+#   Contractful.post('https://api.example.com/users', name: 'Ada')   # form body
+#
+# @example Contract-first client
+#   class Client
+#     include Contractful::Contract
+#     base 'https://api.example.com'
+#     contract :list_users, 'GET /users' do
+#       param :page, Integer, default: 1
+#       responds 200, type: :array
+#     end
+#   end
+#
+# @see file:README.md Project overview and usage
+# @see file:API.md Normative public API reference
+# @see Contractful::Request The underlying request pipeline
+#
 # This module's static methods are the entry point for using the REST client.
 #
 #   # GET

@@ -12,6 +12,11 @@ group :test do
 end
 
 group :development, :test do
+  # API documentation rendering (`yard doc`, `yard stats`). require: false —
+  # nothing in the runtime or test suite loads it.
+  gem 'redcarpet', '~> 3.6', require: false
+  gem 'yard', '~> 0.9', require: false
+
   # Static analysis baseline (see .rubocop.yml for the adoption strategy).
   # require: false - nothing in the runtime loads these; the Rakefile task
   # and CI lint job require them explicitly.

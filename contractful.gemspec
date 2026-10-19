@@ -16,6 +16,7 @@ Gem::Specification.new do |s|
   s.metadata = {
     'bug_tracker_uri' => 'https://github.com/shubhamtaywade82/contractful/issues',
     'changelog_uri' => 'https://github.com/shubhamtaywade82/contractful/blob/master/history.md',
+    'documentation_uri' => 'https://rubydoc.info/gems/contractful/frames',
     'homepage_uri' => 'https://github.com/shubhamtaywade82/contractful',
     'rubygems_mfa_required' => 'true'
   }

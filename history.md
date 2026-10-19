@@ -30,6 +30,11 @@ line — same contracts, helpers and test suite — renamed:
   renderer's "cannot render a Proc default" guard was dead code because
   `Param#default_value` resolves procs — the guard now keys off the new
   `Param#lazy_default?` predicate.
+* The gem now ships YARD API documentation: `.yardopts` configures the
+  rendering (markdown, README/history as narrative files, protected
+  methods included), the `Contractful` facade module carries a proper
+  overview doc, and the gemspec links `documentation_uri` to rubydoc.info.
+  `yard` and `redcarpet` are development-only gems.
 
 # 2.6.0
 

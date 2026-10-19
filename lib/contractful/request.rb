@@ -255,10 +255,18 @@ module Contractful
       # example basic auth headers) and consumed payload streams do not leak
       # state between attempts.
       attempts = 0
+      started = nil
       begin
         loop do
           req = net_http_request_class(method).new(uri, processed_headers)
+          Notifications.post('request', method: method, url: uri.to_s, attempt: attempts + 1)
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           result = transmit uri, req, payload, & block
+          Notifications.post(
+            'response', method: method, url: uri.to_s,
+                        status: result.respond_to?(:code) ? result.code : nil,
+                        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+          )
 
           # When a block handles responses itself (error-status suppression),
           # retryable statuses never raise — judge the returned response.
@@ -267,6 +275,8 @@ module Contractful
              Exceptions.retryable?(result.code) && rewind_payload!
             attempts += 1
             delay = retry_delay_for_response(result, attempts)
+            Notifications.post('retry', method: method, url: uri.to_s,
+                                        attempt: attempts, delay: delay, cause: result.code)
             log_response_retry(result, attempts, delay)
             sleep_for_retry(delay)
             next
@@ -277,15 +287,26 @@ module Contractful
         attempts += 1
         if attempts <= max_retries && rewind_payload!
           delay = retry_backoff_delay(attempts)
+          Notifications.post('retry', method: method, url: uri.to_s,
+                                      attempt: attempts, delay: delay, cause: e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
         raise
       rescue Contractful::ExceptionWithResponse => e
+        # Error statuses raise inside transmit, so the response event for a
+        # failed attempt posts here rather than after the transmit call.
+        Notifications.post(
+          'response', method: method, url: uri.to_s, status: e.http_code,
+                      duration_ms: started && ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+        )
         attempts += 1
         if retry_after && attempts <= max_retries && e.retryable? && rewind_payload!
           delay = retry_delay_for_response(e.response, attempts)
+          Notifications.post('retry', method: method, url: uri.to_s, attempt: attempts,
+                                      delay: delay,
+                                      cause: e.response ? e.http_code : e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry

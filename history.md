@@ -73,6 +73,13 @@ and the review-hardening fixes that landed on master ahead of the release.
   rejected at load time); `before_step`/`after_step` hooks carry the
   stateful rules contracts cannot express (token refresh sequencing,
   rate-limit windows, cross-step invariants).
+* Post request lifecycle events to a new `Contractful::Notifications` hub
+  (`request`, `response`, `retry` — method, url, attempt, status,
+  duration_ms, retry cause). Thread-safe; a raising subscriber is logged
+  and skipped so observability cannot break the request it observes. An
+  opt-in `contractful/notifications/active_support` bridge re-posts every
+  event to ActiveSupport::Notifications as `contractful.<name>`;
+  activesupport is a test-only dependency, never a runtime one.
 
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.

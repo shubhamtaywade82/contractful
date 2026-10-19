@@ -64,6 +64,7 @@ requirement landed.
 | REQ-N01 | OpenAPI import helper | `OpenAPIImport.import` converts an OpenAPI 3.x document into Definitions (types, constraints, payload styles, statuses, response fields); every lossy mapping is reported on `#notes`; `to_ruby` output re-evaluates to contracts that `describe` identically; opt-in require, zero runtime deps | `spec/unit/contract/openapi_import_spec.rb` | implemented (2.6) |
 | REQ-N02 | Recorded-sequence test helper | `Sequence.load` validates a fixture against the client's contracts (unknown calls/keys rejected at load); `run` replays each recorded response through the contract pipeline under WebMock and raises `Failure` on the first violation with the step number; `before_step`/`after_step` hooks carry stateful rules; `expect_request` pins outgoing path/query/headers/payload subsets | `spec/unit/contract/sequence_spec.rb` | implemented (2.6) |
 
+| REQ-N04 | Event notifications | `Notifications.subscribe` receives `request`/`response`/`retry` events with method, url, attempt, status, duration and retry cause; subscribers that raise are logged and skipped; `clear!` detaches all; the ActiveSupport bridge re-posts every event as `contractful.<name>` (opt-in require, activesupport not a runtime dep) | `spec/unit/notifications_spec.rb`, `spec/unit/notifications_active_support_spec.rb` | implemented (0.1.0) |
 ## Platform, packaging, compatibility
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |

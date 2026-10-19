@@ -669,6 +669,41 @@ ordering-sensitive outgoing details (`path`, `query_include`,
 Unknown contract names, malformed steps and missing responses are rejected
 at load time, before anything runs.
 
+## Event notifications
+
+<em>New in 0.1.0.</em> The request pipeline posts lifecycle events to an
+in-process hub, so metrics, tracing and alerting never require touching the
+transport. Subscribers must not raise — a failing subscriber is logged and
+skipped, so observability cannot break the request it observes:
+
+```ruby
+Contractful::Notifications.subscribe do |event|
+  puts "#{event[:name]} #{event[:payload].inspect}"
+end
+# request  {method: 'get', url: 'https://api.test/x', attempt: 1}
+# response {method: 'get', url: 'https://api.test/x', status: 200, duration_ms: 43.12}
+# retry    {method: 'get', url: 'https://api.test/x', attempt: 1, delay: 0.5, cause: 503}
+```
+
+The core posts `request` (method, url, attempt), `response` (status,
+duration_ms — one per attempt, including suppressed error responses) and
+`retry` (attempt, delay, cause — an exception class name or HTTP status).
+Resilience features add their own events (circuit breaker state changes,
+rate-limit sleeps, token refreshes). `subscribe` returns an unsubscribe
+handle; `Notifications.clear!` detaches everything (test hook).
+
+For Rails and APM integration, an opt-in bridge forwards every event to
+ActiveSupport::Notifications as `contractful.<name>`:
+
+```ruby
+require 'contractful/notifications/active_support'   # requires the activesupport gem
+
+ActiveSupport::Notifications.subscribe(/^contractful\./) do |*args|
+  event = ActiveSupport::Notifications::Event.new(*args)
+  Rails.logger.info "#{event.name} in #{event.duration}ms #{event.payload.slice(:url, :status)}"
+end
+```
+
 ## Multipart
 
 Yeah, that's right!  This does multipart sends for you!

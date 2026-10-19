@@ -31,6 +31,17 @@ errors, `.original_exception` on wrapped network errors, contract errors
 naming param/contract/expectation/value. Applications get structured
 diagnostic context by rescuing the documented roots — no string parsing.
 
+### Event notifications
+
+`Contractful::Notifications` is the machine-readable observability surface:
+every request posts `request`, `response` and (when applicable) `retry`
+events with method, url, attempt, status, duration_ms and the retry cause.
+Subscribers are isolated — a raising subscriber is logged and skipped —
+and the optional `contractful/notifications/active_support` bridge
+re-posts everything to ActiveSupport::Notifications as
+`contractful.<name>` for Rails/APM consumption. Prefer events over log
+scraping for metrics; the log remains the human-readable mirror.
+
 ### Runtime quota visibility
 
 `response.rate_limit` (parsed `RateLimit-*`/`X-RateLimit-*` headers) and

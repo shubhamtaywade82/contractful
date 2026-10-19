@@ -54,6 +54,19 @@ module Contractful
   #     backoff.
   # * :max_retry_after upper bound (seconds) for a Retry-After delay;
   #     larger values fall back to the exponential backoff (default 60).
+  # * :retry_jitter randomize retry delays so many concurrent clients do not
+  #     retry in lockstep (the thundering-herd problem). false (default)
+  #     keeps the plain exponential backoff; :full draws uniformly from
+  #     [0, backoff]; :equal from [backoff, 2 * backoff]; :decorrelated
+  #     draws from [retry_interval, min(cap, previous * 3)] per the AWS
+  #     "Exponential Backoff and Jitter" recipe. Jitter applies only to
+  #     exponential backoff — a server-provided Retry-After delay is
+  #     honored exactly as sent.
+  # * :retry_jitter_cap upper bound (seconds) for the :decorrelated jitter
+  #     draw (default 30).
+  # * :retry_rng source of randomness for :retry_jitter — any object
+  #     responding to #rand(range) (a seeded <tt>Random.new(seed)</tt>
+  #     makes tests deterministic). Defaults to the Random class.
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override Contractful.proxy.
   # * :persistent reuse the underlying connection across requests via the
@@ -79,7 +92,8 @@ module Contractful
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
                 :ssl_opts, :max_retries, :retry_interval, :persistent,
-                :retry_after, :max_retry_after
+                :retry_after, :max_retry_after,
+                :retry_jitter, :retry_jitter_cap, :retry_rng
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -226,6 +240,30 @@ module Contractful
         raise ArgumentError.new(
           ':retry_interval must be a non-negative Numeric, ' +
           "got #{@retry_interval.inspect}"
+        )
+      end
+
+      @retry_jitter = args.fetch(:retry_jitter, false)
+      unless [false, :full, :equal, :decorrelated].include?(@retry_jitter)
+        raise ArgumentError.new(
+          ':retry_jitter must be false, :full, :equal or :decorrelated, ' +
+          "got #{@retry_jitter.inspect}"
+        )
+      end
+
+      @retry_jitter_cap = args.fetch(:retry_jitter_cap, 30.0)
+      unless @retry_jitter_cap.is_a?(Numeric) && @retry_jitter_cap.positive?
+        raise ArgumentError.new(
+          ':retry_jitter_cap must be a positive Numeric, ' +
+          "got #{@retry_jitter_cap.inspect}"
+        )
+      end
+
+      @retry_rng = args.fetch(:retry_rng, Random)
+      unless @retry_rng.respond_to?(:rand)
+        raise ArgumentError.new(
+          ':retry_rng must respond to #rand(range), ' +
+          "got #{@retry_rng.inspect}"
         )
       end
 
@@ -808,7 +846,33 @@ module Contractful
     # Exponential backoff between retries: `:retry_interval` for the first
     # retry, then doubling for each subsequent attempt.
     def retry_backoff_delay(attempt)
-      retry_interval * (2**(attempt - 1))
+      delay = retry_interval * (2**(attempt - 1))
+      apply_retry_jitter(delay, attempt)
+    end
+
+    # Randomize an exponential backoff per the configured jitter style.
+    # Called only for computed backoff — a server's Retry-After delay is
+    # honored exactly, so many clients still retry in unison only when the
+    # server itself asked them to.
+    def apply_retry_jitter(delay, attempt)
+      return delay if @retry_jitter == false || delay.zero?
+
+      case @retry_jitter
+      when :full then @retry_rng.rand(0..delay)
+      when :equal then delay + @retry_rng.rand(0..delay)
+      when :decorrelated then decorrelated_jitter_delay(attempt)
+      end
+    end
+
+    # AWS "Exponential Backoff and Jitter" decorrelated draw: each attempt
+    # samples [retry_interval, min(cap, previous * 3)], where the previous
+    # value is the raw (unjittered) backoff of the preceding attempt —
+    # stateless per request, deterministic under a seeded :retry_rng.
+    def decorrelated_jitter_delay(attempt)
+      base = retry_interval
+      previous = attempt <= 1 ? base : base * (2**(attempt - 2))
+      draw = @retry_rng.rand(base..[previous * 3, @retry_jitter_cap].min)
+      [draw, @retry_jitter_cap].min
     end
 
     def sleep_for_retry(secs)

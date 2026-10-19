@@ -253,6 +253,22 @@ Contractful::Request.execute(method: :get, url: 'http://example.com',
                             max_retries: 2, open_timeout: 2)
 ```
 
+<em>New in 0.1.0.</em> Retrying in lockstep is its own outage amplifier:
+when many clients hit the same failing service, identical exponential
+backoff makes them all knock again at the same instant. `:retry_jitter`
+randomizes the computed backoff so retries spread out — `:full` draws from
+`[0, backoff]`, `:equal` from `[backoff, 2 * backoff]`, and `:decorrelated`
+follows the AWS "Exponential Backoff and Jitter" recipe (`:full` is what it
+recommends for most systems). Jitter applies only to the computed backoff:
+a server's `Retry-After` is still honored exactly as sent. A seeded
+`:retry_rng` (any object answering `#rand(range)`) makes tests
+deterministic.
+
+```ruby
+Contractful::Request.execute(method: :get, url: 'http://example.com',
+                            max_retries: 3, retry_jitter: :full)
+```
+
 ## Persistent connections (keep-alive)
 
 <em>New in 2.3.</em> Pass `persistent: true` to reuse the underlying TCP/TLS

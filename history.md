@@ -80,6 +80,12 @@ and the review-hardening fixes that landed on master ahead of the release.
   opt-in `contractful/notifications/active_support` bridge re-posts every
   event to ActiveSupport::Notifications as `contractful.<name>`;
   activesupport is a test-only dependency, never a runtime one.
+* Randomize computed retry backoff with `retry_jitter: :full`, `:equal` or
+  `:decorrelated` (AWS recipe, capped by `retry_jitter_cap`) so fleets of
+  clients do not retry in lockstep; a server's Retry-After is honored
+  exactly, and `retry_rng` accepts a seeded Random for deterministic
+  tests. Contract clients pass the options through as
+  `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng`.
 
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.

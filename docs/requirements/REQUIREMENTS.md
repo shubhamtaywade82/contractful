@@ -65,6 +65,7 @@ requirement landed.
 | REQ-N02 | Recorded-sequence test helper | `Sequence.load` validates a fixture against the client's contracts (unknown calls/keys rejected at load); `run` replays each recorded response through the contract pipeline under WebMock and raises `Failure` on the first violation with the step number; `before_step`/`after_step` hooks carry stateful rules; `expect_request` pins outgoing path/query/headers/payload subsets | `spec/unit/contract/sequence_spec.rb` | implemented (2.6) |
 
 | REQ-N04 | Event notifications | `Notifications.subscribe` receives `request`/`response`/`retry` events with method, url, attempt, status, duration and retry cause; subscribers that raise are logged and skipped; `clear!` detaches all; the ActiveSupport bridge re-posts every event as `contractful.<name>` (opt-in require, activesupport not a runtime dep) | `spec/unit/notifications_spec.rb`, `spec/unit/notifications_active_support_spec.rb` | implemented (0.1.0) |
+| REQ-R01 | Retry jitter | `retry_jitter: :full/:equal/:decorrelated` randomizes computed backoff (Retry-After delays untouched); `:decorrelated` samples [retry_interval, min(cap, previous*3)] with `retry_jitter_cap` (default 30); `retry_rng` injects randomness (seeded Random = deterministic tests); contract layer passes `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng` | `spec/unit/retry_jitter_spec.rb` | implemented (0.1.0) |
 ## Platform, packaging, compatibility
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |

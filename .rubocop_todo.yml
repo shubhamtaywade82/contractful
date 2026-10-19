@@ -268,6 +268,7 @@ RSpec/ExampleLength:
   - spec/unit/utils_spec.rb
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
+  - spec/unit/retry_jitter_spec.rb
 RSpec/ExpectActual:
   Exclude:
   - '**/spec/routing/**/*'
@@ -330,6 +331,7 @@ RSpec/MultipleExpectations:
   - spec/unit/utils_spec.rb
   - spec/unit/notifications_spec.rb
   - spec/unit/notifications_active_support_spec.rb
+  - spec/unit/retry_jitter_spec.rb
 RSpec/PredicateMatcher:
   Exclude:
   - spec/unit/payload_spec.rb
@@ -364,6 +366,7 @@ RSpec/SpecFilePathFormat:
   - spec/unit/response_spec.rb
   - spec/unit/contractful_spec.rb
   - spec/unit/utils_spec.rb
+  - spec/unit/retry_jitter_spec.rb
 RSpec/StubbedMock:
   Exclude:
   - spec/unit/abstract_response_spec.rb

@@ -1,6 +1,6 @@
 inherit_from: .rubocop_todo.yml
 
-# RuboCop baseline for rest-client.
+# RuboCop baseline for contractful.
 #
 # Adoption strategy for an inherited codebase: existing violations are
 # quarantined in .rubocop_todo.yml, generated with:
@@ -46,7 +46,7 @@ Lint/RescueException:
   # catching ::Exception there is deliberate so that even non-StandardError
   # failures cannot leave a poisoned persistent connection behind.
   Exclude:
-    - 'lib/restclient/request.rb'
+    - 'lib/contractful/request.rb'
 
 RSpec/RemoveConst:
   # The to_ruby round-trip spec evaluates generated client source in a
@@ -65,5 +65,5 @@ Naming/PredicatePrefix:
   # has_file? (Payload) and has_default? (Contract::Param) are public API
   # since 2.x; renaming them to file?/default? would break consumers.
   Exclude:
-    - 'lib/restclient/payload.rb'
-    - 'lib/restclient/contract/param.rb'
+    - 'lib/contractful/payload.rb'
+    - 'lib/contractful/contract/param.rb'

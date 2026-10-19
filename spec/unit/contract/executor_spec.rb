@@ -2,10 +2,10 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract executor' do
+RSpec.describe 'Contractful::Contract executor' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       instance_exec(&block)
     end
@@ -55,7 +55,7 @@ RSpec.describe 'RestClient::Contract executor' do
       expect do
         client.list_posts(per_page: 500)
       end.to raise_error(
-        RestClient::Contract::InvalidParam,
+        Contractful::Contract::InvalidParam,
         /param :per_page: value 500 is not in 1\.\.100/
       )
     end
@@ -64,7 +64,7 @@ RSpec.describe 'RestClient::Contract executor' do
       expect do
         client.list_posts(bogus: 1)
       end.to raise_error(
-        RestClient::Contract::UnknownParam,
+        Contractful::Contract::UnknownParam,
         %r{unknown param :bogus for GET /posts}
       )
     end
@@ -73,7 +73,7 @@ RSpec.describe 'RestClient::Contract executor' do
       expect do
         client.create_post
       end.to raise_error(
-        RestClient::Contract::MissingParam,
+        Contractful::Contract::MissingParam,
         %r{param :title is required by POST /posts}
       )
     end
@@ -116,14 +116,14 @@ RSpec.describe 'RestClient::Contract executor' do
       expect(stub).to have_been_requested
     end
 
-    it 'returns the RestClient::Response' do
+    it 'returns the Contractful::Response' do
       stub_request(:get, 'https://api.test/posts')
         .with(query: hash_including('page' => '1', 'per_page' => '25'))
         .to_return(body: '[]')
 
       response = client.list_posts
 
-      expect(response).to be_a(RestClient::Response)
+      expect(response).to be_a(Contractful::Response)
       expect(response.body).to eq '[]'
     end
 
@@ -138,7 +138,7 @@ RSpec.describe 'RestClient::Contract executor' do
 
     it 'forwards meta options to the underlying request' do
       response_double = double('response', code: 200, body: '{}')
-      expect(RestClient::Request).to receive(:execute).with(
+      expect(Contractful::Request).to receive(:execute).with(
         hash_including(timeout: 5, persistent: true, max_retries: 2)
       ).and_return(response_double)
 
@@ -148,7 +148,7 @@ RSpec.describe 'RestClient::Contract executor' do
     it 'rejects unknown meta options' do
       expect do
         client.list_posts(_timeots: 5)
-      end.to raise_error(RestClient::Contract::UnknownParam, /unknown meta option :_timeots/)
+      end.to raise_error(Contractful::Contract::UnknownParam, /unknown meta option :_timeots/)
     end
 
     it 'raises MissingBaseUrl when no base is configured' do
@@ -157,7 +157,7 @@ RSpec.describe 'RestClient::Contract executor' do
       end
 
       expect { baseless.new.list_posts }.to raise_error(
-        RestClient::Contract::MissingBaseUrl, /no base URL configured/
+        Contractful::Contract::MissingBaseUrl, /no base URL configured/
       )
     end
 
@@ -221,7 +221,7 @@ RSpec.describe 'RestClient::Contract executor' do
       expect do
         client.create_issue(owner: 'octo', title: 'Hi')
       end.to raise_error(
-        RestClient::Contract::MissingParam,
+        Contractful::Contract::MissingParam,
         %r{param :repo is required by POST /repos/:owner/:repo/issues}
       )
     end
@@ -322,13 +322,13 @@ RSpec.describe 'RestClient::Contract executor' do
     it 'validates and coerces declared path params' do
       expect do
         client_class.new.show_issue_url(owner: 'octo', repo: 'hi', number: 'x')
-      end.to raise_error(RestClient::Contract::InvalidParam, /param :number/)
+      end.to raise_error(Contractful::Contract::InvalidParam, /param :number/)
     end
 
     it 'raises MissingParam for absent path params' do
       expect do
         client_class.new.show_issue_url(owner: 'octo')
-      end.to raise_error(RestClient::Contract::MissingParam, /path param :repo is required/)
+      end.to raise_error(Contractful::Contract::MissingParam, /path param :repo is required/)
     end
   end
 
@@ -376,7 +376,7 @@ RSpec.describe 'RestClient::Contract executor' do
       expect do
         build_client { contract :x, 'FETCH /posts' }
       end.to raise_error(
-        RestClient::Contract::InvalidDefinition,
+        Contractful::Contract::InvalidDefinition,
         %r{invalid request line "FETCH /posts"}
       )
     end
@@ -384,19 +384,19 @@ RSpec.describe 'RestClient::Contract executor' do
     it 'rejects invalid base URLs' do
       expect do
         build_client { base 'ftp://nope' }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /base must be an absolute http\(s\) URL/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /base must be an absolute http\(s\) URL/)
     end
 
     it 'rejects reserved contract names' do
       expect do
         build_client { contract :inspect, 'GET /x' }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /is reserved/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /is reserved/)
     end
 
     it 'rejects invalid contract names' do
       expect do
         build_client { contract 'not a name', 'GET /x' }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /not a valid method name/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /not a valid method name/)
     end
   end
 
@@ -429,7 +429,7 @@ RSpec.describe 'RestClient::Contract executor' do
     it 'rejects out-of-range input before the network is touched' do
       expect do
         client.create_order(security_id: '12345', transaction_type: 'BUY', quantity: 0)
-      end.to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+      end.to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
 
       expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
     end
@@ -437,7 +437,7 @@ RSpec.describe 'RestClient::Contract executor' do
     it 'rejects enum violations before the network is touched' do
       expect do
         client.create_order(security_id: '12345', transaction_type: 'HOLD', quantity: 1)
-      end.to raise_error(RestClient::Contract::InvalidParam, /not in \["BUY", "SELL"\]/)
+      end.to raise_error(Contractful::Contract::InvalidParam, /not in \["BUY", "SELL"\]/)
 
       expect(a_request(:post, 'https://api.test/orders')).not_to have_been_made
     end

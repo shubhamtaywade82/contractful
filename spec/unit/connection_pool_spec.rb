@@ -29,7 +29,7 @@ class PoolTestConnection
   end
 end
 
-describe RestClient::ConnectionPool do
+describe Contractful::ConnectionPool do
   subject(:pool) { described_class.new(max_idle: 2) }
 
   # Builders in real usage always hand back started connections.

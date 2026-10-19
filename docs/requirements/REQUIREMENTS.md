@@ -14,7 +14,7 @@ requirement landed.
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
-| REQ-C01 | Verb one-liners (FR-1) | `RestClient.get/post/put/patch/delete/head/options` return a String-like `Response` | `spec/unit/restclient_spec.rb` | implemented (1.x) |
+| REQ-C01 | Verb one-liners (FR-1) | `Contractful.get/post/put/patch/delete/head/options` return a String-like `Response` | `spec/unit/contractful_spec.rb` | implemented (1.x) |
 | REQ-C02 | Block form error suppression | With a block, non-2xx returns the response instead of raising | `spec/unit/request_spec.rb` | implemented (1.x) |
 | REQ-C03 | Resource nesting (FR-2) | `Resource#[]` builds sub-paths sharing options | `spec/unit/resource_spec.rb` | implemented (1.x) |
 | REQ-C04 | Payload forms (FR-3) | Hash → form; JSON style accepted; raw String passed through; multipart file parts stream correctly | `spec/unit/payload_spec.rb` | implemented (1.x) |
@@ -41,7 +41,7 @@ requirement landed.
 | --- | --- | --- | --- | --- |
 | REQ-E01 | Status exceptions (FR-8) | Every documented status maps to a rescueable class carrying `.response`, `.http_code`, `.http_body` | `spec/unit/exceptions_spec.rb` | implemented (1.x) |
 | REQ-E02 | Timeout exceptions | Open/Read/Write timeout map to `Exceptions::OpenTimeout`/`ReadTimeout`/`WriteTimeout`, all `retryable?` | `spec/unit/exceptions_spec.rb` | implemented (2.x) |
-| REQ-E03 | Logging hook (FR-9) | `RestClient.log=` / `RESTCLIENT_LOG` route request/response log lines | `spec/unit/request_spec.rb` | implemented (1.x) |
+| REQ-E03 | Logging hook (FR-9) | `Contractful.log=` / `CONTRACTFUL_LOG` route request/response log lines | `spec/unit/request_spec.rb` | implemented (1.x) |
 
 ## Contract-first layer (2.4/2.5)
 
@@ -69,7 +69,7 @@ requirement landed.
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
 | REQ-P01 | Ruby range (FR-24) | Suite green on 3.0–4.0 matrix; `ruby >= 3.0` enforced by gemspec | CI matrix | implemented (2.2) |
-| REQ-P02 | Windows gem (FR-23) | `rest-client.windows.gemspec` builds for `x64-mingw-ucrt` with `ffi ~> 1.16` root-cert loading | `spec/unit/windows/root_certs_spec.rb`, gem build | implemented (2.2) |
+| REQ-P02 | Windows gem (FR-23) | `contractful.windows.gemspec` builds for `x64-mingw-ucrt` with `ffi ~> 1.16` root-cert loading | `spec/unit/windows/root_certs_spec.rb`, gem build | implemented (2.2) |
 | REQ-P03 | Packaging integrity | Both gemspecs build from a clean checkout; `git ls-files` file list; metadata includes changelog/bugs URIs | gem build in release checklist | implemented (2.2) |
 | REQ-P04 | CI gates | Every push runs unit + integration specs on the matrix; `permissions: contents: read` | `.github/workflows/ci.yml` | implemented (2.2) |
 

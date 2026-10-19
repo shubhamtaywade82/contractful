@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'webmock/rspec'
-require 'rest-client'
+require 'contractful'
 
 require_relative 'helpers'
 
@@ -26,8 +26,8 @@ RSpec.configure do |config|
     mocks.yield_receiver_to_any_instance_implementation_blocks = true
   end
 
-  # RestClient.log is process-global state, and several logging specs assign
-  # it directly (`log = RestClient.log = []`). Under RSpec's random ordering
+  # Contractful.log is process-global state, and several logging specs assign
+  # it directly (`log = Contractful.log = []`). Under RSpec's random ordering
   # such an assignment would leak into unrelated examples that never enabled
   # logging: unit CI observed request2_spec's "does not retry when the
   # payload cannot be rewound" dying with NoMethodError on a leaked logger,
@@ -35,7 +35,7 @@ RSpec.configure do |config|
   # `:log => nil` option. Reset it after every example so examples stay
   # order-independent regardless of which logging specs ran before them.
   config.after do
-    RestClient.log = nil
+    Contractful.log = nil
   end
 end
 

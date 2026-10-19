@@ -14,7 +14,7 @@ suggestion.
 | --- | --- | --- | --- |
 | G1 | Full unit + integration suites green on the Ruby 3.0–4.0 matrix | `rake spec:unit`, `rake spec:integration` in CI | CI (blocking) |
 | G2 | Contract specs included in the unit run | `spec/unit/**` glob in the Rakefile (fixed 2026-10; previously skipped `spec/unit/contract/` in CI) | CI (blocking) |
-| G3 | Both gemspecs build from a clean checkout | `gem build rest-client.gemspec` + `gem build rest-client.windows.gemspec` | Release checklist (manual) |
+| G3 | Both gemspecs build from a clean checkout | `gem build contractful.gemspec` + `gem build contractful.windows.gemspec` | Release checklist (manual) |
 | G4 | New/changed `lib/` code has verifying specs; bug fixes have failing-then-passing specs | PR diff inspection | Reviewer |
 | G5 | No new runtime dependency without an ADR | gemspec diff + `docs/adr/` link | Reviewer (CI can flag the gemspec diff) |
 | G6 | `frozen_string_literal: true` in every touched `lib/`/`spec/` file | PR diff inspection | Reviewer |

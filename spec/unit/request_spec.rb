@@ -2,9 +2,9 @@
 
 require_relative '_lib'
 
-describe RestClient::Request, :include_helpers do
+describe Contractful::Request, :include_helpers do
   before do
-    @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+    @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
 
     @uri = double('uri')
     allow(@uri).to receive(:request_uri).and_return('/resource')
@@ -22,7 +22,7 @@ describe RestClient::Request, :include_helpers do
     allow(@net).to receive(:verify_callback=)
     allow(@net).to receive(:ciphers=)
     allow(@net).to receive(:cert_store=)
-    RestClient.log = nil
+    Contractful.log = nil
   end
 
   it 'accept */* mimetype' do
@@ -71,10 +71,10 @@ describe RestClient::Request, :include_helpers do
 
     it 'raises with invalid URI' do
       expect do
-        RestClient::Request.new(method: :get, url: 'http://a@b:c')
+        Contractful::Request.new(method: :get, url: 'http://a@b:c')
       end.to raise_error(URI::InvalidURIError)
       expect do
-        RestClient::Request.new(method: :get, url: 'http://::')
+        Contractful::Request.new(method: :get, url: 'http://::')
       end.to raise_error(URI::InvalidURIError)
     end
   end
@@ -93,19 +93,19 @@ describe RestClient::Request, :include_helpers do
     end
 
     it "doesn't overwrite user and password (which may have already been set by the Resource constructor) if there is no user/password in the url" do
-      request = RestClient::Request.new(method: :get, url: 'http://example.com/resource', user: 'beth', password: 'pass2')
+      request = Contractful::Request.new(method: :get, url: 'http://example.com/resource', user: 'beth', password: 'pass2')
       expect(request.user).to eq 'beth'
       expect(request.password).to eq 'pass2'
     end
 
     it 'uses the username and password from the URL' do
-      request = RestClient::Request.new(method: :get, url: 'http://person:secret@example.com/resource')
+      request = Contractful::Request.new(method: :get, url: 'http://person:secret@example.com/resource')
       expect(request.user).to eq 'person'
       expect(request.password).to eq 'secret'
     end
 
     it 'overrides URL user/pass with explicit options' do
-      request = RestClient::Request.new(method: :get, url: 'http://person:secret@example.com/resource', user: 'beth', password: 'pass2')
+      request = Contractful::Request.new(method: :get, url: 'http://person:secret@example.com/resource', user: 'beth', password: 'pass2')
       expect(request.user).to eq 'beth'
       expect(request.password).to eq 'pass2'
     end
@@ -133,7 +133,7 @@ describe RestClient::Request, :include_helpers do
                  { cookies: cookies }
                end
 
-        request = RestClient::Request.new(method: :get, url: 'example.com', **opts)
+        request = Contractful::Request.new(method: :get, url: 'example.com', **opts)
         expect(request).to receive(:default_headers).and_return({ 'Foo' => 'bar' })
         expect(request.make_headers({})).to eq({ 'Foo' => 'bar', 'Cookie' => 'session_id=1; user_id=someone' })
         expect(request.make_cookie_header).to eq 'session_id=1; user_id=someone'
@@ -144,7 +144,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     # test with no cookies
-    request = RestClient::Request.new(method: :get, url: 'example.com')
+    request = Contractful::Request.new(method: :get, url: 'example.com')
     expect(request).to receive(:default_headers).and_return({ 'Foo' => 'bar' })
     expect(request.make_headers({})).to eq({ 'Foo' => 'bar' })
     expect(request.make_cookie_header).to be_nil
@@ -157,7 +157,7 @@ describe RestClient::Request, :include_helpers do
     jar << HTTP::Cookie.new('session_id', '1', domain: 'other.example.com', path: '/')
     jar << HTTP::Cookie.new('user_id', 'someone', domain: 'other.example.com', path: '/')
 
-    request = RestClient::Request.new(method: :get, url: 'www.example.com', cookies: jar)
+    request = Contractful::Request.new(method: :get, url: 'www.example.com', cookies: jar)
     expect(request).to receive(:default_headers).and_return({ 'Foo' => 'bar' })
     expect(request.make_headers({})).to eq({ 'Foo' => 'bar' })
     expect(request.make_cookie_header).to eq nil
@@ -166,7 +166,7 @@ describe RestClient::Request, :include_helpers do
   end
 
   it 'assumes default domain and path for cookies set by hash' do
-    request = RestClient::Request.new(method: :get, url: 'www.example.com', cookies: { 'session_id' => '1' })
+    request = Contractful::Request.new(method: :get, url: 'www.example.com', cookies: { 'session_id' => '1' })
     expect(request.cookie_jar.cookies.length).to eq 1
 
     cookie = request.cookie_jar.cookies.first
@@ -179,9 +179,9 @@ describe RestClient::Request, :include_helpers do
   it 'rejects or warns with contradictory cookie options' do
     # same opt in two different places
     expect do
-      RestClient::Request.new(method: :get, url: 'example.com',
-                              cookies: { bar: '456' },
-                              headers: { cookies: { foo: '123' } })
+      Contractful::Request.new(method: :get, url: 'example.com',
+                               cookies: { bar: '456' },
+                               headers: { cookies: { foo: '123' } })
     end.to raise_error(ArgumentError, /Cannot pass :cookies in Request.*headers/)
 
     # :cookies opt and Cookie header
@@ -192,15 +192,15 @@ describe RestClient::Request, :include_helpers do
       { headers: { cookies: { foo: '123' }, 'Cookie' => 'foo' } }
     ].each do |opts|
       expect(fake_stderr do
-        RestClient::Request.new(method: :get, url: 'example.com', **opts)
+        Contractful::Request.new(method: :get, url: 'example.com', **opts)
       end).to match(/warning: overriding "Cookie" header with :cookies option/)
     end
   end
 
   it 'does not escape or unescape cookies' do
     cookie = 'Foo%20:Bar%0A~'
-    @request = RestClient::Request.new(method: 'get', url: 'example.com',
-                                       cookies: { test: cookie })
+    @request = Contractful::Request.new(method: 'get', url: 'example.com',
+                                        cookies: { test: cookie })
     expect(@request).to receive(:default_headers).and_return({ 'Foo' => 'bar' })
     expect(@request.make_headers({})).to eq({
                                               'Foo' => 'bar',
@@ -214,15 +214,15 @@ describe RestClient::Request, :include_helpers do
 
     ['foo=bar', 'foo;bar', "foo\nbar"].each do |cookie_name|
       expect do
-        RestClient::Request.new(method: 'get', url: 'example.com',
-                                cookies: { cookie_name => 'value' })
+        Contractful::Request.new(method: 'get', url: 'example.com',
+                                 cookies: { cookie_name => 'value' })
       end.to raise_error(ArgumentError, /\AInvalid cookie name/i)
     end
 
     cookie_name = ''
     expect do
-      RestClient::Request.new(method: 'get', url: 'example.com',
-                              cookies: { cookie_name => 'value' })
+      Contractful::Request.new(method: 'get', url: 'example.com',
+                               cookies: { cookie_name => 'value' })
     end.to raise_error(ArgumentError, /cookie name cannot be empty/i)
   end
 
@@ -232,41 +232,41 @@ describe RestClient::Request, :include_helpers do
 
     %W[foo\tbar foo\nbar].each do |cookie_value|
       expect do
-        RestClient::Request.new(method: 'get', url: 'example.com',
-                                cookies: { 'test' => cookie_value })
+        Contractful::Request.new(method: 'get', url: 'example.com',
+                                 cookies: { 'test' => cookie_value })
       end.to raise_error(ArgumentError, /\AInvalid cookie value/i)
     end
   end
 
   it 'warns when overriding existing headers via payload' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: { 'foo' => 1 }, headers: { content_type: :json })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: { 'foo' => 1 }, headers: { content_type: :json })
     end).to match(/warning: Overriding "Content-Type" header/i)
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: { 'foo' => 1 }, headers: { 'Content-Type' => 'application/json' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: { 'foo' => 1 }, headers: { 'Content-Type' => 'application/json' })
     end).to match(/warning: Overriding "Content-Type" header/i)
 
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: '123456', headers: { content_length: '20' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: '123456', headers: { content_length: '20' })
     end).to match(/warning: Overriding "Content-Length" header/i)
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: '123456', headers: { 'Content-Length' => '20' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: '123456', headers: { 'Content-Length' => '20' })
     end).to match(/warning: Overriding "Content-Length" header/i)
   end
 
   it 'does not warn when overriding user header with header derived from payload if those header values were identical' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: { 'foo' => '123456' }, headers: { 'Content-Type' => 'application/x-www-form-urlencoded' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: { 'foo' => '123456' }, headers: { 'Content-Type' => 'application/x-www-form-urlencoded' })
     end).not_to match(/warning: Overriding "Content-Type" header/i)
   end
 
   it 'passes string header keys through verbatim (no re-capitalization)' do
-    request = RestClient::Request.new(method: :get, url: 'example.com')
+    request = Contractful::Request.new(method: :get, url: 'example.com')
     headers = request.make_headers({ 'x-custom-header' => 'value',
                                      'accept' => 'application/json' })
     # String keys keep their spelling on the wire for backwards
@@ -278,7 +278,7 @@ describe RestClient::Request, :include_helpers do
   end
 
   it 'merges case-variant header collisions instead of sending duplicates' do
-    request = RestClient::Request.new(method: :get, url: 'example.com')
+    request = Contractful::Request.new(method: :get, url: 'example.com')
     headers = request.make_headers({ 'accept' => 'application/json' })
 
     # exactly one Accept header, spelled the way the user passed it
@@ -289,15 +289,15 @@ describe RestClient::Request, :include_helpers do
 
   it 'warns when a payload overrides a user header with different casing' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: { 'foo' => 1 }, headers: { 'content-type' => 'application/json' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: { 'foo' => 1 }, headers: { 'content-type' => 'application/json' })
     end).to match(/warning: Overriding "Content-Type" header/i)
   end
 
   it 'sends a single Content-Type when payload overrides a differently-cased user header' do
-    request = RestClient::Request.new(method: :post, url: 'example.com',
-                                      payload: { 'foo' => 1 },
-                                      headers: { 'content-type' => 'application/json' })
+    request = Contractful::Request.new(method: :post, url: 'example.com',
+                                       payload: { 'foo' => 1 },
+                                       headers: { 'content-type' => 'application/json' })
     headers = request.make_headers({})
     content_type_keys = headers.keys.select { |k| k.casecmp('content-type').zero? }
     expect(content_type_keys).to eq ['Content-Type']
@@ -306,38 +306,38 @@ describe RestClient::Request, :include_helpers do
 
   it 'does not warn when a differently-cased user header matches the payload header value' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com',
-                              payload: { 'foo' => '123456' },
-                              headers: { 'content-type' => 'application/x-www-form-urlencoded' })
+      Contractful::Request.new(method: :post, url: 'example.com',
+                               payload: { 'foo' => '123456' },
+                               headers: { 'content-type' => 'application/x-www-form-urlencoded' })
     end).not_to match(/warning: Overriding "Content-Type" header/i)
   end
 
   it 'warns when a lowercase string Cookie header collides with :cookies' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :get, url: 'example.com',
-                              cookies: { foo: '123' },
-                              headers: { 'cookie' => 'bar' })
+      Contractful::Request.new(method: :get, url: 'example.com',
+                               cookies: { foo: '123' },
+                               headers: { 'cookie' => 'bar' })
     end).to match(/warning: overriding "Cookie" header with :cookies option/)
   end
 
   it 'does not warn for a normal looking payload' do
     expect(fake_stderr do
-      RestClient::Request.new(method: :post, url: 'example.com', payload: 'payload')
-      RestClient::Request.new(method: :post, url: 'example.com', payload: 'payload', headers: { content_type: :json })
-      RestClient::Request.new(method: :post, url: 'example.com', payload: { 'foo' => 'bar' })
+      Contractful::Request.new(method: :post, url: 'example.com', payload: 'payload')
+      Contractful::Request.new(method: :post, url: 'example.com', payload: 'payload', headers: { content_type: :json })
+      Contractful::Request.new(method: :post, url: 'example.com', payload: { 'foo' => 'bar' })
     end).to eq ''
   end
 
   it 'uses netrc credentials' do
     expect(Netrc).to receive(:read).and_return('example.com' => %w[a b])
-    request = RestClient::Request.new(method: :put, url: 'http://example.com/', payload: 'payload')
+    request = Contractful::Request.new(method: :put, url: 'http://example.com/', payload: 'payload')
     expect(request.user).to eq 'a'
     expect(request.password).to eq 'b'
   end
 
   it 'uses credentials in the url in preference to netrc' do
     allow(Netrc).to receive(:read).and_return('example.com' => %w[a b])
-    request = RestClient::Request.new(method: :put, url: 'http://joe%20:pass1@example.com/', payload: 'payload')
+    request = Contractful::Request.new(method: :put, url: 'http://joe%20:pass1@example.com/', payload: 'payload')
     expect(request.user).to eq 'joe '
     expect(request.password).to eq 'pass1'
   end
@@ -414,12 +414,12 @@ describe RestClient::Request, :include_helpers do
     klass = double('net:http class')
     expect(@request).to receive(:net_http_request_class).with('put').and_return(klass)
     expect(klass).to receive(:new).and_return('result')
-    expect(@request).to receive(:transmit).with(@request.uri, 'result', kind_of(RestClient::Payload::Base))
+    expect(@request).to receive(:transmit).with(@request.uri, 'result', kind_of(Contractful::Payload::Base))
     @request.execute
   end
 
   it 'IPv6: executes by constructing the Net::HTTP object, headers, and payload and calling transmit' do
-    @request = RestClient::Request.new(method: :put, url: 'http://[::1]/some/resource', payload: 'payload')
+    @request = Contractful::Request.new(method: :put, url: 'http://[::1]/some/resource', payload: 'payload')
     klass = double('net:http class')
     expect(@request).to receive(:net_http_request_class).with('put').and_return(klass)
 
@@ -454,15 +454,15 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'passes non-hash payloads straight through' do
-      expect(RestClient::Payload.generate('x').to_s).to eq 'x'
+      expect(Contractful::Payload.generate('x').to_s).to eq 'x'
     end
 
     it 'converts a hash payload to urlencoded data' do
-      expect(RestClient::Payload.generate(a: 'b c+d').to_s).to eq 'a=b+c%2Bd'
+      expect(Contractful::Payload.generate(a: 'b c+d').to_s).to eq 'a=b+c%2Bd'
     end
 
     it 'accepts nested hashes in payload' do
-      payload = RestClient::Payload.generate(user: { name: 'joe', location: { country: 'USA', state: 'CA' } }).to_s
+      payload = Contractful::Payload.generate(user: { name: 'joe', location: { country: 'USA', state: 'CA' } }).to_s
       expect(payload).to include('user[name]=joe')
       expect(payload).to include('user[location][country]=USA')
       expect(payload).to include('user[location][state]=CA')
@@ -470,7 +470,7 @@ describe RestClient::Request, :include_helpers do
   end
 
   it 'set urlencoded content_type header on hash payloads' do
-    req = RestClient::Request.new(method: :post, url: 'http://some/resource', payload: { a: 1 })
+    req = Contractful::Request.new(method: :post, url: 'http://some/resource', payload: { a: 1 })
     expect(req.processed_headers.fetch('Content-Type')).to eq 'application/x-www-form-urlencoded'
   end
 
@@ -506,7 +506,7 @@ describe RestClient::Request, :include_helpers do
     it 'does not attempt to send credentials if Authorization header is set' do
       ['Authorization', 'authorization', 'auTHORization', :authorization].each do |authorization|
         headers = { authorization => 'Token abc123' }
-        request = RestClient::Request.new(method: :get, url: 'http://some/resource', headers: headers, user: 'joe', password: 'mypass')
+        request = Contractful::Request.new(method: :get, url: 'http://some/resource', headers: headers, user: 'joe', password: 'mypass')
         req = double('net::http request')
         expect(req).not_to receive(:basic_auth)
         request.send(:setup_credentials, req)
@@ -516,7 +516,7 @@ describe RestClient::Request, :include_helpers do
 
   it 'catches EOFError and shows the more informative ServerBrokeConnection' do
     allow(@http).to receive(:request).and_raise(EOFError)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::ServerBrokeConnection)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::ServerBrokeConnection)
   end
 
   it 'catches OpenSSL::SSL::SSLError and raise it back without more informative message' do
@@ -526,65 +526,65 @@ describe RestClient::Request, :include_helpers do
 
   it 'catches Timeout::Error and raise the more informative ReadTimeout' do
     allow(@http).to receive(:request).and_raise(Timeout::Error)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::ReadTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::ReadTimeout)
   end
 
   it 'catches Errno::ETIMEDOUT and raise the more informative ReadTimeout' do
     allow(@http).to receive(:request).and_raise(Errno::ETIMEDOUT)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::ReadTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::ReadTimeout)
   end
 
-  it "catches Net::ReadTimeout and raises RestClient's ReadTimeout",
+  it "catches Net::ReadTimeout and raises Contractful's ReadTimeout",
      if: defined?(Net::ReadTimeout) do
     allow(@http).to receive(:request).and_raise(Net::ReadTimeout)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::ReadTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::ReadTimeout)
   end
 
-  it "catches Net::OpenTimeout and raises RestClient's OpenTimeout",
+  it "catches Net::OpenTimeout and raises Contractful's OpenTimeout",
      if: defined?(Net::OpenTimeout) do
     allow(@http).to receive(:request).and_raise(Net::OpenTimeout)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::OpenTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::OpenTimeout)
   end
 
-  it "catches Net::WriteTimeout and raises RestClient's WriteTimeout",
+  it "catches Net::WriteTimeout and raises Contractful's WriteTimeout",
      if: defined?(Net::WriteTimeout) do
     allow(@http).to receive(:request).and_raise(Net::WriteTimeout)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::WriteTimeout)
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::WriteTimeout)
   end
 
   it 'uses correct error message for ReadTimeout',
      if: defined?(Net::ReadTimeout) do
     allow(@http).to receive(:request).and_raise(Net::ReadTimeout)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::ReadTimeout, 'Timed out reading data from server')
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::ReadTimeout, 'Timed out reading data from server')
   end
 
   it 'uses correct error message for OpenTimeout',
      if: defined?(Net::OpenTimeout) do
     allow(@http).to receive(:request).and_raise(Net::OpenTimeout)
-    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(RestClient::Exceptions::OpenTimeout, 'Timed out connecting to server')
+    expect { @request.send(:transmit, @uri, 'req', nil) }.to raise_error(Contractful::Exceptions::OpenTimeout, 'Timed out connecting to server')
   end
 
   it 'class method execute wraps constructor' do
     req = double('rest request')
-    expect(RestClient::Request).to receive(:new).with({ 1 => 2 }).and_return(req)
+    expect(Contractful::Request).to receive(:new).with({ 1 => 2 }).and_return(req)
     expect(req).to receive(:execute)
-    RestClient::Request.execute(1 => 2)
+    Contractful::Request.execute(1 => 2)
   end
 
   describe 'exception' do
     it 'raises Unauthorized when the response is 401' do
       res = res_double(:code => '401', :[] => [{ 'content-encoding' => '' }], :body => '')
-      expect { @request.send(:process_result, res, Time.now) }.to raise_error(RestClient::Unauthorized)
+      expect { @request.send(:process_result, res, Time.now) }.to raise_error(Contractful::Unauthorized)
     end
 
     it 'raises ResourceNotFound when the response is 404' do
       res = res_double(:code => '404', :[] => [{ 'content-encoding' => '' }], :body => '')
-      expect { @request.send(:process_result, res, Time.now) }.to raise_error(RestClient::ResourceNotFound)
+      expect { @request.send(:process_result, res, Time.now) }.to raise_error(Contractful::ResourceNotFound)
     end
 
     it 'raises RequestFailed otherwise' do
       res = res_double(:code => '500', :[] => [{ 'content-encoding' => '' }], :body => '')
-      expect { @request.send(:process_result, res, Time.now) }.to raise_error(RestClient::InternalServerError)
+      expect { @request.send(:process_result, res, Time.now) }.to raise_error(Contractful::InternalServerError)
     end
   end
 
@@ -600,18 +600,18 @@ describe RestClient::Request, :include_helpers do
       # unstub Net::HTTP creation since we need to test it
       allow(Net::HTTP).to receive(:new).and_call_original
 
-      @proxy_req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+      @proxy_req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
     end
 
     it 'creates a proxy class if a proxy url is given' do
-      allow(RestClient).to receive(:proxy).and_return('http://example.com/')
-      allow(RestClient).to receive(:proxy_set?).and_return(true)
+      allow(Contractful).to receive(:proxy).and_return('http://example.com/')
+      allow(Contractful).to receive(:proxy_set?).and_return(true)
       expect(@proxy_req.net_http_object('host', 80).proxy?).to be true
     end
 
     it 'creates a proxy class with the correct address if a IPv6 proxy url is given' do
-      allow(RestClient).to receive(:proxy).and_return('http://[::1]/')
-      allow(RestClient).to receive(:proxy_set?).and_return(true)
+      allow(Contractful).to receive(:proxy).and_return('http://[::1]/')
+      allow(Contractful).to receive(:proxy_set?).and_return(true)
       expect(@proxy_req.net_http_object('host', 80).proxy?).to be true
       expect(@proxy_req.net_http_object('host', 80).proxy_address).to eq('::1')
     end
@@ -621,18 +621,18 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'disables proxy on a per-request basis' do
-      allow(RestClient).to receive(:proxy).and_return('http://example.com')
-      allow(RestClient).to receive(:proxy_set?).and_return(true)
+      allow(Contractful).to receive(:proxy).and_return('http://example.com')
+      allow(Contractful).to receive(:proxy_set?).and_return(true)
       expect(@proxy_req.net_http_object('host', 80).proxy?).to be true
 
-      disabled_req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
+      disabled_req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
       expect(disabled_req.net_http_object('host', 80).proxy?).to be_falsey
     end
 
     it 'sets proxy on a per-request basis' do
       expect(@proxy_req.net_http_object('some', 80).proxy?).to be_falsey
 
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: 'http://example.com')
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: 'http://example.com')
       expect(req.net_http_object('host', 80).proxy?).to be true
     end
 
@@ -642,36 +642,36 @@ describe RestClient::Request, :include_helpers do
       allow(ENV).to receive(:[]).with('NO_PROXY').and_return(nil)
       allow(Netrc).to receive(:read).and_return({})
 
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
       obj = req.net_http_object('host', 80)
       expect(obj.proxy?).to be true
       expect(obj.proxy_address).to eq '127.0.0.1'
 
       # test original method .proxy?
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
       obj = req.net_http_object('host', 80)
       expect(obj.proxy?).to be_falsey
 
-      # stub RestClient.proxy_set? to peek into implementation
-      allow(RestClient).to receive(:proxy_set?).and_return(true)
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+      # stub Contractful.proxy_set? to peek into implementation
+      allow(Contractful).to receive(:proxy_set?).and_return(true)
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
       obj = req.net_http_object('host', 80)
       expect(obj.proxy?).to be_falsey
 
       # test stubbed Net::HTTP.new
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: nil)
       expect(Net::HTTP).to receive(:new).with('host', 80, nil, nil, nil, nil)
       req.net_http_object('host', 80)
     end
 
     it 'overrides global proxy with per-request proxy' do
-      allow(RestClient).to receive(:proxy).and_return('http://example.com')
-      allow(RestClient).to receive(:proxy_set?).and_return(true)
+      allow(Contractful).to receive(:proxy).and_return('http://example.com')
+      allow(Contractful).to receive(:proxy_set?).and_return(true)
       obj = @proxy_req.net_http_object('host', 80)
       expect(obj.proxy?).to be true
       expect(obj.proxy_address).to eq 'example.com'
 
-      req = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: 'http://127.0.0.1/')
+      req = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', proxy: 'http://127.0.0.1/')
       expect(req.net_http_object('host', 80).proxy?).to be true
       expect(req.net_http_object('host', 80).proxy_address).to eq('127.0.0.1')
     end
@@ -679,31 +679,31 @@ describe RestClient::Request, :include_helpers do
 
   describe 'logging' do
     it 'logs a get request' do
-      log = RestClient.log = []
-      RestClient::Request.new(method: :get, url: 'http://url', headers: { user_agent: 'rest-client' }).log_request
-      expect(log[0]).to eq %(RestClient.get "http://url", "Accept"=>"*/*", "User-Agent"=>"rest-client"\n)
+      log = Contractful.log = []
+      Contractful::Request.new(method: :get, url: 'http://url', headers: { user_agent: 'contractful' }).log_request
+      expect(log[0]).to eq %(Contractful.get "http://url", "Accept"=>"*/*", "User-Agent"=>"contractful"\n)
     end
 
     it 'logs a post request with a small payload' do
-      log = RestClient.log = []
-      RestClient::Request.new(method: :post, url: 'http://url', payload: 'foo', headers: { user_agent: 'rest-client' }).log_request
-      expect(log[0]).to eq %(RestClient.post "http://url", "foo", "Accept"=>"*/*", "Content-Length"=>"3", "User-Agent"=>"rest-client"\n)
+      log = Contractful.log = []
+      Contractful::Request.new(method: :post, url: 'http://url', payload: 'foo', headers: { user_agent: 'contractful' }).log_request
+      expect(log[0]).to eq %(Contractful.post "http://url", "foo", "Accept"=>"*/*", "Content-Length"=>"3", "User-Agent"=>"contractful"\n)
     end
 
     it 'logs a post request with a large payload' do
-      log = RestClient.log = []
-      RestClient::Request.new(method: :post, url: 'http://url', payload: ('x' * 1000), headers: { user_agent: 'rest-client' }).log_request
-      expect(log[0]).to eq %{RestClient.post "http://url", 1000 byte(s) length, "Accept"=>"*/*", "Content-Length"=>"1000", "User-Agent"=>"rest-client"\n}
+      log = Contractful.log = []
+      Contractful::Request.new(method: :post, url: 'http://url', payload: ('x' * 1000), headers: { user_agent: 'contractful' }).log_request
+      expect(log[0]).to eq %{Contractful.post "http://url", 1000 byte(s) length, "Accept"=>"*/*", "Content-Length"=>"1000", "User-Agent"=>"contractful"\n}
     end
 
     it 'logs input headers as a hash' do
-      log = RestClient.log = []
-      RestClient::Request.new(method: :get, url: 'http://url', headers: { accept: 'text/plain', user_agent: 'rest-client' }).log_request
-      expect(log[0]).to eq %(RestClient.get "http://url", "Accept"=>"text/plain", "User-Agent"=>"rest-client"\n)
+      log = Contractful.log = []
+      Contractful::Request.new(method: :get, url: 'http://url', headers: { accept: 'text/plain', user_agent: 'contractful' }).log_request
+      expect(log[0]).to eq %(Contractful.get "http://url", "Accept"=>"text/plain", "User-Agent"=>"contractful"\n)
     end
 
     it 'logs a response including the status code, content type, and result body size in bytes' do
-      log = RestClient.log = []
+      log = Contractful.log = []
       res = res_double(code: '200', class: Net::HTTPOK, body: 'abcd')
       allow(res).to receive(:[]).with('Content-type').and_return('text/html')
       response = response_from_res_double(res, @request)
@@ -712,7 +712,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'logs a response with a nil Content-type' do
-      log = RestClient.log = []
+      log = Contractful.log = []
       res = res_double(code: '200', class: Net::HTTPOK, body: 'abcd')
       allow(res).to receive(:[]).with('Content-type').and_return(nil)
       response = response_from_res_double(res, @request)
@@ -721,7 +721,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'logs a response with a nil body' do
-      log = RestClient.log = []
+      log = Contractful.log = []
       res = res_double(code: '200', class: Net::HTTPOK, body: nil)
       allow(res).to receive(:[]).with('Content-type').and_return('text/html; charset=utf-8')
       response = response_from_res_double(res, @request)
@@ -730,14 +730,14 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not log request password' do
-      log = RestClient.log = []
-      RestClient::Request.new(method: :get, url: 'http://user:password@url', headers: { user_agent: 'rest-client' }).log_request
-      expect(log[0]).to eq %(RestClient.get "http://user:REDACTED@url", "Accept"=>"*/*", "User-Agent"=>"rest-client"\n)
+      log = Contractful.log = []
+      Contractful::Request.new(method: :get, url: 'http://user:password@url', headers: { user_agent: 'contractful' }).log_request
+      expect(log[0]).to eq %(Contractful.get "http://user:REDACTED@url", "Accept"=>"*/*", "User-Agent"=>"contractful"\n)
     end
 
     it 'does not log the Authorization header value' do
-      log = RestClient.log = []
-      RestClient::Request.new(
+      log = Contractful.log = []
+      Contractful::Request.new(
         method: :get, url: 'http://url',
         headers: { authorization: 'Bearer top-secret-token' }
       ).log_request
@@ -746,8 +746,8 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not log the Cookie header value' do
-      log = RestClient.log = []
-      RestClient::Request.new(
+      log = Contractful.log = []
+      Contractful::Request.new(
         method: :get, url: 'http://url',
         headers: { 'Cookie' => 'session=secret-cookie-value' }
       ).log_request
@@ -756,10 +756,10 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'logs non-credential headers verbatim' do
-      log = RestClient.log = []
-      RestClient::Request.new(
+      log = Contractful.log = []
+      Contractful::Request.new(
         method: :get, url: 'http://url',
-        headers: { user_agent: 'rest-client', x_request_id: 'abc-123' }
+        headers: { user_agent: 'contractful', x_request_id: 'abc-123' }
       ).log_request
       expect(log[0]).to include('"X-Request-Id"=>"abc-123"')
     end
@@ -767,12 +767,12 @@ describe RestClient::Request, :include_helpers do
     it 'logs to a passed logger, if provided' do
       logger = double('logger', '<<' => true)
       expect(logger).to receive(:<<)
-      RestClient::Request.new(method: :get, url: 'http://user:password@url', log: logger).log_request
+      Contractful::Request.new(method: :get, url: 'http://user:password@url', log: logger).log_request
     end
   end
 
   it 'strips the charset from the response content type' do
-    log = RestClient.log = []
+    log = Contractful.log = []
     res = res_double(code: '200', class: Net::HTTPOK, body: 'abcd')
     allow(res).to receive(:[]).with('Content-type').and_return('text/html; charset=utf-8')
     response = response_from_res_double(res, @request)
@@ -782,7 +782,7 @@ describe RestClient::Request, :include_helpers do
 
   describe 'timeout' do
     it 'does not set timeouts if not specified' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -795,7 +795,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets read_timeout' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: 123)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: 123)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -806,7 +806,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets open_timeout' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', open_timeout: 123)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', open_timeout: 123)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -817,7 +817,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets both timeouts with :timeout' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', timeout: 123)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', timeout: 123)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -829,7 +829,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'supersedes :timeout with open/read_timeout' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', timeout: 123, open_timeout: 34, read_timeout: 56)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', timeout: 123, open_timeout: 34, read_timeout: 56)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -841,7 +841,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'disable timeout by setting it to nil' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: nil, open_timeout: nil)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: nil, open_timeout: nil)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -853,7 +853,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'deprecated: warns when disabling timeout by setting it to -1' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: -1)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: -1)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -866,7 +866,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'deprecated: disable timeout by setting it to -1' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: -1, open_timeout: -1)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', read_timeout: -1, open_timeout: -1)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -881,7 +881,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets write_timeout' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', write_timeout: 123)
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload', write_timeout: 123)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -892,7 +892,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set write_timeout if not specified' do
-      @request = RestClient::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
+      @request = Contractful::Request.new(method: :put, url: 'http://some/resource', payload: 'payload')
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
       allow(@request).to receive(:response_log)
@@ -923,7 +923,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets net.verify_mode to OpenSSL::SSL::VERIFY_NONE if verify_ssl is false' do
-      @request = RestClient::Request.new(method: :put, verify_ssl: false, url: 'http://some/resource', payload: 'payload')
+      @request = Contractful::Request.new(method: :put, verify_ssl: false, url: 'http://some/resource', payload: 'payload')
       expect(@net).to receive(:verify_mode=).with(OpenSSL::SSL::VERIFY_NONE)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -932,7 +932,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set net.verify_mode to OpenSSL::SSL::VERIFY_NONE if verify_ssl is true' do
-      @request = RestClient::Request.new(method: :put, url: 'https://some/resource', payload: 'payload', verify_ssl: true)
+      @request = Contractful::Request.new(method: :put, url: 'https://some/resource', payload: 'payload', verify_ssl: true)
       expect(@net).not_to receive(:verify_mode=).with(OpenSSL::SSL::VERIFY_NONE)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -941,7 +941,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets net.verify_mode to OpenSSL::SSL::VERIFY_PEER if verify_ssl is true' do
-      @request = RestClient::Request.new(method: :put, url: 'https://some/resource', payload: 'payload', verify_ssl: true)
+      @request = Contractful::Request.new(method: :put, url: 'https://some/resource', payload: 'payload', verify_ssl: true)
       expect(@net).to receive(:verify_mode=).with(OpenSSL::SSL::VERIFY_PEER)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -950,7 +950,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets net.verify_mode to OpenSSL::SSL::VERIFY_PEER if verify_ssl is not given' do
-      @request = RestClient::Request.new(method: :put, url: 'https://some/resource', payload: 'payload')
+      @request = Contractful::Request.new(method: :put, url: 'https://some/resource', payload: 'payload')
       expect(@net).to receive(:verify_mode=).with(OpenSSL::SSL::VERIFY_PEER)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -960,10 +960,10 @@ describe RestClient::Request, :include_helpers do
 
     it 'sets net.verify_mode to the passed value if verify_ssl is an OpenSSL constant' do
       mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
-      @request = RestClient::Request.new(method: :put,
-                                         url: 'https://some/resource',
-                                         payload: 'payload',
-                                         verify_ssl: mode)
+      @request = Contractful::Request.new(method: :put,
+                                          url: 'https://some/resource',
+                                          payload: 'payload',
+                                          verify_ssl: mode)
       expect(@net).to receive(:verify_mode=).with(mode)
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -976,7 +976,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_version if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -990,7 +990,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_version if not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1003,7 +1003,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_min_version and ssl_max_version if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1019,7 +1019,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_min_version or ssl_max_version if not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1053,7 +1053,7 @@ describe RestClient::Request, :include_helpers do
 
     it 'sets the ssl_ciphers if provided' do
       ciphers = 'AESGCM:HIGH:!aNULL:!eNULL:RC4+RSA'
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1067,7 +1067,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_ciphers if set to nil' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1081,7 +1081,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_client_cert if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1095,7 +1095,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_client_cert if it is not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1112,7 +1112,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_client_key if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1126,7 +1126,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_client_key if it is not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1143,7 +1143,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_ca_file if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1158,7 +1158,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_ca_file if it is not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1175,7 +1175,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'sets the ssl_ca_path if provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1190,7 +1190,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_ca_path if it is not provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1206,7 +1206,7 @@ describe RestClient::Request, :include_helpers do
       store = OpenSSL::X509::Store.new
       store.set_default_paths
 
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1222,7 +1222,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'bies default set the ssl_cert_store if no CA info is provided' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1237,7 +1237,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_cert_store if it is set falsy' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1251,7 +1251,7 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'does not set the ssl_verify_callback by default' do
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload'
@@ -1265,7 +1265,7 @@ describe RestClient::Request, :include_helpers do
 
     it 'sets the ssl_verify_callback if passed' do
       callback = -> {}
-      @request = RestClient::Request.new(
+      @request = Contractful::Request.new(
         method: :put,
         url: 'https://some/resource',
         payload: 'payload',
@@ -1275,7 +1275,7 @@ describe RestClient::Request, :include_helpers do
 
       # we'll read cert_store on jruby
       # https://github.com/jruby/jruby/issues/597
-      allow(@net).to receive(:cert_store) if RestClient::Platform.jruby?
+      allow(@net).to receive(:cert_store) if Contractful::Platform.jruby?
 
       allow(@http).to receive(:request)
       allow(@request).to receive(:process_result)
@@ -1287,7 +1287,7 @@ describe RestClient::Request, :include_helpers do
   end
 
   it 'stills return a response object for 204 No Content responses' do
-    @request = RestClient::Request.new(
+    @request = Contractful::Request.new(
       method: :put,
       url: 'https://some/resource',
       payload: 'payload'
@@ -1302,13 +1302,13 @@ describe RestClient::Request, :include_helpers do
 
   describe 'raw response' do
     it 'reads the response into a binary-mode tempfile' do
-      @request = RestClient::Request.new(method: 'get', url: 'example.com', raw_response: true)
+      @request = Contractful::Request.new(method: 'get', url: 'example.com', raw_response: true)
 
       tempfile = double('tempfile')
       expect(tempfile).to receive(:binmode)
       allow(tempfile).to receive(:open)
       allow(tempfile).to receive(:close)
-      expect(Tempfile).to receive(:new).with('rest-client.').and_return(tempfile)
+      expect(Tempfile).to receive(:new).with('contractful.').and_return(tempfile)
 
       net_http_res = Net::HTTPOK.new(nil, '200', 'body')
       allow(net_http_res).to receive(:read_body).and_return('body')
@@ -1317,8 +1317,8 @@ describe RestClient::Request, :include_helpers do
     end
 
     it 'redacts URL credentials from streaming progress logs' do
-      log = RestClient.log = []
-      @request = RestClient::Request.new(
+      log = Contractful.log = []
+      @request = Contractful::Request.new(
         method: 'get', url: 'http://user:password@example.com/big.bin',
         raw_response: true, stream_log_percent: 50
       )
@@ -1326,7 +1326,7 @@ describe RestClient::Request, :include_helpers do
       tempfile = double('tempfile')
       allow(tempfile).to receive(:binmode)
       allow(tempfile).to receive(:close)
-      expect(Tempfile).to receive(:new).with('rest-client.').and_return(tempfile)
+      expect(Tempfile).to receive(:new).with('contractful.').and_return(tempfile)
       allow(tempfile).to receive(:write)
 
       net_http_res = Net::HTTPOK.new(nil, '200', 'body')
@@ -1343,7 +1343,7 @@ describe RestClient::Request, :include_helpers do
   describe 'payloads' do
     it 'accepts string payloads' do
       payload = 'Foo'
-      @request = RestClient::Request.new(method: :get, url: 'example.com', payload: payload)
+      @request = Contractful::Request.new(method: :get, url: 'example.com', payload: payload)
       expect(@request).to receive(:process_result)
       expect(@http).to receive(:request).with('req', payload)
       @request.send(:transmit, @uri, 'req', payload)
@@ -1352,11 +1352,11 @@ describe RestClient::Request, :include_helpers do
     it 'accepts streaming IO payloads' do
       payload = StringIO.new('streamed')
 
-      @request = RestClient::Request.new(method: :get, url: 'example.com', payload: payload)
+      @request = Contractful::Request.new(method: :get, url: 'example.com', payload: payload)
       expect(@request).to receive(:process_result)
 
       @get = double('net::http::get')
-      expect(@get).to receive(:body_stream=).with(instance_of(RestClient::Payload::Streamed))
+      expect(@get).to receive(:body_stream=).with(instance_of(Contractful::Payload::Streamed))
 
       allow(@request.net_http_request_class(:GET)).to receive(:new).and_return(@get)
       expect(@http).to receive(:request).with(@get, nil)
@@ -1367,18 +1367,18 @@ describe RestClient::Request, :include_helpers do
   describe 'constructor' do
     it 'rejects valid URIs with no hostname' do
       # Ruby >= 3.4 returns an empty string (rather than nil) as the hostname
-      # of 'http:///' — either way, RestClient must reject it.
+      # of 'http:///' — either way, Contractful must reject it.
       hostname = URI.parse('http:///').hostname
       expect(hostname.nil? || hostname.empty?).to be(true)
 
       expect do
-        RestClient::Request.new(method: :get, url: 'http:///')
+        Contractful::Request.new(method: :get, url: 'http:///')
       end.to raise_error(URI::InvalidURIError, /\Abad URI/)
     end
 
     it 'rejects invalid URIs' do
       expect do
-        RestClient::Request.new(method: :get, url: 'http://::')
+        Contractful::Request.new(method: :get, url: 'http://::')
       end.to raise_error(URI::InvalidURIError)
     end
   end
@@ -1415,7 +1415,7 @@ describe RestClient::Request, :include_helpers do
 
     it 'handles ParamsArray objects' do
       expect(@request.process_url_params('https://example.com/',
-                                         params: RestClient::ParamsArray.new([[:foo, 1], [:foo, 2]]))).to eq 'https://example.com/?foo=1&foo=2'
+                                         params: Contractful::ParamsArray.new([[:foo, 1], [:foo, 2]]))).to eq 'https://example.com/?foo=1&foo=2'
     end
   end
 end

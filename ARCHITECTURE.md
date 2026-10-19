@@ -1,6 +1,6 @@
 # ARCHITECTURE — System architecture
 
-rest-client is a layered Ruby library with a deliberately thin core: one
+contractful is a layered Ruby library with a deliberately thin core: one
 request pipeline used by every entry point, a transport that is Net::HTTP,
 and a metaprogrammed contract layer that compiles declarations into real
 methods on top of that pipeline. There is no runtime, no daemon, no external
@@ -11,14 +11,14 @@ calls on demand.
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ Contract layer — RestClient::Contract (2.4+)               │
+│ Contract layer — Contractful::Contract (2.4+)               │
 │   DSL macros → Definition → Executor → define_method      │
 │   typed params · response contracts · auth · idempotency   │
 │   pagination · rate-limit · callbacks · reflection         │
 ├────────────────────────────────────────────────────────────┤
-│ High-level API — RestClient.get/post/... · Resource        │
+│ High-level API — Contractful.get/post/... · Resource        │
 ├────────────────────────────────────────────────────────────┤
-│ Request pipeline — RestClient::Request                     │
+│ Request pipeline — Contractful::Request                     │
 │   payload normalization (Payload, ParamsArray)             │
 │   auth (user/password, netrc) · cookies · redirects        │
 │   retries + backoff · Retry-After · connection pool        │
@@ -29,8 +29,8 @@ calls on demand.
 │ Response side — AbstractResponse · Response · RawResponse  │
 │   headers · history · #json · RateLimit parsing            │
 ├────────────────────────────────────────────────────────────┤
-│ Errors — RestClient::Exception hierarchy                   │
-│          RestClient::Contract::Error hierarchy             │
+│ Errors — Contractful::Exception hierarchy                   │
+│          Contractful::Contract::Error hierarchy             │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,7 +38,7 @@ calls on demand.
 
 | Module | Responsibility |
 | --- | --- |
-| `lib/restclient.rb` | Facade: module-level verb methods, `RestClient.log`, version |
+| `lib/contractful.rb` | Facade: module-level verb methods, `Contractful.log`, version |
 | `request.rb` | The pipeline: option validation, payload/params prep, transmission, redirects, retries, timeouts, SSL setup |
 | `payload.rb` | Payload normalization: form, JSON, raw, multipart, streaming; `rewind` for retries |
 | `params_array.rb` | Ordered param lists with repeated keys and nested notation |
@@ -62,7 +62,7 @@ calls on demand.
 
 ## Request lifecycle
 
-1. **Entry.** A call arrives: `RestClient.get`, `Resource#get`, or a
+1. **Entry.** A call arrives: `Contractful.get`, `Resource#get`, or a
    generated contract method (`Contract::Executor.call`).
 2. **Contract validation (contract path only).** Params are coerced and
    checked against the `Definition` — required, type, `inclusion:`,
@@ -76,7 +76,7 @@ calls on demand.
    first, then `before_request` callbacks may adjust everything through the
    mutable context), loads netrc credentials, and applies cookies.
 4. **Connection.** With `persistent: true` the request checks a connection
-   out of `RestClient::ConnectionPool` (keyed by host/port/proxy/SSL); the
+   out of `Contractful::ConnectionPool` (keyed by host/port/proxy/SSL); the
    key must include the client-certificate fingerprint so credentials never
    leak across pool entries. Otherwise a fresh `Net::HTTP` is configured:
    SSL versions normalized via `normalize_ssl_version`, timeouts applied
@@ -88,7 +88,7 @@ calls on demand.
    `:max_retry_after`) or exponential backoff — rewinds the payload and
    retries with any idempotency key kept stable.
 6. **Response validation.** Classic path: non-2xx raises the mapped
-   exception (`RestClient::NotFound`, ...) with the response attached.
+   exception (`Contractful::NotFound`, ...) with the response attached.
    Contract path: the status must be in the declared set, the body must
    satisfy the declared type and `response_field` bindings, and any
    `verify_response` block must pass — otherwise

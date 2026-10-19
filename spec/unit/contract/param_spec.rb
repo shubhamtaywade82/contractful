@@ -2,7 +2,7 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe RestClient::Contract::Param do
+RSpec.describe Contractful::Contract::Param do
   let(:param) { described_class.new(:x, type, **options) }
   let(:type) { nil }
   let(:options) { {} }
@@ -12,7 +12,7 @@ RSpec.describe RestClient::Contract::Param do
       expect do
         described_class.new(:x, :nonsense)
       end.to raise_error(
-        RestClient::Contract::InvalidDefinition,
+        Contractful::Contract::InvalidDefinition,
         /unsupported param type :nonsense/
       )
     end
@@ -20,13 +20,13 @@ RSpec.describe RestClient::Contract::Param do
     it 'rejects non-class, non-proc types' do
       expect do
         described_class.new(:x, 'String')
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /expected a Class, Proc or supported symbol/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /expected a Class, Proc or supported symbol/)
     end
 
     it 'rejects an inclusion that does not respond to include?' do
       expect do
         described_class.new(:x, Integer, inclusion: 1)
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /inclusion must respond to #include\?/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /inclusion must respond to #include\?/)
     end
 
     it 'maps symbol aliases to classes' do
@@ -56,7 +56,7 @@ RSpec.describe RestClient::Contract::Param do
     context 'String params' do
       let(:type) { String }
 
-      it { expect { param.process!(42) }.to raise_error(RestClient::Contract::InvalidParam, /param :x: expected String, got Integer \(42\)/) }
+      it { expect { param.process!(42) }.to raise_error(Contractful::Contract::InvalidParam, /param :x: expected String, got Integer \(42\)/) }
 
       it 'accepts strings' do
         expect(param.process!('hi')).to eq 'hi'
@@ -70,9 +70,9 @@ RSpec.describe RestClient::Contract::Param do
     context 'Integer params' do
       let(:type) { Integer }
 
-      it { expect { param.process!('abc') }.to raise_error(RestClient::Contract::InvalidParam, /expected Integer, got String \("abc"\)/) }
-      it { expect { param.process!(3.5) }.to raise_error(RestClient::Contract::InvalidParam, /expected Integer, got Float/) }
-      it { expect { param.process!(nil) }.to raise_error(RestClient::Contract::InvalidParam, /expected Integer, got nil/) }
+      it { expect { param.process!('abc') }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer, got String \("abc"\)/) }
+      it { expect { param.process!(3.5) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer, got Float/) }
+      it { expect { param.process!(nil) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer, got nil/) }
 
       it 'accepts integers' do
         expect(param.process!(7)).to eq 7
@@ -100,7 +100,7 @@ RSpec.describe RestClient::Contract::Param do
       end
 
       it 'rejects junk strings' do
-        expect { param.process!('nope') }.to raise_error(RestClient::Contract::InvalidParam, /expected Float/)
+        expect { param.process!('nope') }.to raise_error(Contractful::Contract::InvalidParam, /expected Float/)
       end
     end
 
@@ -124,7 +124,7 @@ RSpec.describe RestClient::Contract::Param do
       end
 
       it 'rejects everything else' do
-        expect { param.process!('maybe') }.to raise_error(RestClient::Contract::InvalidParam, /expected boolean/)
+        expect { param.process!('maybe') }.to raise_error(Contractful::Contract::InvalidParam, /expected boolean/)
       end
     end
 
@@ -148,7 +148,7 @@ RSpec.describe RestClient::Contract::Param do
       end
 
       it 'rejects non-hashes' do
-        expect { param.process!([:a]) }.to raise_error(RestClient::Contract::InvalidParam, /expected Hash/)
+        expect { param.process!([:a]) }.to raise_error(Contractful::Contract::InvalidParam, /expected Hash/)
       end
     end
 
@@ -162,7 +162,7 @@ RSpec.describe RestClient::Contract::Param do
       it 'wraps proc failures in InvalidParam' do
         param = described_class.new(:x, ->(_v) { raise ArgumentError, 'bad' })
         expect { param.process!('x') }.to raise_error(
-          RestClient::Contract::InvalidParam, /custom coercion failed: ArgumentError: bad/
+          Contractful::Contract::InvalidParam, /custom coercion failed: ArgumentError: bad/
         )
       end
     end
@@ -180,7 +180,7 @@ RSpec.describe RestClient::Contract::Param do
             'Money'
           end
 
-          def self.restclient_coerce(value)
+          def self.contractful_coerce(value)
             raise ArgumentError, 'not money' unless value.to_s.match?(/\A\d+\z/)
 
             new(value.to_i)
@@ -194,18 +194,18 @@ RSpec.describe RestClient::Contract::Param do
         expect(param.process!(money)).to be money
       end
 
-      it 'uses Class#restclient_coerce when defined' do
+      it 'uses Class#contractful_coerce when defined' do
         expect(param.process!('42').value).to eq 42
       end
 
       it 'rejects values the class cannot coerce' do
         expect { param.process!('lots') }.to raise_error(
-          RestClient::Contract::InvalidParam, /custom coercion failed: ArgumentError: not money/
+          Contractful::Contract::InvalidParam, /custom coercion failed: ArgumentError: not money/
         )
       end
     end
 
-    context 'custom Class params without restclient_coerce' do
+    context 'custom Class params without contractful_coerce' do
       let(:plain_class) do
         Class.new do
           def self.name
@@ -217,7 +217,7 @@ RSpec.describe RestClient::Contract::Param do
 
       it 'rejects values without dispatching an arbitrary method' do
         expect { param.process!('x') }.to raise_error(
-          RestClient::Contract::InvalidParam, /expected NotAKernelFunction/
+          Contractful::Contract::InvalidParam, /expected NotAKernelFunction/
         )
       end
 
@@ -241,7 +241,7 @@ RSpec.describe RestClient::Contract::Param do
 
       it 'rejects values outside the range' do
         expect { param.process!(99) }.to raise_error(
-          RestClient::Contract::InvalidParam, /param :x: value 99 is not in 1\.\.10/
+          Contractful::Contract::InvalidParam, /param :x: value 99 is not in 1\.\.10/
         )
       end
     end
@@ -255,7 +255,7 @@ RSpec.describe RestClient::Contract::Param do
       end
 
       it 'rejects anything that is not already the type' do
-        expect { param.process!('5') }.to raise_error(RestClient::Contract::InvalidParam, /expected Integer, got String/)
+        expect { param.process!('5') }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer, got String/)
       end
     end
   end
@@ -309,40 +309,40 @@ RSpec.describe RestClient::Contract::Param do
       it 'rejects values below min' do
         param = described_class.new(:quantity, Integer, min: 1)
         expect { param.process!(0) }
-          .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+          .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
       end
 
       it 'rejects values above max' do
         param = described_class.new(:quantity, Integer, max: 100)
         expect { param.process!(101) }
-          .to raise_error(RestClient::Contract::InvalidParam, /above maximum 100/)
+          .to raise_error(Contractful::Contract::InvalidParam, /above maximum 100/)
       end
 
       it 'applies after coercion, so String input is judged as its coerced value' do
         param = described_class.new(:quantity, Integer, min: 1)
         expect(param.process!('5')).to eq 5
         expect { param.process!('0') }
-          .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+          .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
       end
 
       it 'works on any Comparable, e.g. String dates' do
         param = described_class.new(:from, String, min: '2026-01-01')
         expect(param.process!('2026-10-18')).to eq '2026-10-18'
         expect { param.process!('2025-12-31') }
-          .to raise_error(RestClient::Contract::InvalidParam, /below minimum/)
+          .to raise_error(Contractful::Contract::InvalidParam, /below minimum/)
       end
 
       it 'rejects non-comparable values when a bound is declared' do
         param = described_class.new(:opts, Hash, min: 1)
         expect { param.process!(a: 1) }
-          .to raise_error(RestClient::Contract::InvalidParam, /cannot compare|cannot enforce min 1 on Hash/)
+          .to raise_error(Contractful::Contract::InvalidParam, /cannot compare|cannot enforce min 1 on Hash/)
       end
 
       it 'validates bounds at definition time' do
         expect { described_class.new(:x, Integer, min: Object.new) }
-          .to raise_error(RestClient::Contract::InvalidDefinition, /min must be comparable/)
+          .to raise_error(Contractful::Contract::InvalidDefinition, /min must be comparable/)
         expect { described_class.new(:x, Integer, max: Object.new) }
-          .to raise_error(RestClient::Contract::InvalidDefinition, /max must be comparable/)
+          .to raise_error(Contractful::Contract::InvalidDefinition, /max must be comparable/)
       end
     end
 
@@ -351,7 +351,7 @@ RSpec.describe RestClient::Contract::Param do
         param = described_class.new(:pan, String, length: 10)
         expect(param.process!('IN12345678')).to eq 'IN12345678'
         expect { param.process!('short') }
-          .to raise_error(RestClient::Contract::InvalidParam, /length 5 is outside 10/)
+          .to raise_error(Contractful::Contract::InvalidParam, /length 5 is outside 10/)
       end
 
       it 'enforces a Range of lengths' do
@@ -359,33 +359,33 @@ RSpec.describe RestClient::Contract::Param do
         expect(param.process!('AAPL')).to eq 'AAPL'
         expect(param.process!('A')).to eq 'A'
         expect { param.process!('a' * 21) }
-          .to raise_error(RestClient::Contract::InvalidParam, /length 21 is outside 1\.\.20/)
+          .to raise_error(Contractful::Contract::InvalidParam, /length 21 is outside 1\.\.20/)
       end
 
       it 'works on Array and Hash values' do
         arr = described_class.new(:tags, Array, length: (1..3))
         expect(arr.process!(%w[a b])).to eq %w[a b]
         expect { arr.process!(%w[a b c d]) }
-          .to raise_error(RestClient::Contract::InvalidParam, /length 4 is outside/)
+          .to raise_error(Contractful::Contract::InvalidParam, /length 4 is outside/)
 
         hsh = described_class.new(:opts, Hash, length: 2)
         expect(hsh.process!({ a: 1, b: 2 })).to eq({ a: 1, b: 2 })
         expect { hsh.process!({ a: 1 }) }
-          .to raise_error(RestClient::Contract::InvalidParam, /length 1 is outside 2/)
+          .to raise_error(Contractful::Contract::InvalidParam, /length 1 is outside 2/)
       end
 
       it 'rejects values without #length' do
         param = described_class.new(:flag, :boolean, length: (1..2))
         expect { param.process!(true) }
-          .to raise_error(RestClient::Contract::InvalidParam, /cannot enforce length/)
+          .to raise_error(Contractful::Contract::InvalidParam, /cannot enforce length/)
       end
 
       it 'validates the constraint shape at definition time' do
         expect { described_class.new(:x, String, length: 'ten') }
-          .to raise_error(RestClient::Contract::InvalidDefinition,
+          .to raise_error(Contractful::Contract::InvalidDefinition,
                           /length must be an Integer or an Integer Range/)
         expect { described_class.new(:x, String, length: ('a'..'z')) }
-          .to raise_error(RestClient::Contract::InvalidDefinition,
+          .to raise_error(Contractful::Contract::InvalidDefinition,
                           /length must be an Integer or an Integer Range/)
       end
     end
@@ -401,18 +401,18 @@ RSpec.describe RestClient::Contract::Param do
       it 'rejects non-matching strings' do
         param = described_class.new(:pan, String, pattern: pan_pattern)
         expect { param.process!('nope') }
-          .to raise_error(RestClient::Contract::InvalidParam, /does not match/)
+          .to raise_error(Contractful::Contract::InvalidParam, /does not match/)
       end
 
       it 'requires a String value' do
         param = described_class.new(:pan, nil, pattern: pan_pattern)
         expect { param.process!(12_345) }
-          .to raise_error(RestClient::Contract::InvalidParam, /pattern requires a String/)
+          .to raise_error(Contractful::Contract::InvalidParam, /pattern requires a String/)
       end
 
       it 'validates the constraint type at definition time' do
         expect { described_class.new(:x, String, pattern: 'abc') }
-          .to raise_error(RestClient::Contract::InvalidDefinition, /pattern must be a Regexp/)
+          .to raise_error(Contractful::Contract::InvalidDefinition, /pattern must be a Regexp/)
       end
     end
 
@@ -422,14 +422,14 @@ RSpec.describe RestClient::Contract::Param do
                                   pattern: /\A[A-Z]{3,4}\z/)
       expect(param.process!(:BUY)).to eq 'BUY'
       expect { param.process!('HOLD') }
-        .to raise_error(RestClient::Contract::InvalidParam, /not in/)
+        .to raise_error(Contractful::Contract::InvalidParam, /not in/)
     end
 
     it 'rejects a constraint violation on an otherwise valid param' do
       param = described_class.new(:transaction_type, String, length: (3..4))
       expect(param.process!('BUY')).to eq 'BUY'
       expect { param.process!('LIQUIDATE') }
-        .to raise_error(RestClient::Contract::InvalidParam, /length 9 is outside 3\.\.4/)
+        .to raise_error(Contractful::Contract::InvalidParam, /length 9 is outside 3\.\.4/)
     end
   end
 end

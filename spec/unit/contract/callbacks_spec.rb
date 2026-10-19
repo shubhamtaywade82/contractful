@@ -2,10 +2,10 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract callbacks' do
+RSpec.describe 'Contractful::Contract callbacks' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       base 'https://api.test'
       instance_exec(&block)
@@ -71,7 +71,7 @@ RSpec.describe 'RestClient::Contract callbacks' do
       expect(seen[:method]).to eq :post
       expect(seen[:url]).to eq 'https://api.test/posts'
       expect(seen[:payload]).to eq '{"title":"Hi"}'
-      expect(seen[:definition]).to be_a(RestClient::Contract::Definition)
+      expect(seen[:definition]).to be_a(Contractful::Contract::Definition)
       expect(seen[:definition].name).to eq :create_post
     end
 
@@ -125,7 +125,7 @@ RSpec.describe 'RestClient::Contract callbacks' do
 
       expect do
         klass.new.list_posts
-      end.to raise_error(RestClient::Contract::UnexpectedResponse)
+      end.to raise_error(Contractful::Contract::UnexpectedResponse)
       expect(seen).to be_empty
     end
 
@@ -139,7 +139,7 @@ RSpec.describe 'RestClient::Contract callbacks' do
 
       expect do
         klass.new.create_post
-      end.to raise_error(RestClient::Contract::MissingParam)
+      end.to raise_error(Contractful::Contract::MissingParam)
       expect(seen).to be_empty
     end
   end

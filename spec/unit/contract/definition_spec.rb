@@ -2,7 +2,7 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe RestClient::Contract::Definition do
+RSpec.describe Contractful::Contract::Definition do
   def build(request_line = 'GET /posts', &block)
     verb, path = request_line.split(' ', 2)
     definition = described_class.new(:list_posts, verb, path)
@@ -20,13 +20,13 @@ RSpec.describe RestClient::Contract::Definition do
   it 'rejects unsupported verbs' do
     expect do
       described_class.new(:x, :fetch, '/posts')
-    end.to raise_error(RestClient::Contract::InvalidDefinition, /unsupported HTTP verb "fetch"/)
+    end.to raise_error(Contractful::Contract::InvalidDefinition, /unsupported HTTP verb "fetch"/)
   end
 
   it 'rejects path templates that do not start with a slash' do
     expect do
       described_class.new(:x, :get, 'posts')
-    end.to raise_error(RestClient::Contract::InvalidDefinition, %r{must start with "/"})
+    end.to raise_error(Contractful::Contract::InvalidDefinition, %r{must start with "/"})
   end
 
   describe 'the DSL block' do
@@ -42,7 +42,7 @@ RSpec.describe RestClient::Contract::Definition do
     it 'rejects invalid payload styles' do
       expect do
         build('POST /posts') { payload_style :carrier_pigeon }
-      end.to raise_error(RestClient::Contract::InvalidDefinition, /invalid payload_style :carrier_pigeon/)
+      end.to raise_error(Contractful::Contract::InvalidDefinition, /invalid payload_style :carrier_pigeon/)
     end
   end
 
@@ -79,7 +79,7 @@ RSpec.describe RestClient::Contract::Definition do
       definition = described_class.new(:show, :get, '/posts/:id')
       expect do
         definition.expand_path({})
-      end.to raise_error(RestClient::Contract::MissingParam, /path param :id is required/)
+      end.to raise_error(Contractful::Contract::MissingParam, /path param :id is required/)
     end
   end
 

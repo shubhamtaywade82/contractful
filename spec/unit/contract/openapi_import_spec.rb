@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'restclient/contract/openapi_import'
+require 'contractful/contract/openapi_import'
 require 'tmpdir'
 require 'pathname'
 
-RSpec.describe RestClient::Contract::OpenAPIImport do
+RSpec.describe Contractful::Contract::OpenAPIImport do
   subject(:mod) { described_class }
 
   let(:user_schema) do
@@ -550,7 +550,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     let(:source) do
       <<~RUBY
         class #{class_name}
-          include RestClient::Contract
+          include Contractful::Contract
           base 'https://smoke.test'
           contract :list_users, 'GET /users' do
             param :page, Integer, default: 1, min: 1
@@ -574,7 +574,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
 
     it 'rejects invalid params before any network traffic' do
       expect { Object.const_get(class_name).new.list_users(page: 0) }
-        .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+        .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
       expect(a_request(:any, //)).not_to have_been_made
     end
   end

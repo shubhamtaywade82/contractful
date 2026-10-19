@@ -1,4 +1,4 @@
-# Contributing to rest-client
+# Contributing to contractful
 
 Thank you for helping keep this gem alive. This document covers the human
 workflow; AI coding agents must additionally follow [AGENTS.md](AGENTS.md).
@@ -9,8 +9,8 @@ See [docs/implementation/SETUP.md](docs/implementation/SETUP.md) for the
 full, tested instructions. The short version:
 
 ```sh
-git clone https://github.com/shubhamtaywade82/rest-client.git
-cd rest-client
+git clone https://github.com/shubhamtaywade82/contractful.git
+cd contractful
 # Ruby >= 3.0 required; the project is verified on Ruby 4.0.x via mise
 gem install bundler
 bundle install
@@ -37,7 +37,7 @@ Imperative mood, conventional prefixes, one concern per commit:
 
 ```text
 feat: add pagination contracts with metaprogrammed page enumerators
-fix: retry loop no longer catches RestClient::Exception as ::Exception
+fix: retry loop no longer catches Contractful::Exception as ::Exception
 docs: add threat model and quality gates
 test: cover UnknownParam in strict mode
 Release 2.5.0: closed requests, open responses, auth, idempotency, ...
@@ -69,7 +69,7 @@ feature gets its own commit (and push) once its specs are green.
 
 Open a GitHub issue with:
 
-1. Ruby version (`ruby -v`) and gem version (`RestClient.version`).
+1. Ruby version (`ruby -v`) and gem version (`Contractful.version`).
 2. A minimal redacted reproduction — **scrub tokens, cookies and URLs with
    credentials** before posting.
 3. Expected vs actual behavior, full exception class and message.

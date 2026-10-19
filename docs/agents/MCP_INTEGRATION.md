@@ -1,6 +1,6 @@
 # MCP integration — Model Context Protocol (conditional document)
 
-**Status: not currently used in this repository.** rest-client is an HTTP
+**Status: not currently used in this repository.** contractful is an HTTP
 client library; it neither ships an MCP server nor consumes MCP tools in its
 build, test or release workflow. This document exists so that the day MCP
 becomes relevant, the ground rules are already written. Do not extend it with
@@ -11,8 +11,8 @@ are made.
 
 Two scenarios would activate it:
 
-1. **An MCP server built on rest-client.** The contract-first layer maps
-   naturally onto MCP tool schemas: every `RestClient::Contract::Definition`
+1. **An MCP server built on contractful.** The contract-first layer maps
+   naturally onto MCP tool schemas: every `Contractful::Contract::Definition`
    already exposes `#name`, `#params`, `#describe` and the introspection API
    (`contracts`, `contract_for`), which is exactly the metadata an MCP
    `tools/list` handler needs. A server could generate tool descriptions from
@@ -41,12 +41,12 @@ Two scenarios would activate it:
   reviewable commits and PRs. MCP never becomes a side channel that mutates
   the repository outside git history.
 - **Separation of concerns.** Any MCP server code lives in its own repository
-  or gem, not inside rest-client. This repository's runtime dependency set is
+  or gem, not inside contractful. This repository's runtime dependency set is
   deliberately small and must not grow to host agent infrastructure.
 
-## For consumers building MCP tools on rest-client
+## For consumers building MCP tools on contractful
 
-If you expose an HTTP API to AI agents via an MCP server and use rest-client
+If you expose an HTTP API to AI agents via an MCP server and use contractful
 under the hood, the contract layer gives you the right building blocks:
 declare one contract per tool, use the typed params as the tool's input
 schema (strict mode gives you closed-schema rejection of malformed tool

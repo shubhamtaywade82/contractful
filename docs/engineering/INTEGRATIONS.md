@@ -1,6 +1,6 @@
 # INTEGRATIONS — dependencies, platforms and external touchpoints
 
-rest-client sits in the middle of an integration web: it wraps Net::HTTP,
+contractful sits in the middle of an integration web: it wraps Net::HTTP,
 depends on four small runtime libraries, supports a Windows platform gem,
 is exercised in CI by GitHub Actions and httpbin.org, and is consumed by
 downstream SDK projects. This document records each integration, why it
@@ -38,9 +38,9 @@ two adaptation layers worth knowing before touching request.rb:
 
 ## Platform integration: Windows
 
-`rest-client.windows.gemspec` publishes a platform gem for
+`contractful.windows.gemspec` publishes a platform gem for
 `x64-mingw-ucrt` with `ffi ~> 1.16`, loading the Windows certificate store
-(`lib/restclient/windows/root_certs.rb`) so TLS verification works without
+(`lib/contractful/windows/root_certs.rb`) so TLS verification works without
 a CA bundle file. The main gemspec's file list excludes this code; the
 Rakefile's `windows:*` tasks build/push per-platform gems. When touching
 SSL defaults, remember the two platforms get trust from different stores —
@@ -62,10 +62,10 @@ specs cover the Windows loader separately
 - **Callbacks:** `before_request` (mutable context — inject tracing
   headers, auth, request IDs) and `after_response` (observe validated
   responses — metrics, logging) accumulate down client-class hierarchies.
-- **Logging:** `RestClient.log=` / `RESTCLIENT_LOG` route the gem's own
+- **Logging:** `Contractful.log=` / `CONTRACTFUL_LOG` route the gem's own
   log lines into the host's logging stack.
 - **Connection pooling:** `persistent: true` per request or per
-  `Resource`; the pool is inspectable (`RestClient.connection_pool`).
+  `Resource`; the pool is inspectable (`Contractful.connection_pool`).
 - **Contract introspection:** `contracts`, `contract_for`,
   `Definition#describe` — build documentation, dashboards or MCP tool
   schemas from declarations instead of scraping methods.

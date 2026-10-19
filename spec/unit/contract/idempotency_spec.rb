@@ -2,10 +2,10 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract idempotency keys' do
+RSpec.describe 'Contractful::Contract idempotency keys' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
 
       instance_exec(&block)
     end
@@ -157,14 +157,14 @@ end
         base 'https://api.test'
         idempotency_header ''
       end
-    end.to raise_error(RestClient::Contract::InvalidDefinition, /non-empty String/)
+    end.to raise_error(Contractful::Contract::InvalidDefinition, /non-empty String/)
 
     expect do
       build_client do
         base 'https://api.test'
         idempotency_generator 'not-callable'
       end
-    end.to raise_error(RestClient::Contract::InvalidDefinition, /respond to #call/)
+    end.to raise_error(Contractful::Contract::InvalidDefinition, /respond to #call/)
   end
 
   it 'marks idempotent contracts in introspection' do

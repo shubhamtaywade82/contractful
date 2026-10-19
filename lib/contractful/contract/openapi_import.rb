@@ -2,6 +2,7 @@
 
 require 'yaml'
 require 'json'
+require_relative '../contract'
 
 # rubocop:disable Naming/MethodParameterName
 # The rendering helpers below follow OpenAPI tooling conventions for the

@@ -326,5 +326,10 @@ RSpec.describe Contractful::Contract::Sequence do
       expect { mod.run(client, fixture) }
         .to raise_error(mod::Error, /WebMock is loaded but not enabled/)
     end
+
+    it 'can be required standalone without prior contractful requires' do
+      cmd = [Gem.ruby, '-Ilib', '-rcontractful/contract/sequence', '-e', 'exit(0)']
+      expect(system(*cmd)).to be(true)
+    end
   end
 end

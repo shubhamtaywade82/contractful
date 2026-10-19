@@ -98,5 +98,10 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
       expect { import.to_ruby(class_name: 'GeneratedClient') }
         .to raise_error(mod::Error, /cannot render a Proc param type/)
     end
+
+    it 'can be required standalone without prior contractful requires' do
+      cmd = [Gem.ruby, '-Ilib', '-rcontractful/contract/openapi_import', '-e', 'exit(0)']
+      expect(system(*cmd)).to be(true)
+    end
   end
 end

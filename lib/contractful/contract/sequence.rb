@@ -2,6 +2,7 @@
 
 require 'yaml'
 require 'json'
+require_relative '../contract'
 
 module Contractful
   module Contract

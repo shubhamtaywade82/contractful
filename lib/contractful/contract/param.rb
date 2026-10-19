@@ -85,6 +85,13 @@ module Contractful
         !@default.equal?(NO_DEFAULT)
       end
 
+      # Whether the declared default is a Proc (resolved lazily at call time).
+      # Renderers need the raw declaration — {default_value} would resolve
+      # the proc and hide its laziness.
+      def lazy_default?
+        @default.is_a?(Proc)
+      end
+
       # The declared default value. Procs are called so defaults can be
       # computed lazily (for example <tt>default: -> { Time.now.to_i }</tt>).
       def default_value
@@ -393,9 +400,11 @@ module Contractful
 
         # Last resort: a Kernel cast (e.g. Float("1.5")). The dispatch is
         # deliberately bounded to Kernel's module functions — a class name is
-        # never used to call arbitrary methods on this object.
-        cast_name = @type.name.to_sym
-        if Kernel.respond_to?(cast_name)
+        # never used to call arbitrary methods on this object. Anonymous
+        # classes have no #name, so they skip the cast entirely and fall to
+        # the InvalidParam below.
+        cast_name = @type.name&.to_sym
+        if cast_name && Kernel.respond_to?(cast_name)
           begin
             cast = Kernel.public_send(cast_name, value)
             return cast if cast.is_a?(@type)

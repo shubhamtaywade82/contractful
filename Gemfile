@@ -9,6 +9,12 @@ group :test do
   # Coverage measurement and CI gate (>= 95% line coverage on lib/).
   # Loaded at the top of spec/spec_helper.rb, before any library code.
   gem 'simplecov', '~> 0.22', require: false
+  # Test-only: exercises the optional ActiveSupport::Notifications bridge.
+  # ActiveSupport 8 requires Ruby >= 3.2; on older Rubies the bridge specs
+  # skip themselves (see spec/unit/notifications_active_support_spec.rb) —
+  # the bridge itself stays an optional integration, never a runtime
+  # dependency, so it is fine to not exercise it there.
+  gem 'activesupport', '~> 8.0', require: false if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new('3.2')
 end
 
 group :development, :test do

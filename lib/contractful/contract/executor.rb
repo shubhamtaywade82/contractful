@@ -22,6 +22,7 @@ module Contractful
       META_OPTIONS = %i[
         _headers _timeout _open_timeout _read_timeout _write_timeout
         _persistent _max_retries _retry_interval _idempotency_key
+        _retry_jitter _retry_jitter_cap _retry_rng _breaker _pace
       ].freeze
 
       META_MAP = {
@@ -31,7 +32,12 @@ module Contractful
         _write_timeout: :write_timeout,
         _persistent: :persistent,
         _max_retries: :max_retries,
-        _retry_interval: :retry_interval
+        _retry_interval: :retry_interval,
+        _retry_jitter: :retry_jitter,
+        _retry_jitter_cap: :retry_jitter_cap,
+        _retry_rng: :retry_rng,
+        _breaker: :breaker,
+        _pace: :pace
       }.freeze
 
       # Verbs whose params are sent as a query string by default.
@@ -68,18 +74,19 @@ module Contractful
 
         apply_auth!(ctx, instance, definition)
         apply_idempotency!(ctx, instance, definition, meta)
-        instance.__run_before_callbacks(ctx)
 
-        request_args = {
-          method: ctx[:method],
-          url: ctx[:url],
-          headers: ctx[:headers],
-          payload: ctx[:payload]
-        }
-        request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
-        merge_meta_options!(request_args, meta)
+        response = transmit(ctx, instance, definition, meta)
 
-        response = execute_request(request_args, definition)
+        # OAuth-style refresh-on-401: one-flight refresh of the contract's
+        # token provider, then exactly one retry with the fresh credential.
+        provider = token_provider_for(instance, definition)
+        if response.code.to_i == 401 && provider && !ctx.key?(:__token_refreshed)
+          TokenRefresh.refresh(provider)
+          ctx[:__token_refreshed] = true
+          apply_auth!(ctx, instance, definition)
+          response = transmit(ctx, instance, definition, meta)
+        end
+
         validate_response!(definition, response)
         instance.__run_after_callbacks(response)
         response
@@ -107,6 +114,34 @@ module Contractful
       end
 
       # --- internals ---------------------------------------------------------
+
+      # Run the before-callbacks and send the request. Extracted so the
+      # refresh-on-401 flow can re-run the identical phase with fresh auth.
+      def transmit(ctx, instance, definition, meta)
+        instance.__run_before_callbacks(ctx)
+
+        request_args = {
+          method: ctx[:method],
+          url: ctx[:url],
+          headers: ctx[:headers],
+          payload: ctx[:payload]
+        }
+        request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
+        merge_meta_options!(request_args, meta)
+
+        execute_request(request_args, definition)
+      end
+
+      def token_provider_for(instance, definition)
+        # auth may be declared on the contract itself or on the class
+        [definition.auth, instance.class.__merged_scalar(:auth)].each do |auth|
+          next unless auth.is_a?(Contractful::Contract::Auth)
+
+          provider = auth.token_provider
+          return provider if provider
+        end
+        nil
+      end
 
       # Execute the request. When the contract declares expected error
       # statuses (4xx/5xx), the default contractful exception behavior is

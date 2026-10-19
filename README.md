@@ -253,6 +253,22 @@ Contractful::Request.execute(method: :get, url: 'http://example.com',
                             max_retries: 2, open_timeout: 2)
 ```
 
+<em>New in 0.1.0.</em> Retrying in lockstep is its own outage amplifier:
+when many clients hit the same failing service, identical exponential
+backoff makes them all knock again at the same instant. `:retry_jitter`
+randomizes the computed backoff so retries spread out — `:full` draws from
+`[0, backoff]`, `:equal` from `[backoff, 2 * backoff]`, and `:decorrelated`
+follows the AWS "Exponential Backoff and Jitter" recipe (`:full` is what it
+recommends for most systems). Jitter applies only to the computed backoff:
+a server's `Retry-After` is still honored exactly as sent. A seeded
+`:retry_rng` (any object answering `#rand(range)`) makes tests
+deterministic.
+
+```ruby
+Contractful::Request.execute(method: :get, url: 'http://example.com',
+                            max_retries: 3, retry_jitter: :full)
+```
+
 ## Persistent connections (keep-alive)
 
 <em>New in 2.3.</em> Pass `persistent: true` to reuse the underlying TCP/TLS
@@ -288,6 +304,56 @@ How it behaves:
 
 Call `Contractful.connection_pool.clear!` before forking a process or when you
 know connections have gone stale.
+
+## Circuit breaker
+
+<em>New in 0.1.0.</em> Retries answer transient errors; a circuit breaker
+answers a host that is *down* — without one, every request still pays the
+full timeout and every retry amplifies the load on something that is
+already dying. Opt in per request with `breaker: true` (defaults) or a
+config Hash:
+
+```ruby
+Contractful.get('https://api.example.com/x',
+                breaker: { threshold: 5, cooldown: 30 })
+```
+
+Counted as failures: network errors and retryable statuses (408/425/429/5xx)
+from requests whose retries are exhausted; client errors like 404 never
+open a circuit. After `threshold` consecutive failures every request to
+that scheme/host/port fails fast with `Contractful::CircuitOpenError` for
+`cooldown` seconds; the next request after the cooldown probes the host
+(half-open) and its outcome closes or re-opens the circuit. Breakers are
+process-wide and thread-safe; state transitions post a `circuit`
+notification (see [Event notifications](#event-notifications)), so metrics
+can watch open/half-open/closed as a first-class signal.
+
+```ruby
+Contractful::Notifications.subscribe do |event|
+  next unless event[:name] == 'circuit'
+  puts "circuit #{event[:payload][:key]}: #{event[:payload][:from]} -> #{event[:payload][:state]}"
+end
+```
+
+## Rate-limit pacing
+
+<em>New in 0.1.0.</em> The breaker reacts to failure; pacing prevents the
+429s in the first place. Opt in per request with `pace: true` (defaults:
+600 requests per 60s window) or a config Hash:
+
+```ruby
+Contractful.get('https://api.example.com/x',
+                pace: { limit: 100, window: 60, max_wait: 10 })
+```
+
+Pacing is per scheme/host/port across the whole process (all threads
+included) using a sliding window: every attempt — retries included —
+acquires a slot before the request leaves. A full window makes the request
+sleep until the oldest slot expires (posting a `pace` notification with
+the delay); a wait longer than `max_wait` raises
+`Contractful::PacingTimeout` instead of stalling silently. Callers that
+cannot tolerate waiting should set a small `max_wait` and treat the
+timeout as their own backpressure signal.
 
 ## Contract-first API clients
 
@@ -474,6 +540,32 @@ class DhanHQClient
   # and auth api_key: { name: 'k', value: v, in: :query }
 end
 ```
+
+For OAuth-style flows with short-lived tokens, give the contract a
+**token provider** — an object that answers `#token` (the current
+credential) and `#refresh` (force a new one). The client class stays
+credential-free, and a 401 is handled for you:
+
+```ruby
+class TokenStore
+  def token      = @token
+  def refresh
+    @token = fetch_new_token   # your OAuth2 client-credentials flow
+  end
+end
+
+class DhanHQClient
+  include Contractful::Contract
+  base 'https://api.dhan.co'
+  auth token_provider: TokenStore.new
+end
+```
+
+When a request comes back 401, the executor refreshes the provider in
+**one flight** (concurrent 401s share a single refresh — per-provider
+mutex, posting a `token_refresh` notification) and retries the request
+exactly once with the fresh credential. A second 401 is returned or
+raised like any other declared status; there is no refresh loop.
 
 Auth is resolved right before the `before_request` callbacks run, so
 callbacks can still inspect or override the resolved credentials. Individual
@@ -668,6 +760,41 @@ ordering-sensitive outgoing details (`path`, `query_include`,
 `headers_include`, `json_include` — unknown keys fail the fixture loudly).
 Unknown contract names, malformed steps and missing responses are rejected
 at load time, before anything runs.
+
+## Event notifications
+
+<em>New in 0.1.0.</em> The request pipeline posts lifecycle events to an
+in-process hub, so metrics, tracing and alerting never require touching the
+transport. Subscribers must not raise — a failing subscriber is logged and
+skipped, so observability cannot break the request it observes:
+
+```ruby
+Contractful::Notifications.subscribe do |event|
+  puts "#{event[:name]} #{event[:payload].inspect}"
+end
+# request  {method: 'get', url: 'https://api.test/x', attempt: 1}
+# response {method: 'get', url: 'https://api.test/x', status: 200, duration_ms: 43.12}
+# retry    {method: 'get', url: 'https://api.test/x', attempt: 1, delay: 0.5, cause: 503}
+```
+
+The core posts `request` (method, url, attempt), `response` (status,
+duration_ms — one per attempt, including suppressed error responses) and
+`retry` (attempt, delay, cause — an exception class name or HTTP status).
+Resilience features add their own events (circuit breaker state changes,
+rate-limit sleeps, token refreshes). `subscribe` returns an unsubscribe
+handle; `Notifications.clear!` detaches everything (test hook).
+
+For Rails and APM integration, an opt-in bridge forwards every event to
+ActiveSupport::Notifications as `contractful.<name>`:
+
+```ruby
+require 'contractful/notifications/active_support'   # requires the activesupport gem
+
+ActiveSupport::Notifications.subscribe(/^contractful\./) do |*args|
+  event = ActiveSupport::Notifications::Event.new(*args)
+  Rails.logger.info "#{event.name} in #{event.duration}ms #{event.payload.slice(:url, :status)}"
+end
+```
 
 ## Multipart
 

@@ -54,6 +54,37 @@ module Contractful
   #     backoff.
   # * :max_retry_after upper bound (seconds) for a Retry-After delay;
   #     larger values fall back to the exponential backoff (default 60).
+  # * :retry_jitter randomize retry delays so many concurrent clients do not
+  #     retry in lockstep (the thundering-herd problem). false (default)
+  #     keeps the plain exponential backoff; :full draws uniformly from
+  #     [0, backoff]; :equal from [backoff, 2 * backoff]; :decorrelated
+  #     draws from [retry_interval, min(cap, previous * 3)] per the AWS
+  #     "Exponential Backoff and Jitter" recipe. Jitter applies only to
+  #     exponential backoff — a server-provided Retry-After delay is
+  #     honored exactly as sent.
+  # * :retry_jitter_cap upper bound (seconds) for the :decorrelated jitter
+  #     draw (default 30).
+  # * :retry_rng source of randomness for :retry_jitter — any object
+  #     responding to #rand(range) (a seeded <tt>Random.new(seed)</tt>
+  #     makes tests deterministic). Defaults to the Random class.
+  # * :breaker host-level circuit breaker, opt-in. true uses the defaults
+  #     ({Contractful::CircuitBreaker::DEFAULT_THRESHOLD} consecutive
+  #     failures, then fail fast for
+  #     {Contractful::CircuitBreaker::DEFAULT_COOLDOWN} seconds); a Hash
+  #     customizes it as <tt>breaker: { threshold: 5, cooldown: 30 }</tt>.
+  #     Failures are network errors and retryable statuses (408/425/429/5xx);
+  #     a request that ultimately fails after its retries counts once.
+  #     While open, requests fail fast with
+  #     {Contractful::CircuitOpenError}. State transitions post a `circuit`
+  #     notification.
+  # * :pace proactive rate-limit enforcement (opt-in). true uses the
+  #     defaults ({Contractful::Pacer::DEFAULT_LIMIT} requests per
+  #     {Contractful::Pacer::DEFAULT_WINDOW}s per scheme/host/port across
+  #     the process); a Hash customizes it:
+  #     <tt>pace: { limit: 100, window: 60, max_wait: 10 }</tt>. When the
+  #     window is full the request sleeps until a slot frees (posting a
+  #     `pace` notification); a wait beyond `max_wait` raises
+  #     {Contractful::PacingTimeout}. Retries acquire a slot per attempt.
   # * :proxy An HTTP proxy URI to use for this request. Any value here
   #   (including nil) will override Contractful.proxy.
   # * :persistent reuse the underlying connection across requests via the
@@ -79,7 +110,10 @@ module Contractful
                 :user, :password, :read_timeout, :write_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
                 :ssl_opts, :max_retries, :retry_interval, :persistent,
-                :retry_after, :max_retry_after
+                :retry_after, :max_retry_after,
+                :retry_jitter, :retry_jitter_cap, :retry_rng,
+                :breaker,
+                :pace
 
     # An array of previous redirection responses
     attr_accessor :redirection_history
@@ -229,6 +263,52 @@ module Contractful
         )
       end
 
+      @retry_jitter = args.fetch(:retry_jitter, false)
+      unless [false, :full, :equal, :decorrelated].include?(@retry_jitter)
+        raise ArgumentError.new(
+          ':retry_jitter must be false, :full, :equal or :decorrelated, ' +
+          "got #{@retry_jitter.inspect}"
+        )
+      end
+
+      @retry_jitter_cap = args.fetch(:retry_jitter_cap, 30.0)
+      unless @retry_jitter_cap.is_a?(Numeric) && @retry_jitter_cap.positive?
+        raise ArgumentError.new(
+          ':retry_jitter_cap must be a positive Numeric, ' +
+          "got #{@retry_jitter_cap.inspect}"
+        )
+      end
+
+      @retry_rng = args.fetch(:retry_rng, Random)
+      unless @retry_rng.respond_to?(:rand)
+        raise ArgumentError.new(
+          ':retry_rng must respond to #rand(range), ' +
+          "got #{@retry_rng.inspect}"
+        )
+      end
+
+      @breaker = args.fetch(:breaker, false)
+      case @breaker
+      when false, true, Hash
+        # ok
+      else
+        raise ArgumentError.new(
+          ':breaker must be true, false or a config Hash, ' +
+          "got #{@breaker.inspect}"
+        )
+      end
+
+      @pace = args.fetch(:pace, false)
+      case @pace
+      when false, true, Hash
+        # ok
+      else
+        raise ArgumentError.new(
+          ':pace must be true, false or a config Hash, ' +
+          "got #{@pace.inspect}"
+        )
+      end
+
       @retry_after = args.fetch(:retry_after, true) ? true : false
       @max_retry_after = args.fetch(:max_retry_after, 60)
       unless @max_retry_after.is_a?(Numeric) && @max_retry_after >= 0
@@ -255,10 +335,22 @@ module Contractful
       # example basic auth headers) and consumed payload streams do not leak
       # state between attempts.
       attempts = 0
+      started = nil
+      breaker = @breaker ? CircuitBreaker.registry.breaker_for(uri, **breaker_options) : nil
+      breaker&.check!
+      pacer = @pace ? Pacer.registry.pacer_for(uri, **pace_options) : nil
       begin
         loop do
           req = net_http_request_class(method).new(uri, processed_headers)
+          pacer&.acquire
+          Notifications.post('request', method: method, url: uri.to_s, attempt: attempts + 1)
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           result = transmit uri, req, payload, & block
+          Notifications.post(
+            'response', method: method, url: uri.to_s,
+                        status: result.respond_to?(:code) ? result.code : nil,
+                        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+          )
 
           # When a block handles responses itself (error-status suppression),
           # retryable statuses never raise — judge the returned response.
@@ -267,29 +359,45 @@ module Contractful
              Exceptions.retryable?(result.code) && rewind_payload!
             attempts += 1
             delay = retry_delay_for_response(result, attempts)
+            Notifications.post('retry', method: method, url: uri.to_s,
+                                        attempt: attempts, delay: delay, cause: result.code)
             log_response_retry(result, attempts, delay)
             sleep_for_retry(delay)
             next
           end
+          breaker&.record_response(result)
           break result
         end
       rescue *RETRIABLE_EXCEPTIONS => e
         attempts += 1
         if attempts <= max_retries && rewind_payload!
           delay = retry_backoff_delay(attempts)
+          Notifications.post('retry', method: method, url: uri.to_s,
+                                      attempt: attempts, delay: delay, cause: e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
+        breaker&.record_failure
         raise
       rescue Contractful::ExceptionWithResponse => e
+        # Error statuses raise inside transmit, so the response event for a
+        # failed attempt posts here rather than after the transmit call.
+        Notifications.post(
+          'response', method: method, url: uri.to_s, status: e.http_code,
+                      duration_ms: started && ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+        )
         attempts += 1
         if retry_after && attempts <= max_retries && e.retryable? && rewind_payload!
           delay = retry_delay_for_response(e.response, attempts)
+          Notifications.post('retry', method: method, url: uri.to_s, attempt: attempts,
+                                      delay: delay,
+                                      cause: e.response ? e.http_code : e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
+        breaker&.record_failure
         raise
       end
     ensure
@@ -787,7 +895,58 @@ module Contractful
     # Exponential backoff between retries: `:retry_interval` for the first
     # retry, then doubling for each subsequent attempt.
     def retry_backoff_delay(attempt)
-      retry_interval * (2**(attempt - 1))
+      delay = retry_interval * (2**(attempt - 1))
+      apply_retry_jitter(delay, attempt)
+    end
+
+    # Randomize an exponential backoff per the configured jitter style.
+    # Called only for computed backoff — a server's Retry-After delay is
+    # honored exactly, so many clients still retry in unison only when the
+    # server itself asked them to.
+    def apply_retry_jitter(delay, attempt)
+      return delay if @retry_jitter == false || delay.zero?
+
+      case @retry_jitter
+      when :full then @retry_rng.rand(0..delay)
+      when :equal then delay + @retry_rng.rand(0..delay)
+      when :decorrelated then decorrelated_jitter_delay(attempt)
+      end
+    end
+
+    # Normalize the :pace option into registry kwargs.
+    def pace_options
+      case @pace
+      when Hash
+        { limit: @pace.fetch(:limit, Pacer::DEFAULT_LIMIT),
+          window: @pace.fetch(:window, Pacer::DEFAULT_WINDOW),
+          max_wait: @pace.fetch(:max_wait, Pacer::DEFAULT_MAX_WAIT) }
+      else
+        { limit: Pacer::DEFAULT_LIMIT, window: Pacer::DEFAULT_WINDOW,
+          max_wait: Pacer::DEFAULT_MAX_WAIT }
+      end
+    end
+
+    # Normalize the :breaker option into registry kwargs.
+    def breaker_options
+      case @breaker
+      when Hash
+        { threshold: @breaker.fetch(:threshold, CircuitBreaker::DEFAULT_THRESHOLD),
+          cooldown: @breaker.fetch(:cooldown, CircuitBreaker::DEFAULT_COOLDOWN) }
+      else
+        { threshold: CircuitBreaker::DEFAULT_THRESHOLD,
+          cooldown: CircuitBreaker::DEFAULT_COOLDOWN }
+      end
+    end
+
+    # AWS "Exponential Backoff and Jitter" decorrelated draw: each attempt
+    # samples [retry_interval, min(cap, previous * 3)], where the previous
+    # value is the raw (unjittered) backoff of the preceding attempt —
+    # stateless per request, deterministic under a seeded :retry_rng.
+    def decorrelated_jitter_delay(attempt)
+      base = retry_interval
+      previous = attempt <= 1 ? base : base * (2**(attempt - 2))
+      draw = @retry_rng.rand(base..[previous * 3, @retry_jitter_cap].min)
+      [draw, @retry_jitter_cap].min
     end
 
     def sleep_for_retry(secs)

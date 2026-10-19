@@ -36,6 +36,36 @@ line — same contracts, helpers and test suite — renamed:
   overview doc, and the gemspec links `documentation_uri` to rubydoc.info.
   `yard` and `redcarpet` are development-only gems.
 
+* Post request lifecycle events to a new `Contractful::Notifications` hub
+  (`request`, `response`, `retry` — method, url, attempt, status,
+  duration_ms, retry cause). Thread-safe; a raising subscriber is logged
+  and skipped so observability cannot break the request it observes. An
+  opt-in `contractful/notifications/active_support` bridge re-posts every
+  event to ActiveSupport::Notifications as `contractful.<name>`;
+  activesupport is a test-only dependency, never a runtime one.
+* Randomize computed retry backoff with `retry_jitter: :full`, `:equal` or
+  `:decorrelated` (AWS recipe, capped by `retry_jitter_cap`) so fleets of
+  clients do not retry in lockstep; a server's Retry-After is honored
+  exactly, and `retry_rng` accepts a seeded Random for deterministic
+  tests. Contract clients pass the options through as
+  `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng`.
+* Add an opt-in host-level circuit breaker (`breaker: true` or a config
+  Hash): consecutive failure requests — network errors and retryable
+  statuses after retries are exhausted — open a process-wide
+  scheme/host/port circuit that fails fast with
+  `Contractful::CircuitOpenError` for the cooldown, then half-open probes.
+  4xx responses never open a circuit. Transitions post `circuit`
+  notifications; contract clients pass `_breaker` per call.
+* Add proactive rate-limit pacing (`pace: true` or a config Hash): a
+  process-wide sliding window per scheme/host/port delays requests that
+  would exceed a configured quota instead of eating 429s — waits post
+  `pace` notifications and a wait beyond `max_wait` raises
+  `PacingTimeout`. Contract clients pass `_pace` per call.
+* Add OAuth-style token-provider auth (`auth token_provider:`): the
+  provider answers `#token` and `#refresh`; on a 401 the executor
+  refreshes it in one flight (concurrent 401s share a single refresh)
+  and retries exactly once with the fresh credential.
+
 # 2.6.0
 
 Roadmap-helpers release: the two planned development-time companions to
@@ -73,7 +103,6 @@ and the review-hardening fixes that landed on master ahead of the release.
   rejected at load time); `before_step`/`after_step` hooks carry the
   stateful rules contracts cannot express (token refresh sequencing,
   rate-limit windows, cross-step invariants).
-
 Review-hardening fixes from a skills-based code review (secret redaction,
 contract layer robustness, spec hygiene). No public API changes.
 

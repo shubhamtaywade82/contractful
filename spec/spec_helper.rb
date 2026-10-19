@@ -20,6 +20,12 @@ SimpleCov.start do
   # this file can never register execution. It is fully exercised at load
   # time; filtering it is measurement hygiene, not a coverage dodge.
   add_filter '/lib/contractful/version.rb'
+  # The optional ActiveSupport bridge is exercised by the test bundle only
+  # where activesupport (~> 8.0) can install — Ruby >= 3.2 (see Gemfile).
+  # On older Rubies the file would sit at 0% and sink the gate through no
+  # fault of its own; where it loads, it counts toward the gate in full.
+  add_filter '/lib/contractful/notifications/active_support' if
+    Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.2')
 
   track_files 'lib/**/*.rb'
 

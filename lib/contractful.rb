@@ -88,6 +88,12 @@ require File.dirname(__FILE__) + '/contractful/windows'
 #   # HEAD
 #   Contractful.head('http://example.com').headers
 #
+# The module helpers accept a headers Hash only. Transport and resilience
+# options (timeouts, retries, breaker:, pace:, persistent:, ...) belong to
+# Contractful::Request.execute:
+#
+#   Contractful::Request.execute(method: :get, url: 'http://example.com', max_retries: 3)
+#
 # To use with a proxy, just set Contractful.proxy to the proper http proxy:
 #
 #   Contractful.proxy = "http://proxy.example.com/"

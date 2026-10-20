@@ -40,7 +40,7 @@ feat: add pagination contracts with metaprogrammed page enumerators
 fix: retry loop no longer catches Contractful::Exception as ::Exception
 docs: add threat model and quality gates
 test: cover UnknownParam in strict mode
-Release 2.5.0: closed requests, open responses, auth, idempotency, ...
+Release 0.1.0: closed requests, open responses, auth, idempotency, ...
 ```
 
 When implementing a series of features, land them one at a time — each

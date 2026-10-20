@@ -49,7 +49,7 @@ See `Contractful::Resource` docs for details.
 
 By default, contractful will follow HTTP 30x redirection requests.
 
-__New in 2.0:__ `Contractful::Response` exposes a `#history` method that returns
+`Contractful::Response` exposes a `#history` method that returns
 a list of each response received in a redirection chain.
 
 ```ruby
@@ -71,9 +71,9 @@ a list of each response received in a redirection chain.
 
 To disable automatic redirection, set `:max_redirects => 0`.
 
-__New in 2.0:__ Prior versions of contractful would raise
+Prior rest-client versions would raise
 `Contractful::MaxRedirectsReached`, with no easy way to access the server's
-response. In 2.0, contractful raises the normal
+response. contractful raises the normal
 `Contractful::ExceptionWithResponse` as it would with any other non-HTTP-20x
 response.
 
@@ -109,7 +109,7 @@ Contractful::Found: 302 Found
 
 The result of a `Contractful::Request` is a `Contractful::Response` object.
 
-__New in 2.0:__ `Contractful::Response` objects are now a subclass of `String`.
+`Contractful::Response` objects are a subclass of `String`.
 Previously, they were a real String object with response functionality mixed
 in, which was very confusing to work with.
 
@@ -120,10 +120,10 @@ Response objects have several useful methods. (See the class rdoc for more detai
 - `Response#headers`: A hash of HTTP response headers
 - `Response#raw_headers`: A hash of HTTP response headers as unprocessed arrays
 - `Response#cookies`: A hash of HTTP cookies set by the server
-- `Response#cookie_jar`: <em>New in 1.8</em> An HTTP::CookieJar of cookies
+- `Response#cookie_jar`: An HTTP::CookieJar of cookies
 - `Response#request`: The Contractful::Request object used to make the request
-- `Response#history`: <em>New in 2.0</em> If redirection was followed, a list of prior Response objects
-- `Response#json`: <em>New in 2.3</em> Parse the response body as JSON. Keyword
+- `Response#history`: If redirection was followed, a list of prior Response objects
+- `Response#json`: Parse the response body as JSON. Keyword
   arguments are forwarded to `JSON.parse`.
 
 ```ruby
@@ -260,7 +260,7 @@ with a `read` method.
 ```
 
 In Multipart requests, Contractful will also stream file handles passed as Hash
-(or __new in 2.1__ ParamsArray).
+(or ParamsArray).
 
 ```ruby
 >> r = Contractful.put('http://httpbin.org/put',
@@ -297,7 +297,7 @@ Note that the tempfile created by `Tempfile.new` will be in `Dir.tmpdir`
 different location. This file will be unlinked when it is dereferenced.
 
 If logging is enabled, this will also print download progress.
-__New in 2.1:__ Customize the interval with `:stream_log_percent` (defaults to
+Customize the interval with `:stream_log_percent` (defaults to
 10 for printing a message every 10% complete).
 
 For example:

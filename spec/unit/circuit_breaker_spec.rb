@@ -18,6 +18,22 @@ RSpec.describe Contractful::CircuitBreaker do
   end
 
   describe 'state machine' do
+    it 'lets a subscriber inspect the breaker without deadlocking' do
+      observed = []
+      b = described_class.new('https://notified.test:443', threshold: 1, cooldown: 60)
+      unsubscribe = Contractful::Notifications.subscribe do |event|
+        observed << [event[:payload][:state], b.state]
+      end
+      begin
+        b.record_failure
+      ensure
+        unsubscribe.call
+        Contractful::Notifications.clear!
+      end
+
+      expect(observed).to eq [%i[open open]]
+    end
+
     it 'stays closed under the threshold and opens at it' do
       expect(breaker.state).to eq :closed
       2.times { breaker.record_failure }

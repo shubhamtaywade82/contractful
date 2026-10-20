@@ -7,8 +7,9 @@ specs are green and its row says `implemented`. PRs that change behavior
 must update the affected rows in the same change.
 
 Status vocabulary: `implemented` (specs green in CI), `planned` (agreed,
-not built), `in-progress` (branch work, not merged). Versions note where a
-requirement landed.
+not built), `in-progress` (branch work, not merged). Version markers note the
+upstream rest-client release line in which a requirement landed; contractful
+0.1.0 ships every row marked `implemented`.
 
 ## Core HTTP client
 
@@ -43,7 +44,7 @@ requirement landed.
 | REQ-E02 | Timeout exceptions | Open/Read/Write timeout map to `Exceptions::OpenTimeout`/`ReadTimeout`/`WriteTimeout`, all `retryable?` | `spec/unit/exceptions_spec.rb` | implemented (2.x) |
 | REQ-E03 | Logging hook (FR-9) | `Contractful.log=` / `CONTRACTFUL_LOG` route request/response log lines | `spec/unit/request_spec.rb` | implemented (1.x) |
 
-## Contract-first layer (2.4/2.5)
+## Contract-first layer
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |

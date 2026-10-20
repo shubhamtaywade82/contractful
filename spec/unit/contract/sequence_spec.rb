@@ -22,6 +22,11 @@ RSpec.describe Contractful::Contract::Sequence do
         response_field :status, :string
       end
 
+      contract :set_flag, 'POST /flags' do
+        param :enabled, :boolean, required: true
+        responds 200, type: :hash
+      end
+
       contract :get_order, 'GET /orders/:order_id' do
         param :order_id, String, required: true
         responds 200, 404, type: :hash
@@ -223,6 +228,28 @@ RSpec.describe Contractful::Contract::Sequence do
                  response: { status: 201, body: { order_id: 'o-3' } },
                  expect_request: { json_include: { meta: { source: 'bot' } } } }]
       expect(mod.run(client, { steps: steps }).size).to eq 1
+    end
+
+    it 'treats false as a present value in JSON subset assertions' do
+      steps = [{ call: 'set_flag',
+                 params: { enabled: false },
+                 response: { status: 200, body: {} },
+                 expect_request: { json_include: { enabled: false } } }]
+      expect(mod.run(client, { steps: steps }).size).to eq 1
+    end
+
+    it 'anchors stubbed paths so a prefix does not match a longer path' do
+      steps = [
+        { call: 'set_flag', params: { enabled: true },
+          response: { status: 200, body: {} } },
+        { call: 'get_health', response: { status: 200, body: 'ok' } }
+      ]
+      player = mod.load(client, { steps: steps })
+      player.before_step do |number, _step|
+        Contractful.post('https://seq.test/flags/extra', 'x') if number == 2
+      end
+
+      expect { player.run }.to raise_error(WebMock::NetConnectNotAllowedError)
     end
 
     it 'fails with the step number when the path is wrong' do

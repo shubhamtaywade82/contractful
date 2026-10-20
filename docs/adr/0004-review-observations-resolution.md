@@ -29,7 +29,7 @@ this only ever affected the logging path.
 
 Only Symbol keys (`:content_type`) are normalized to `Content-Type`
 capitalization; String keys (`'content-type'`) go to the wire exactly as
-spelled. This matches contractful 1.x/2.x (upstream issue #599), and we
+spelled. This matches rest-client 1.x/2.x (upstream issue #599), and we
 keep it: canonicalizing String keys would silently change the spelling of
 headers on the wire for existing users — which breaks, among other things,
 signature schemes that canonicalize over sent header names.
@@ -71,7 +71,7 @@ belongs. The class documentation states this explicitly.
 `Response` subclasses `String` (the body) while carrying response metadata,
 and a user response block is called as `block.call(response, self, res,
 &block)` — response, request, raw Net::HTTP result, original block. This
-is public API since contractful 1.x: consumers index into responses as
+is public API since rest-client 1.x: consumers index into responses as
 strings, and 3-arity (plus the block passthrough) response blocks are
 widespread.
 

@@ -84,7 +84,7 @@ dual-header auth (`access-token` + `client-id`) maps to
 nil` until real headers appear (data absence, not an error), and the
 vendor's error-code annexure maps onto the retryable/terminal
 classification. That consumer lens is what prioritized idempotency keys,
-pagination and rate-limit work in the 2.5 series.
+pagination and rate-limit work in this release.
 
 ## Telemetry policy
 

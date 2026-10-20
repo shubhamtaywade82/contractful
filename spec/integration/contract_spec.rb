@@ -3,7 +3,7 @@
 require_relative '_lib'
 
 # Live integration tests for the contract-first DSL against httpbin.org.
-RSpec.describe 'Contractful::Contract integration' do
+RSpec.describe 'Contractful::Contract integration', :live do
   before(:all) do
     WebMock.disable!
   end

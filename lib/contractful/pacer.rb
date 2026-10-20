@@ -26,8 +26,10 @@ module Contractful
   # Opt in per request with `pace: true` (defaults: 600 requests / 60s
   # window, 30s max wait) or a config Hash:
   #
-  #   Contractful.get('https://api.example.com/x',
-  #                   pace: { limit: 100, window: 60, max_wait: 10 })
+  #   Contractful::Request.execute(
+  #     method: :get, url: 'https://api.example.com/x',
+  #     pace: { limit: 100, window: 60, max_wait: 10 }
+  #   )
   #
   # Requests are paced per scheme/host/port across the whole process
   # (threads included): each attempt — retries included — must acquire a
@@ -115,7 +117,9 @@ module Contractful
       end
     end
 
-    # Lazily-materializing pacer store.
+    # Lazily-materializing pacer store. The first configuration for an
+    # origin wins: later calls for the same scheme/host/port reuse the
+    # existing pacer and ignore their limit/window/max_wait options.
     class Registry
       def initialize
         @pacers = {}

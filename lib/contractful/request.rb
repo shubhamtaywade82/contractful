@@ -159,7 +159,8 @@ module Contractful
     # Network-level failures that are considered transient. When the
     # `:max_retries` request option is greater than zero, requests that fail
     # with one of these errors are retried automatically (with exponential
-    # backoff). HTTP error responses (4xx/5xx) are never retried.
+    # backoff). Retryable HTTP statuses (`Exceptions::RETRIABLE_STATUSES`)
+    # are retried by the pipeline as well; see #execute.
     RETRIABLE_EXCEPTIONS = [
       Contractful::Exceptions::Timeout, # includes Open/Read/WriteTimeout
       Contractful::ServerBrokeConnection,
@@ -622,7 +623,7 @@ module Contractful
     #
     # stringify_headers only normalizes Symbol keys to the canonical
     # `Content-Type` style capitalization; String keys are passed through
-    # verbatim for backwards compatibility with contractful 1.x/2.x
+    # verbatim for backwards compatibility with rest-client 1.x/2.x
     # (https://github.com/rest-client/rest-client/issues/599). Because
     # equivalent header names may therefore be spelled with different
     # casing, the merges below are case-insensitive: a later header whose
@@ -816,7 +817,7 @@ module Contractful
     #
     # Design note: only Symbol keys are normalized to `Content-Type` style
     # capitalization. String keys are passed through verbatim, matching
-    # contractful 1.x/2.x behavior
+    # rest-client 1.x/2.x behavior
     # (https://github.com/rest-client/rest-client/issues/599). String keys
     # are therefore not canonicalized (e.g. 'x-custom-header' stays
     # lowercase on the wire), which some clients depend on; equivalent
@@ -1339,7 +1340,7 @@ module Contractful
 
       response.log_response
 
-      # Public API (frozen since contractful 1.x, see docs/adr/0004): the
+      # Public API (frozen since rest-client 1.x, see docs/adr/0004): the
       # user block receives the Response (a String subclass), this request,
       # and the raw Net::HTTP result; the block itself is passed through as
       # a fourth argument for callers that delegate. Do not change the

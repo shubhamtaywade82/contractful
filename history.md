@@ -66,6 +66,35 @@ line — same contracts, helpers and test suite — renamed:
   refreshes it in one flight (concurrent 401s share a single refresh)
   and retries exactly once with the fresh credential.
 
+Review follow-up (second pass over the request pipeline and contract layer):
+
+* Redirects now strip `Authorization`, `Proxy-Authorization` and `Cookie`
+  headers when the origin changes, and refuse HTTPS→HTTP downgrades, so
+  credentials cannot follow a redirect to a different host.
+* Treat every 2xx status (including 208 and 226) as success. Retryable HTTP
+  statuses are retried in the block/error-suppression path too, and the
+  circuit breaker judges the actual response even when the block returns a
+  different value; an unknown or absent response no longer counts as a
+  success.
+* Token-provider refresh now applies to undeclared 401 responses and honors
+  `auth false`. Circuit-breaker transitions are posted outside the lock, so
+  subscribers can safely inspect the breaker.
+* Redact URL passwords from notifications and `Request#inspect` as well as
+  logs, and use the documented `<<` interface when logging a failing
+  notification subscriber.
+* Non-seekable payload streams are no longer consumed by request logging and
+  report as non-rewindable instead of raising `Errno::ESPIPE`;
+  `Payload.generate` no longer mutates the caller's `:multipart` flag.
+* OpenAPI exclusive bounds shift by one only for integer schemas; number
+  schemas use an inclusive approximation with a note.
+* Sequence fixtures treat false/nil payload values as present and anchor
+  stub paths so a prefix does not match a longer path.
+* Live-network integration specs are tagged and excluded by default; run
+  them explicitly with `LIVE_HTTP_TESTS=1` or `rake spec:live`.
+* Documentation now keeps module helpers header-only (resilience options go
+  through `Contractful::Request.execute`), aligns URL-credential redaction
+  guidance with the implementation, and removes stale version labels.
+
 # 2.6.0
 
 Roadmap-helpers release: the two planned development-time companions to
@@ -144,7 +173,7 @@ contract layer robustness, spec hygiene). No public API changes.
   spelled `'content-type'` now replaces (instead of coexisting with) the
   default `'Content-Type'`, so duplicate headers no longer reach the wire, and
   the payload-override and Cookie-override warnings fire across casings.
-  String header keys still pass through verbatim (contractful 1.x/2.x
+  String header keys still pass through verbatim (rest-client 1.x/2.x
   compatibility, upstream issue #599); both behaviors are pinned by specs.
 * Document the finalized design decisions from the repository review in
   `docs/adr/0004-review-observations-resolution.md` (non-seekable payload
@@ -550,7 +579,7 @@ release:
 
 - This release is unchanged from 1.6.9. It was published in order to supersede
   the malicious 1.6.10-13 versions, even for users who are still pinning to the
-  legacy 1.6.x series. All users are encouraged to upgrade to contractful 2.x.
+  legacy 1.6.x series. All users are encouraged to upgrade to rest-client 2.x.
 
 # 1.6.10, 1.6.11, 1.6.12, 1.6.13 (CVE-2019-15224)
 

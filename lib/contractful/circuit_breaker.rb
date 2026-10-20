@@ -67,51 +67,55 @@ module Contractful
     end
 
     # Current state, lazily transitioning open → half-open once the
-    # cooldown has elapsed.
+    # cooldown has elapsed. Notifications are posted after releasing the
+    # lock so that subscribers may safely inspect the breaker.
     def state
-      @mutex.synchronize { current_state }
+      from, current = @mutex.synchronize { advance_open_state }
+      post_transition(from, :half_open) if from
+      current
     end
 
     # Raise {CircuitOpenError} if the circuit is open; otherwise allow the
     # request (a half-open circuit lets the probe through).
     def check!
-      @mutex.synchronize do
-        return if current_state != :open
-
-        raise CircuitOpenError,
-              "circuit open for #{@key} " \
-              "(retry after #{remaining_cooldown.round(1)}s)"
+      from = nil
+      error = @mutex.synchronize do
+        from, = advance_open_state
+        @state == :open ? open_error : nil
       end
+      post_transition(from, :half_open) if from
+      raise error if error
     end
 
     def record_success
+      from = nil
       @mutex.synchronize do
-        post_transition(:closed) if @state != :closed
+        from = @state unless @state == :closed
         @state = :closed
         @failures = 0
         @opened_at = nil
       end
+      post_transition(from, :closed) if from
       nil
     end
 
     def record_failure
-      @mutex.synchronize do
-        @failures += 1
-        return unless @state == :half_open || @failures >= @threshold
-
-        post_transition(:open)
-        @state = :open
-        @opened_at = Process.clock_gettime(CLOCK)
-        @failures = 0
-      end
+      from = @mutex.synchronize { count_failure! }
+      post_transition(from, :open) if from
       nil
     end
 
     # Judge a transmitted response: retryable statuses are failures,
-    # everything else (4xx included) is a success.
+    # everything else (4xx included) is a success. An unknown result (for
+    # example the raw `block_response` path, which has no Response object)
+    # is not evidence of success and leaves the breaker unchanged.
     def record_response(response)
-      code = response.respond_to?(:code) ? response.code.to_i : nil
-      if code && Exceptions.retryable?(code)
+      return unless response.respond_to?(:code)
+
+      code = response.code.to_i
+      return if code.zero?
+
+      if Exceptions.retryable?(code)
         record_failure
       else
         record_success
@@ -126,7 +130,9 @@ module Contractful
       end
     end
 
-    # Lazily-materializing breaker store.
+    # Lazily-materializing breaker store. The first configuration for an
+    # origin wins: later calls for the same scheme/host/port reuse the
+    # existing breaker and ignore their threshold/cooldown options.
     class Registry
       def initialize
         @breakers = {}
@@ -151,15 +157,40 @@ module Contractful
 
     private
 
-    def current_state
-      return @state unless @state == :open
+    # Move an expired open circuit to half-open. Must be called with the
+    # mutex held; returns the previous state (nil when no transition) and
+    # the resulting state.
+    def advance_open_state
+      return [nil, @state] unless @state == :open && cooldown_elapsed?
 
-      if (Process.clock_gettime(CLOCK) - @opened_at) >= @cooldown
-        post_transition(:half_open)
-        @state = :half_open
-        @opened_at = nil
-      end
-      @state
+      from = @state
+      @state = :half_open
+      @opened_at = nil
+      [from, @state]
+    end
+
+    # Count a failure and open the circuit at the threshold. Must be called
+    # with the mutex held; returns the previous state when it opened.
+    def count_failure!
+      @failures += 1
+      return nil unless @state == :half_open || @failures >= @threshold
+
+      from = @state
+      @state = :open
+      @opened_at = Process.clock_gettime(CLOCK)
+      @failures = 0
+      from
+    end
+
+    def open_error
+      CircuitOpenError.new(
+        "circuit open for #{@key} " \
+        "(retry after #{remaining_cooldown.round(1)}s)"
+      )
+    end
+
+    def cooldown_elapsed?
+      @opened_at && (Process.clock_gettime(CLOCK) - @opened_at) >= @cooldown
     end
 
     def remaining_cooldown
@@ -167,8 +198,8 @@ module Contractful
       left.positive? ? left : 0.0
     end
 
-    def post_transition(to)
-      Notifications.post('circuit', key: @key, from: @state, state: to)
+    def post_transition(from, to)
+      Notifications.post('circuit', key: @key, from: from, state: to)
     end
   end
 end

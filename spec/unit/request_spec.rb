@@ -29,6 +29,15 @@ describe Contractful::Request, :include_helpers do
     expect(@request.default_headers[:accept]).to eq '*/*'
   end
 
+  it 'redacts the password from inspect' do
+    request = Contractful::Request.new(
+      method: :get, url: 'http://alice:s3cr3t@example.com/resource'
+    )
+
+    expect(request.inspect).to include('http://alice:REDACTED@example.com/resource')
+    expect(request.inspect).not_to include('s3cr3t')
+  end
+
   it 'processes a successful result' do
     res = res_double
     allow(res).to receive(:code).and_return('200')
@@ -688,6 +697,24 @@ describe Contractful::Request, :include_helpers do
       log = Contractful.log = []
       Contractful::Request.new(method: :post, url: 'http://url', payload: 'foo', headers: { user_agent: 'contractful' }).log_request
       expect(log[0]).to eq %(Contractful.post "http://url", "foo", "Accept"=>"*/*", "Content-Length"=>"3", "User-Agent"=>"contractful"\n)
+    end
+
+    it 'does not consume a non-seekable payload while logging' do
+      log = Contractful.log = []
+      rd, wr = IO.pipe
+      begin
+        wr.write('payload-data')
+        wr.close
+        request = Contractful::Request.new(method: :post, url: 'http://url', payload: rd)
+
+        request.log_request
+
+        expect(request.payload.read).to eq 'payload-data'
+        expect(log.first).to include('streaming body')
+      ensure
+        rd.close unless rd.closed?
+        wr.close unless wr.closed?
+      end
     end
 
     it 'logs a post request with a large payload' do

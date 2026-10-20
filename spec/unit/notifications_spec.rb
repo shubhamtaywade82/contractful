@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
+require 'stringio'
 
 RSpec.describe Contractful::Notifications do
   before { described_class.clear! }
@@ -45,14 +46,13 @@ RSpec.describe Contractful::Notifications do
     end
 
     it 'logs subscriber failures when Contractful.log is set' do
-      sink = []
-      log = ->(msg) { sink << msg }
-      Contractful.log = log
+      sink = StringIO.new
+      Contractful.log = sink
       described_class.subscribe { raise ArgumentError, 'nope' }
 
       described_class.post('request')
 
-      expect(sink.join).to include('notification subscriber raised ArgumentError: nope')
+      expect(sink.string).to include('notification subscriber raised ArgumentError: nope')
     end
   end
 end
@@ -88,6 +88,16 @@ RSpec.describe 'request pipeline notifications' do
       expect(events.first[:payload]).to include(method: 'get', url: 'http://example.com/resource', attempt: 1)
       expect(events.last[:payload]).to include(status: 200)
       expect(events.last[:payload][:duration_ms]).to be_a(Float)
+    end
+
+    it 'redacts URL passwords from request and response events' do
+      url = 'http://alice:s3cr3t@example.com/resource'
+      stub_request(:get, url).to_return(body: 'ok')
+
+      run_get(url)
+
+      urls = events.map { |e| e[:payload][:url] }
+      expect(urls).to all(eq('http://alice:REDACTED@example.com/resource'))
     end
   end
 

@@ -27,8 +27,8 @@ module Contractful
   #
   #   resource = Contractful::Resource.new('http://some/resource', :headers => { :client_version => 1 })
   #
-  # This header will be transported as X-Client-Version (notice the X prefix,
-  # capitalization and hyphens)
+  # This header will be transported as Client-Version (symbol keys are split
+  # on underscores and capitalized; no X- prefix is added)
   #
   # Use the [] syntax to allocate subresources:
   #

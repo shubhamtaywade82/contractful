@@ -107,7 +107,7 @@ describe Contractful::Response, :include_helpers do
 
   describe 'exceptions processing' do
     it 'returns itself for normal codes' do
-      (200..206).each do |code|
+      ((200..208).to_a + [226]).each do |code|
         net_http_res = res_double(code: code.to_s)
         resp = Contractful::Response.create('abc', net_http_res, @request)
         expect(resp.return!).to equal(resp)
@@ -116,7 +116,7 @@ describe Contractful::Response, :include_helpers do
 
     it 'throws an exception for other codes' do
       Contractful::Exceptions::EXCEPTIONS_MAP.each_pair do |code, exc|
-        next if (200..207).include? code
+        next if (200..299).include? code
 
         net_http_res = res_double(code: code.to_i)
         resp = Contractful::Response.create('abc', net_http_res, @request)
@@ -143,10 +143,66 @@ describe Contractful::Response, :include_helpers do
       expect(r.history.fetch(0).code).to be 301
     end
 
-    it 'follows a redirection and keep the parameters' do
-      stub_request(:get, 'http://some/resource').with(headers: { 'Accept' => 'application/json' }, basic_auth: %w[foo bar]).to_return(body: '', status: 301, headers: { 'Location' => 'http://new/resource' })
-      stub_request(:get, 'http://new/resource').with(headers: { 'Accept' => 'application/json' }, basic_auth: %w[foo bar]).to_return(body: 'Foo')
-      expect(Contractful::Request.execute(url: 'http://some/resource', method: :get, user: 'foo', password: 'bar', headers: { accept: :json }).body).to eq 'Foo'
+    it 'keeps credentials on a same-origin redirection' do
+      stub_request(:get, 'http://some/resource')
+        .with(basic_auth: %w[foo bar], headers: { 'Accept' => 'application/json' })
+        .to_return(body: '', status: 301, headers: { 'Location' => 'http://some/next' })
+      stub_request(:get, 'http://some/next')
+        .with(basic_auth: %w[foo bar], headers: { 'Accept' => 'application/json' })
+        .to_return(body: 'Foo')
+
+      expect(
+        Contractful::Request.execute(url: 'http://some/resource', method: :get,
+                                     user: 'foo', password: 'bar',
+                                     headers: { accept: :json }).body
+      ).to eq 'Foo'
+    end
+
+    it 'strips basic auth on a cross-origin redirection' do
+      stub_request(:get, 'http://some/resource')
+        .with(basic_auth: %w[foo bar])
+        .to_return(body: '', status: 301, headers: { 'Location' => 'http://other/resource' })
+
+      seen_headers = nil
+      stub_request(:get, 'http://other/resource').to_return do |request|
+        seen_headers = request.headers
+        { body: 'Foo' }
+      end
+
+      response = Contractful::Request.execute(url: 'http://some/resource', method: :get,
+                                              user: 'foo', password: 'bar')
+
+      expect(response.body).to eq 'Foo'
+      expect(seen_headers).not_to have_key('Authorization')
+    end
+
+    it 'strips explicit authorization headers on a cross-origin redirection' do
+      stub_request(:get, 'http://some/resource')
+        .with(headers: { 'Authorization' => 'Bearer top-secret' })
+        .to_return(body: '', status: 301, headers: { 'Location' => 'http://other/resource' })
+
+      seen_headers = nil
+      stub_request(:get, 'http://other/resource').to_return do |request|
+        seen_headers = request.headers
+        { body: 'Foo' }
+      end
+
+      Contractful::Request.execute(url: 'http://some/resource', method: :get,
+                                   headers: { authorization: 'Bearer top-secret' })
+
+      expect(seen_headers).not_to have_key('Authorization')
+    end
+
+    it 'refuses to follow an https-to-http downgrade' do
+      stub_request(:get, 'https://secure.test/resource')
+        .to_return(body: '', status: 301, headers: { 'Location' => 'http://plain.test/resource' })
+      stub_request(:get, 'http://plain.test/resource').to_return(body: 'insecure')
+
+      expect do
+        Contractful::Request.execute(url: 'https://secure.test/resource', method: :get)
+      end.to raise_error(Contractful::MovedPermanently)
+
+      expect(a_request(:get, 'http://plain.test/resource')).not_to have_been_made
     end
 
     it 'follows a redirection and keep the cookies' do

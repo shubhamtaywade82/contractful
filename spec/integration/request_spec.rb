@@ -2,7 +2,7 @@
 
 require_relative '_lib'
 
-describe Contractful::Request do
+describe Contractful::Request, :live do
   before(:all) do
     WebMock.disable!
   end

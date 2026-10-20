@@ -18,6 +18,22 @@ RSpec.describe Contractful::CircuitBreaker do
   end
 
   describe 'state machine' do
+    it 'lets a subscriber inspect the breaker without deadlocking' do
+      observed = []
+      b = described_class.new('https://notified.test:443', threshold: 1, cooldown: 60)
+      unsubscribe = Contractful::Notifications.subscribe do |event|
+        observed << [event[:payload][:state], b.state]
+      end
+      begin
+        b.record_failure
+      ensure
+        unsubscribe.call
+        Contractful::Notifications.clear!
+      end
+
+      expect(observed).to eq [%i[open open]]
+    end
+
     it 'stays closed under the threshold and opens at it' do
       expect(breaker.state).to eq :closed
       2.times { breaker.record_failure }
@@ -136,6 +152,37 @@ RSpec.describe 'circuit breaker end-to-end' do
 
     WebMock.reset!
     expect { Contractful::Request.execute(**opts) }.to raise_error(Contractful::CircuitOpenError)
+  end
+
+  it 'does not open on client errors' do
+    not_found_url = 'http://breaker.test:80/missing'
+    stub_request(:get, not_found_url).to_return(status: 404)
+    opts = {
+      method: :get,
+      url: not_found_url,
+      max_retries: 0,
+      breaker: { threshold: 2, cooldown: 60 }
+    }
+
+    2.times do
+      expect { Contractful::Request.execute(**opts) }
+        .to raise_error(Contractful::ResourceNotFound)
+    end
+
+    breaker = Contractful::CircuitBreaker.registry.breaker_for(URI('http://breaker.test:80'))
+    expect(breaker.state).to eq :closed
+    expect { Contractful::Request.execute(**opts) }
+      .to raise_error(Contractful::ResourceNotFound)
+  end
+
+  it 'ignores an unknown response instead of treating it as success' do
+    unknown_breaker = Contractful::CircuitBreaker.new('https://unknown.test:443', threshold: 1, cooldown: 60)
+    unknown_breaker.record_failure
+    expect(unknown_breaker.state).to eq :open
+
+    unknown_breaker.record_response(nil)
+
+    expect(unknown_breaker.state).to eq :open
   end
 
   it 'is opt-in: without breaker no state accumulates' do

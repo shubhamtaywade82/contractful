@@ -4,8 +4,10 @@ This document is the normative list of contractful's public API. Names
 documented here are covered by semantic versioning: removing or changing one
 requires a major release. Anything not listed here (underscore-prefixed
 machinery like `__own_contract_config`, private helpers) is internal and may
-change in any release. The contract-first layer introduced in 2.4/2.5 is
-part of the public surface and follows the same rules.
+change in any release. The contract-first layer is part of the public surface
+and follows the same rules. Version markers in parentheses refer to the
+upstream rest-client release line in which a feature first appeared;
+contractful 0.1.0 ships all of them.
 
 ## Module-level entry points
 

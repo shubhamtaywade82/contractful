@@ -16,12 +16,14 @@ telemetry (INTEGRATIONS.md policy): the gem reports only to whoever asks.
 - Logged content: the request line (method, URL, payload summary) and the
   response line (status, content type, size) — enough to correlate with
   application logs, not a full wire dump.
-- **Redaction guidance (security-relevant):** request lines include URLs —
-  never place credentials in URLs; auth headers are not logged, but callers
-  who add custom logging via `before_request` must redact
-  `Authorization`, `Cookie`, and API-key headers themselves. Assume
-  anything you put in a header may end up in *your* logs if you log the
-  context.
+- **Redaction guidance (security-relevant):** request lines include URLs.
+  URL userinfo is supported: the password is redacted from request logs,
+  notifications and `Request#inspect` (the username remains). Prefer auth
+  headers or `user:`/`password:` options, because proxies and custom handlers
+  can still see the raw URL. Auth headers are not logged, but callers who add
+  custom logging via `before_request` must redact `Authorization`, `Cookie`,
+  and API-key headers themselves. Assume anything you put in a header may end
+  up in *your* logs if you log the context.
 
 ### Exceptions as diagnostics
 

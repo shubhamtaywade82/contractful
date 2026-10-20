@@ -10,6 +10,11 @@ module Contractful
   # Response behavior shared by Response and RawResponse: status and header
   # inspection, cookie handling, redirection history and return semantics.
   module AbstractResponse
+    # Headers that must never be forwarded to a different origin when
+    # following a redirect (RFC 9110 §15.4: a client should not forward
+    # credentials to a third party).
+    SENSITIVE_REDIRECT_HEADERS = %w[authorization proxy-authorization cookie].freeze
+
     attr_reader :net_http_res, :request, :start_time, :end_time, :duration
 
     def inspect
@@ -117,7 +122,7 @@ module Contractful
 
     # Return the default behavior corresponding to the response code:
     #
-    # For 20x status codes: return the response itself
+    # For 2xx status codes: return the response itself
     #
     # For 30x status codes:
     #   301, 302, 307: redirect GET / HEAD if there is a Location header
@@ -127,7 +132,7 @@ module Contractful
     #
     def return!(&block)
       case code
-      when 200..207
+      when 200..299
         self
       when 301, 302, 307
         case request.method
@@ -215,18 +220,30 @@ module Contractful
     #
     def _follow_redirection(new_args, &block)
       # parse location header and merge into existing URL
-      url = headers[:location]
+      location = headers[:location]
 
       # cannot follow redirection if there is no location header
-      raise exception_with_response unless url
+      raise exception_with_response unless location
 
-      # handle relative redirects
-      url = URI.parse(request.url).merge(url).to_s unless url.start_with?('http')
-      new_args[:url] = url
+      target = URI.parse(location)
+      target = request.uri.merge(target) unless target.absolute?
 
-      new_args[:password] = request.password
-      new_args[:user] = request.user
-      new_args[:headers] = request.headers
+      # Never downgrade an encrypted request to plaintext.
+      raise exception_with_response if request.uri.scheme == 'https' && target.scheme == 'http'
+
+      new_args[:url] = target.to_s
+
+      if same_origin?(request.uri, target)
+        new_args[:password] = request.password
+        new_args[:user] = request.user
+        new_args[:headers] = request.headers
+      else
+        # A redirect to another origin must not receive the caller's
+        # credentials (basic auth or an explicit Authorization/Cookie header).
+        new_args.delete(:user)
+        new_args.delete(:password)
+        new_args[:headers] = without_sensitive_headers(request.headers)
+      end
       new_args[:max_redirects] = request.max_redirects - 1
 
       # pass through our new cookie jar
@@ -240,6 +257,16 @@ module Contractful
 
       # execute redirected request
       new_req.execute(&block)
+    end
+
+    def same_origin?(from, to)
+      from.scheme == to.scheme && from.host == to.host && from.port == to.port
+    end
+
+    def without_sensitive_headers(headers)
+      headers.reject do |key, _value|
+        SENSITIVE_REDIRECT_HEADERS.include?(key.to_s.downcase)
+      end
     end
 
     def check_max_redirects

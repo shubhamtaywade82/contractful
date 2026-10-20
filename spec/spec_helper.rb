@@ -58,6 +58,9 @@ RSpec.configure do |config|
   # add helpers
   config.include Helpers, :include_helpers
 
+  # Live-network specs are opt-in; CI never depends on external hosts.
+  config.filter_run_excluding :live unless ENV['LIVE_HTTP_TESTS']
+
   config.mock_with :rspec do |mocks|
     mocks.yield_receiver_to_any_instance_implementation_blocks = true
   end

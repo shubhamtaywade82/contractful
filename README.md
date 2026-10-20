@@ -84,16 +84,20 @@ There are also several development dependencies. It's recommended to use
 [bundler](http://bundler.io/) to manage these dependencies for hacking on
 contractful.
 
-### Upgrading to contractful 2.0 from 1.x
+### Upgrading from rest-client
 
-Users are encouraged to upgrade to contractful 2.0, which cleans up a number of
-API warts and wrinkles, making contractful generally more useful. Usage is
-largely compatible, so many applications will be able to upgrade with no
-changes.
+contractful 0.1.0 is the renamed continuation of the modernized rest-client
+codebase. Update the gem name, the `require` path, and the `RestClient`
+constants to `contractful` / `Contractful`; the request API and options are
+otherwise unchanged.
+
+The rest-client 2.0 line, included in this codebase, cleaned up a number of
+API warts and wrinkles. Usage is largely compatible, so many applications will
+be able to upgrade with no changes.
 
 Overview of significant changes:
 
-* requires Ruby >= 2.0
+* requires Ruby >= 3.0
 * `Contractful::Response` objects are a subclass of `String` rather than a
   Frankenstein monster. And `#body` or `#to_s` return a true `String` object.
 * cleanup of exception classes, including new `Contractful::Exceptions::Timeout`
@@ -206,9 +210,9 @@ Contractful::Request.execute(method: :get, url: 'http://example.com/resource',
 
 ## Automatic retries
 
-<em>New in 2.3.</em> Requests can be retried automatically when they fail with a
-transient network-level error. Opt in with `:max_retries`; delays between
-attempts grow exponentially from `:retry_interval` (default 0.5s):
+Requests can be retried automatically when they fail transiently. Opt in
+with `:max_retries`; delays between attempts grow exponentially from
+`:retry_interval` (default 0.5s):
 `retry_interval`, `retry_interval * 2`, `retry_interval * 4`, ...
 
 ```ruby
@@ -216,14 +220,14 @@ Contractful::Request.execute(method: :get, url: 'http://example.com/resource',
                             max_retries: 3, retry_interval: 0.5)
 ```
 
-Retried failures are network errors: open/read/write timeouts, a server
+Network failures are retried by default: open/read/write timeouts, a server
 that breaks the connection (`EOFError`), connection reset/abort, and broken
-pipes. By default HTTP error responses (4xx/5xx) are never retried — see
-the 2.5 classification below for the retryable-status exception — and
-redirects behave as usual.
+pipes. HTTP error responses (4xx/5xx) are not treated as network failures;
+retryable statuses are handled by the classification below, and redirects
+behave as usual.
 
-<em>New in 2.5.</em> The error model now classifies failures as **retryable
-vs terminal**. HTTP statuses 408, 425, 429, 500, 502, 503 and 504
+The error model classifies failures as **retryable vs terminal**. HTTP
+statuses 408, 425, 429, 500, 502, 503 and 504
 (`Contractful::Exceptions::RETRIABLE_STATUSES`) are treated as transient like
 network failures and retried when `:max_retries` is positive. Between
 attempts the server's `Retry-After` header is honored (delta-seconds or
@@ -253,7 +257,7 @@ Contractful::Request.execute(method: :get, url: 'http://example.com',
                             max_retries: 2, open_timeout: 2)
 ```
 
-<em>New in 0.1.0.</em> Retrying in lockstep is its own outage amplifier:
+Retrying in lockstep is its own outage amplifier:
 when many clients hit the same failing service, identical exponential
 backoff makes them all knock again at the same instant. `:retry_jitter`
 randomizes the computed backoff so retries spread out — `:full` draws from
@@ -271,7 +275,7 @@ Contractful::Request.execute(method: :get, url: 'http://example.com',
 
 ## Persistent connections (keep-alive)
 
-<em>New in 2.3.</em> Pass `persistent: true` to reuse the underlying TCP/TLS
+Pass `persistent: true` to reuse the underlying TCP/TLS
 connection across requests via the process-wide connection pool, instead of
 opening a new connection for every request. This saves the connection and TLS
 handshake overhead when making many requests to the same host.
@@ -307,15 +311,15 @@ know connections have gone stale.
 
 ## Circuit breaker
 
-<em>New in 0.1.0.</em> Retries answer transient errors; a circuit breaker
+Retries answer transient errors; a circuit breaker
 answers a host that is *down* — without one, every request still pays the
 full timeout and every retry amplifies the load on something that is
 already dying. Opt in per request with `breaker: true` (defaults) or a
 config Hash:
 
 ```ruby
-Contractful.get('https://api.example.com/x',
-                breaker: { threshold: 5, cooldown: 30 })
+Contractful::Request.execute(method: :get, url: 'https://api.example.com/x',
+                            breaker: { threshold: 5, cooldown: 30 })
 ```
 
 Counted as failures: network errors and retryable statuses (408/425/429/5xx)
@@ -326,7 +330,9 @@ that scheme/host/port fails fast with `Contractful::CircuitOpenError` for
 (half-open) and its outcome closes or re-opens the circuit. Breakers are
 process-wide and thread-safe; state transitions post a `circuit`
 notification (see [Event notifications](#event-notifications)), so metrics
-can watch open/half-open/closed as a first-class signal.
+can watch open/half-open/closed as a first-class signal. The first breaker
+configuration for a scheme/host/port wins; later `breaker:` values for the
+same origin reuse the existing breaker.
 
 ```ruby
 Contractful::Notifications.subscribe do |event|
@@ -337,27 +343,28 @@ end
 
 ## Rate-limit pacing
 
-<em>New in 0.1.0.</em> The breaker reacts to failure; pacing prevents the
-429s in the first place. Opt in per request with `pace: true` (defaults:
-600 requests per 60s window) or a config Hash:
+The breaker reacts to failure; pacing prevents the 429s in the first place.
+Opt in per request with `pace: true` (defaults: 600 requests per 60s window)
+or a config Hash:
 
 ```ruby
-Contractful.get('https://api.example.com/x',
-                pace: { limit: 100, window: 60, max_wait: 10 })
+Contractful::Request.execute(method: :get, url: 'https://api.example.com/x',
+                            pace: { limit: 100, window: 60, max_wait: 10 })
 ```
 
 Pacing is per scheme/host/port across the whole process (all threads
 included) using a sliding window: every attempt — retries included —
-acquires a slot before the request leaves. A full window makes the request
-sleep until the oldest slot expires (posting a `pace` notification with
-the delay); a wait longer than `max_wait` raises
+acquires a slot before the request leaves. The first `pace:` configuration
+for an origin wins; later values reuse the existing pacer. A full window
+makes the request sleep until the oldest slot expires (posting a `pace`
+notification with the delay); a wait longer than `max_wait` raises
 `Contractful::PacingTimeout` instead of stalling silently. Callers that
 cannot tolerate waiting should set a small `max_wait` and treat the
 timeout as their own backpressure signal.
 
 ## Contract-first API clients
 
-<em>New in 2.4.</em> `Contractful::Contract` is a contract-first layer built on
+`Contractful::Contract` is a contract-first layer built on
 heavy metaprogramming: you *declare* the HTTP shape of an API — verb, path,
 typed parameters, expected responses — and the gem generates the client
 methods, path builders, validation and introspection for you. The contract
@@ -763,7 +770,7 @@ at load time, before anything runs.
 
 ## Event notifications
 
-<em>New in 0.1.0.</em> The request pipeline posts lifecycle events to an
+The request pipeline posts lifecycle events to an
 in-process hub, so metrics, tracing and alerting never require touching the
 transport. Subscribers must not raise — a failing subscriber is logged and
 skipped, so observability cannot break the request it observes:
@@ -934,7 +941,7 @@ use whatever proxy the system is configured to use:
   Contractful.proxy = ENV['http_proxy']
 ```
 
-__New in 2.0:__ Specify a per-request proxy by passing the :proxy option to
+Specify a per-request proxy by passing the :proxy option to
 Contractful::Request. This will override any proxies set by environment variable
 or by the global `Contractful.proxy` value.
 
@@ -958,7 +965,7 @@ Contractful can render a hash as HTTP query parameters for GET/HEAD/DELETE
 requests or as HTTP post data in `x-www-form-urlencoded` format for POST
 requests.
 
-__New in 2.0:__ Even though there is no standard specifying how this should
+Even though there is no standard specifying how this should
 work, contractful follows a similar convention to the one used by Rack / Rails
 servers for handling arrays, nested hashes, and null values.
 
@@ -1034,7 +1041,7 @@ GET:
   {"outer"=>{"foo"=>"123", "bar"=>"456"}}
 ```
 
-__New in 2.0:__ The new `Contractful::ParamsArray` class allows callers to
+The `Contractful::ParamsArray` class allows callers to
 provide ordering even to structured parameters. This is useful for unusual
 cases where the server treats the order of parameters as significant or you
 want to pass a particular key multiple times.
@@ -1108,14 +1115,11 @@ response2 = Contractful.post(
 )
 # ...response body
 ```
-### Full cookie jar support (new in 1.8)
+### Full cookie jar support
 
 The original cookie implementation was very naive and ignored most of the
-cookie RFC standards.
-__New in 1.8__:  An HTTP::CookieJar of cookies
-
-Response objects now carry a cookie_jar method that exposes an HTTP::CookieJar
-of cookies, which supports full standards compliant behavior.
+cookie RFC standards. Response objects carry a `cookie_jar` method that
+exposes an HTTP::CookieJar of cookies with full standards-compliant behavior.
 
 ## SSL/TLS support
 

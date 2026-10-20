@@ -129,10 +129,12 @@ module Contractful
         request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
         merge_meta_options!(request_args, meta)
 
-        execute_request(request_args, definition)
+        execute_request(request_args, definition, instance)
       end
 
       def token_provider_for(instance, definition)
+        return nil if definition.auth.equal?(false)
+
         # auth may be declared on the contract itself or on the class
         [definition.auth, instance.class.__merged_scalar(:auth)].each do |auth|
           next unless auth.is_a?(Contractful::Contract::Auth)
@@ -144,10 +146,11 @@ module Contractful
       end
 
       # Execute the request. When the contract declares expected error
-      # statuses (4xx/5xx), the default contractful exception behavior is
-      # suppressed and every response is judged by the contract instead.
-      def execute_request(request_args, definition)
-        if declares_error_status?(definition)
+      # statuses (4xx/5xx) or a token provider can recover from a 401, the
+      # default contractful exception behavior is suppressed and every
+      # response is judged by the contract instead.
+      def execute_request(request_args, definition, instance)
+        if declares_error_status?(definition) || token_provider_for(instance, definition)
           Contractful::Request.execute(request_args) do |response|
             handle_suppressed(response)
           end

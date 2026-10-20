@@ -40,16 +40,18 @@ validated client code.
 - **API SDK authors** who wrap a vendor API (a trading platform, a SaaS
   product) and want typed, validated, documented client methods generated
   from declarations.
-- **Maintainers of long-lived Ruby apps** stuck on old contractful 1.x/2.x
+- **Maintainers of long-lived Ruby apps** stuck on old rest-client 1.x/2.x
   who need a drop-in that works on modern Rubies.
 
 ## Feature requirements
 
 IDs are normative; the traceability matrix in
 [docs/requirements/REQUIREMENTS.md](docs/requirements/REQUIREMENTS.md) maps
-each to acceptance criteria and specs.
+each to acceptance criteria and specs. The "Upstream since" column records
+the rest-client release line in which the feature first appeared;
+contractful ships all of them from 0.1.0.
 
-| ID | Feature | Since |
+| ID | Feature | Upstream since |
 | --- | --- | --- |
 | FR-1 | One-liner DSL: `Contractful.get/post/put/patch/delete/head/options` | 1.x |
 | FR-2 | `Resource` / ActiveResource-style nesting | 1.x |
@@ -80,7 +82,7 @@ each to acceptance criteria and specs.
 
 - CI matrix green on every push (hard gate; a red matrix blocks merge).
 - Zero open bug reports about Ruby 3.x/4.x incompatibility after a release.
-- The public API stays drop-in compatible for contractful 2.x users; breaking
+- The public API stays drop-in compatible for rest-client 2.x users; breaking
   changes require a major version and a documented migration path.
 - Contract-layer features require no new runtime dependencies (checked at
   every release).

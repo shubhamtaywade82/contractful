@@ -39,6 +39,18 @@ RSpec::Core::RakeTask.new('spec:integration:run') do |t|
   t.pattern = 'spec/integration/*_spec.rb'
 end
 
+desc 'Run live-network integration specs (requires internet access)'
+task 'spec:live' do
+  ENV['COVERAGE_SUITE'] = 'live'
+  ENV['LIVE_HTTP_TESTS'] = '1'
+  Rake::Task['spec:live:run'].invoke
+end
+
+RSpec::Core::RakeTask.new('spec:live:run') do |t|
+  t.pattern = 'spec/integration/*_spec.rb'
+  t.rspec_opts = ['--tag', 'live']
+end
+
 desc 'Run RuboCop static analysis (see .rubocop.yml for the baseline strategy)'
 require 'rubocop/rake_task'
 RuboCop::RakeTask.new('rubocop')

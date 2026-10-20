@@ -683,12 +683,14 @@ module Contractful
         options[:inclusion] = schema['enum'] if schema['enum'].is_a?(Array)
 
         # OpenAPI 3.0: minimum + exclusiveMinimum:true. OpenAPI 3.1 allows a
-        # numeric exclusiveMinimum instead of minimum. Integer bounds shift
-        # by one; non-integer exclusivity is approximated with a note.
+        # numeric exclusiveMinimum instead of minimum. Only integer schemas
+        # can absorb exclusivity by shifting the bound by one; a number
+        # (float) schema is approximated with an inclusive bound and a note.
+        integer_type = schema['type'] == 'integer'
         if schema.key?('minimum') || schema['exclusiveMinimum'].is_a?(Numeric)
           bound = schema.key?('minimum') ? schema['minimum'] : schema['exclusiveMinimum']
           exclusive = schema['exclusiveMinimum'] == true || schema['exclusiveMinimum'].is_a?(Numeric)
-          if exclusive && bound.is_a?(Integer)
+          if exclusive && integer_type && bound.is_a?(Integer)
             options[:min] = bound + 1
           else
             ctx.note("#{label}: exclusiveMinimum approximated as an inclusive bound") if exclusive
@@ -699,7 +701,7 @@ module Contractful
         if schema.key?('maximum') || schema['exclusiveMaximum'].is_a?(Numeric)
           bound = schema.key?('maximum') ? schema['maximum'] : schema['exclusiveMaximum']
           exclusive = schema['exclusiveMaximum'] == true || schema['exclusiveMaximum'].is_a?(Numeric)
-          if exclusive && bound.is_a?(Integer)
+          if exclusive && integer_type && bound.is_a?(Integer)
             options[:max] = bound - 1
           else
             ctx.note("#{label}: exclusiveMaximum approximated as an inclusive bound") if exclusive

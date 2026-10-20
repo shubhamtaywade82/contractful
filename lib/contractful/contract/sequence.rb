@@ -296,8 +296,9 @@ module Contractful
         # fixtures did not pin down; use expect_request to pin them).
         def register_stub!(definition, step)
           base = client.__contract_base.to_s
-          pattern = Regexp.escape(base.sub(%r{/+\z}, '')) +
-                    definition.path_template.gsub(/:[a-zA-Z_][a-zA-Z0-9_]*/) { '[^/]+' }
+          path = Regexp.escape(definition.path_template)
+                       .gsub(/:[a-zA-Z_][a-zA-Z0-9_]*/, '[^/]+')
+          pattern = Regexp.escape(base.sub(%r{/+\z}, '')) + path
           response = step[:response]
           headers = response[:headers].dup
           body = response[:body]
@@ -307,7 +308,7 @@ module Contractful
           end
           rendered = body.is_a?(Hash) || body.is_a?(Array) ? JSON.generate(body) : body
 
-          WebMock::API.stub_request(definition.verb, /\A#{pattern}/)
+          WebMock::API.stub_request(definition.verb, /\A#{pattern}(?:\?.*)?\z/)
                       .to_return(status: response[:status],
                                  headers: headers,
                                  body: rendered || '')
@@ -404,9 +405,10 @@ module Contractful
             if value.is_a?(Hash)
               next "expected #{dotted} inside a JSON object, got #{actual.class}" unless actual.is_a?(Hash)
 
-              deep_subset_violations(value, actual[key.to_s] || actual[key], dotted)
+              nested = actual.key?(key.to_s) ? actual[key.to_s] : actual[key]
+              deep_subset_violations(value, nested, dotted)
             elsif actual.is_a?(Hash) && (actual.key?(key.to_s) || actual.key?(key))
-              found = actual[key.to_s] || actual[key]
+              found = actual.key?(key.to_s) ? actual[key.to_s] : actual[key]
               next unless found != value
 
               "expected #{dotted}=#{value.inspect}, got #{found.inspect}"

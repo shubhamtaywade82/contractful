@@ -30,26 +30,30 @@ spec/
 │   ├── connection_pool_spec.rb, rate_limit_spec.rb, ...
 │   └── ...
 ├── integration/           # HTTP behavior through the real Request path
-│   ├── integration_spec.rb, request_spec.rb   # WebMock-stubbed
-│   └── httpbin_spec.rb    # LIVE network (WebMock disabled) — see below
+│   ├── integration_spec.rb                    # WebMock-stubbed, offline
+│   └── request_spec.rb, httpbin_spec.rb,
+│       contract_spec.rb                       # tagged :live (WebMock disabled)
 └── helpers.rb, spec_helper.rb
 ```
 
 Rules of placement: unit specs never touch real sockets (they exercise
 `Request` with WebMock or stubbed transports); integration specs drive the
-full request path; only `httpbin_spec.rb` and the contract live specs touch
-the network, because TLS, real headers and redirect chains deserve at least
-one truthful end-to-end verification.
+full request path. Specs that require a real host are tagged `:live` and
+excluded unless `LIVE_HTTP_TESTS` is set, because TLS, real headers and
+redirect chains deserve truthful end-to-end verification without making CI
+depend on the network.
 
 ## Commands
 
 ```sh
 bundle exec rake spec:unit         # spec/unit/** — includes contract/ (fixed to do so)
-bundle exec rake spec:integration  # spec/integration/* — includes the live httpbin specs
-bundle exec rake spec              # everything (default task)
+bundle exec rake spec:integration  # offline integration specs; :live excluded
+bundle exec rake spec:live         # live-network specs only (needs internet)
+bundle exec rake spec              # everything offline (default task)
 bundle exec rake doc               # specdoc dry-run
 ```
 
+Set `LIVE_HTTP_TESTS=1` to include the `:live` examples in any RSpec run.
 CI (`.github/workflows/ci.yml`) runs `spec:unit` and `spec:integration` on
 Ruby 3.0–4.0, plus an experimental non-blocking `ruby-head` job. A red
 matrix blocks merge; a red `ruby-head` is a warning about tomorrow.
@@ -113,7 +117,7 @@ spec and test the sequence with WebMock-orchestrated pages.
 ## Release QA checklist
 
 Before tagging a release, maintainers run the full `rake spec` on the
-reference Ruby, spot-check the live httpbin specs, build both gemspecs,
-install the built Ruby-platform gem into a scratch gemset and run the
-README smoke snippets. The suite being green is necessary, not sufficient —
-packaging and docs are part of quality.
+reference Ruby, run `bundle exec rake spec:live` against the real hosts,
+build both gemspecs, install the built Ruby-platform gem into a scratch
+gemset and run the README smoke snippets. The suite being green is
+necessary, not sufficient — packaging and docs are part of quality.

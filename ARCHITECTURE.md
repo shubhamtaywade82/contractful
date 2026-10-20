@@ -11,7 +11,7 @@ calls on demand.
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ Contract layer — Contractful::Contract (2.4+)               │
+│ Contract layer — Contractful::Contract                     │
 │   DSL macros → Definition → Executor → define_method      │
 │   typed params · response contracts · auth · idempotency   │
 │   pagination · rate-limit · callbacks · reflection         │

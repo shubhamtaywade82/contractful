@@ -159,7 +159,8 @@ module Contractful
     # Network-level failures that are considered transient. When the
     # `:max_retries` request option is greater than zero, requests that fail
     # with one of these errors are retried automatically (with exponential
-    # backoff). HTTP error responses (4xx/5xx) are never retried.
+    # backoff). Retryable HTTP statuses (`Exceptions::RETRIABLE_STATUSES`)
+    # are retried by the pipeline as well; see #execute.
     RETRIABLE_EXCEPTIONS = [
       Contractful::Exceptions::Timeout, # includes Open/Read/WriteTimeout
       Contractful::ServerBrokeConnection,
@@ -169,7 +170,7 @@ module Contractful
     ].freeze
 
     def inspect
-      "<Contractful::Request @method=#{@method.inspect}, @url=#{@url.inspect}>"
+      "<Contractful::Request @method=#{@method.inspect}, @url=#{redacted_url.inspect}>"
     end
 
     def initialize args
@@ -336,6 +337,15 @@ module Contractful
       # state between attempts.
       attempts = 0
       started = nil
+      event_url = redacted_url
+      response_for_attempt = nil
+      attempt_block =
+        if block
+          proc do |http_response, request, raw|
+            response_for_attempt = http_response
+            block.call(http_response, request, raw, &block)
+          end
+        end
       breaker = @breaker ? CircuitBreaker.registry.breaker_for(uri, **breaker_options) : nil
       breaker&.check!
       pacer = @pace ? Pacer.registry.pacer_for(uri, **pace_options) : nil
@@ -343,36 +353,38 @@ module Contractful
         loop do
           req = net_http_request_class(method).new(uri, processed_headers)
           pacer&.acquire
-          Notifications.post('request', method: method, url: uri.to_s, attempt: attempts + 1)
+          Notifications.post('request', method: method, url: event_url, attempt: attempts + 1)
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          result = transmit uri, req, payload, & block
+          response_for_attempt = nil
+          result = transmit uri, req, payload, & attempt_block
+          response = result.is_a?(Contractful::Response) ? result : response_for_attempt
           Notifications.post(
-            'response', method: method, url: uri.to_s,
-                        status: result.respond_to?(:code) ? result.code : nil,
+            'response', method: method, url: event_url,
+                        status: response.respond_to?(:code) ? response.code : nil,
                         duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
           )
 
           # When a block handles responses itself (error-status suppression),
           # retryable statuses never raise — judge the returned response.
           if block_given? && retry_after && attempts < max_retries &&
-             result.is_a?(Contractful::Response) &&
-             Exceptions.retryable?(result.code) && rewind_payload!
+             response.is_a?(Contractful::Response) &&
+             Exceptions.retryable?(response.code) && rewind_payload!
             attempts += 1
-            delay = retry_delay_for_response(result, attempts)
-            Notifications.post('retry', method: method, url: uri.to_s,
-                                        attempt: attempts, delay: delay, cause: result.code)
-            log_response_retry(result, attempts, delay)
+            delay = retry_delay_for_response(response, attempts)
+            Notifications.post('retry', method: method, url: event_url,
+                                        attempt: attempts, delay: delay, cause: response.code)
+            log_response_retry(response, attempts, delay)
             sleep_for_retry(delay)
             next
           end
-          breaker&.record_response(result)
+          breaker&.record_response(response)
           break result
         end
       rescue *RETRIABLE_EXCEPTIONS => e
         attempts += 1
         if attempts <= max_retries && rewind_payload!
           delay = retry_backoff_delay(attempts)
-          Notifications.post('retry', method: method, url: uri.to_s,
+          Notifications.post('retry', method: method, url: event_url,
                                       attempt: attempts, delay: delay, cause: e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
@@ -384,20 +396,21 @@ module Contractful
         # Error statuses raise inside transmit, so the response event for a
         # failed attempt posts here rather than after the transmit call.
         Notifications.post(
-          'response', method: method, url: uri.to_s, status: e.http_code,
+          'response', method: method, url: event_url, status: e.http_code,
                       duration_ms: started && ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
         )
         attempts += 1
         if retry_after && attempts <= max_retries && e.retryable? && rewind_payload!
           delay = retry_delay_for_response(e.response, attempts)
-          Notifications.post('retry', method: method, url: uri.to_s, attempt: attempts,
+          Notifications.post('retry', method: method, url: event_url, attempt: attempts,
                                       delay: delay,
                                       cause: e.response ? e.http_code : e.class.name)
           log_retry(e, attempts, delay)
           sleep_for_retry(delay)
           retry
         end
-        breaker&.record_failure
+        breaker&.record_response(e.response) if e.response
+        breaker&.record_failure unless e.response
         raise
       end
     ensure
@@ -610,7 +623,7 @@ module Contractful
     #
     # stringify_headers only normalizes Symbol keys to the canonical
     # `Content-Type` style capitalization; String keys are passed through
-    # verbatim for backwards compatibility with contractful 1.x/2.x
+    # verbatim for backwards compatibility with rest-client 1.x/2.x
     # (https://github.com/rest-client/rest-client/issues/599). Because
     # equivalent header names may therefore be spelled with different
     # casing, the merges below are case-insensitive: a later header whose
@@ -755,6 +768,8 @@ module Contractful
     end
 
     def redacted_uri
+      return unless uri
+
       if uri.password
         sanitized_uri = uri.dup
         sanitized_uri.password = 'REDACTED'
@@ -802,7 +817,7 @@ module Contractful
     #
     # Design note: only Symbol keys are normalized to `Content-Type` style
     # capitalization. String keys are passed through verbatim, matching
-    # contractful 1.x/2.x behavior
+    # rest-client 1.x/2.x behavior
     # (https://github.com/rest-client/rest-client/issues/599). String keys
     # are therefore not canonicalized (e.g. 'x-custom-header' stays
     # lowercase on the wire), which some clients depend on; equivalent
@@ -1325,7 +1340,7 @@ module Contractful
 
       response.log_response
 
-      # Public API (frozen since contractful 1.x, see docs/adr/0004): the
+      # Public API (frozen since rest-client 1.x, see docs/adr/0004): the
       # user block receives the Response (a String subclass), this request,
       # and the raw Net::HTTP result; the block itself is passed through as
       # a fourth argument for callers that delegate. Do not change the

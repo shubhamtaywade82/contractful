@@ -210,9 +210,9 @@ Contractful::Request.execute(method: :get, url: 'http://example.com/resource',
 
 ## Automatic retries
 
-Requests can be retried automatically when they fail with a
-transient network-level error. Opt in with `:max_retries`; delays between
-attempts grow exponentially from `:retry_interval` (default 0.5s):
+Requests can be retried automatically when they fail transiently. Opt in
+with `:max_retries`; delays between attempts grow exponentially from
+`:retry_interval` (default 0.5s):
 `retry_interval`, `retry_interval * 2`, `retry_interval * 4`, ...
 
 ```ruby
@@ -220,14 +220,14 @@ Contractful::Request.execute(method: :get, url: 'http://example.com/resource',
                             max_retries: 3, retry_interval: 0.5)
 ```
 
-Retried failures are network errors: open/read/write timeouts, a server
+Network failures are retried by default: open/read/write timeouts, a server
 that breaks the connection (`EOFError`), connection reset/abort, and broken
-pipes. By default HTTP error responses (4xx/5xx) are never retried — see
-the retryable-status classification below for the exception — and
-redirects behave as usual.
+pipes. HTTP error responses (4xx/5xx) are not treated as network failures;
+retryable statuses are handled by the classification below, and redirects
+behave as usual.
 
-The error model classifies failures as **retryable
-vs terminal**. HTTP statuses 408, 425, 429, 500, 502, 503 and 504
+The error model classifies failures as **retryable vs terminal**. HTTP
+statuses 408, 425, 429, 500, 502, 503 and 504
 (`Contractful::Exceptions::RETRIABLE_STATUSES`) are treated as transient like
 network failures and retried when `:max_retries` is positive. Between
 attempts the server's `Retry-After` header is honored (delta-seconds or

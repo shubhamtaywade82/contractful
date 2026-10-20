@@ -254,6 +254,46 @@ describe Contractful::Request, :include_helpers do
       expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
     end
 
+    it 'classifies the response when the block returns a non-response value' do
+      events = []
+      unsubscribe = Contractful::Notifications.subscribe { |e| events << e }
+      begin
+        stub_request(:get, 'http://some/resource')
+          .to_return(status: 503).then.to_return(status: 200, body: 'ok')
+
+        result = Contractful::Request.execute(url: 'http://some/resource',
+                                              method: :get,
+                                              max_retries: 1,
+                                              retry_interval: 0) do |_response|
+          :handled
+        end
+
+        expect(result).to eq :handled
+        expect(a_request(:get, 'http://some/resource')).to have_been_made.twice
+        response_events = events.select { |e| e[:name] == 'response' }
+        expect(response_events.map { |e| e[:payload][:status] }).to eq [503, 200]
+      ensure
+        unsubscribe.call
+      end
+    end
+
+    it 'records a retryable response as a breaker failure even when the block returns a non-response' do
+      url = 'http://breaker-block.test:80/fail'
+      stub_request(:get, url).to_return(status: 503)
+
+      begin
+        Contractful::Request.execute(url: url, method: :get, max_retries: 0,
+                                     breaker: { threshold: 1, cooldown: 60 }) do |_response|
+          :handled
+        end
+
+        breaker = Contractful::CircuitBreaker.registry.breaker_for(URI('http://breaker-block.test:80'))
+        expect(breaker.state).to eq :open
+      ensure
+        Contractful::CircuitBreaker.registry.clear!
+      end
+    end
+
     it 'does not retry terminal statuses like 404' do
       stub = stub_request(:get, 'http://some/resource')
              .to_return(status: 404).then.to_return(body: 'should not happen')

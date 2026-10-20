@@ -25,7 +25,9 @@ module Contractful
       elsif params.is_a?(String)
         Base.new(params)
       elsif params.is_a?(Hash)
-        if params.delete(:multipart) == true || has_file?(params)
+        if params[:multipart] == true
+          Multipart.new(params.reject { |key, _value| key.equal?(:multipart) })
+        elsif has_file?(params)
           Multipart.new(params)
         else
           UrlEncoded.new(params)
@@ -112,7 +114,7 @@ module Contractful
         else
           false
         end
-      rescue IOError
+      rescue IOError, SystemCallError
         false
       end
 
@@ -131,11 +133,24 @@ module Contractful
       end
 
       def short_inspect
-        if size && size > 500
-          "#{size} byte(s) length"
-        else
-          to_s_inspect
-        end
+        return "#{size} byte(s) length" if size && size > 500
+        return 'streaming body'.inspect unless seekable?
+
+        to_s_inspect
+      end
+
+      private
+
+      # A stream that responds to #seek may still reject it (pipes and
+      # sockets raise Errno::ESPIPE). Probing the current position avoids
+      # consuming the stream merely to render it in a log line.
+      def seekable?
+        return false unless @stream.respond_to?(:seek)
+
+        @stream.seek(0, IO::SEEK_CUR)
+        true
+      rescue IOError, SystemCallError
+        false
       end
     end
 

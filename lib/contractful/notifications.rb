@@ -86,8 +86,8 @@ module Contractful
       def notify(listener, event)
         listener.call(event)
       rescue StandardError => e
-        Contractful.log&.call(
-          "contractful: notification subscriber raised #{e.class}: #{e.message}"
+        Contractful.log&.<<(
+          "contractful: notification subscriber raised #{e.class}: #{e.message}\n"
         )
       end
     end

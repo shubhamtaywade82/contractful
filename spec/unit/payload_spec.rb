@@ -260,6 +260,21 @@ describe Contractful::Payload, :include_helpers do
         end
       end
 
+      it 'reports a pipe as non-rewindable instead of raising Errno::ESPIPE' do
+        rd, wr = IO.pipe
+        begin
+          wr.write('pipe-data')
+          wr.close
+          payload = Contractful::Payload.generate(rd)
+
+          expect { payload.rewind }.not_to raise_error
+          expect(payload.rewind).to be false
+        ensure
+          rd.close unless rd.closed?
+          wr.close unless wr.closed?
+        end
+      end
+
       it 'logs small non-seekable payloads without crashing (short_inspect path)' do
         payload = Contractful::Payload.generate(plain_reader)
         expect { payload.short_inspect }.not_to raise_error
@@ -279,6 +294,14 @@ describe Contractful::Payload, :include_helpers do
 
     it 'is multipart if forced' do
       expect(Contractful::Payload.generate({ 'foo' => 'bar', :multipart => true })).to be_kind_of(Contractful::Payload::Multipart)
+    end
+
+    it 'does not mutate the caller hash when multipart is forced' do
+      params = { 'foo' => 'bar', :multipart => true }
+
+      expect(Contractful::Payload.generate(params)).to be_kind_of(Contractful::Payload::Multipart)
+      expect(params).to eq('foo' => 'bar', :multipart => true)
+      expect(Contractful::Payload.generate(params)).to be_kind_of(Contractful::Payload::Multipart)
     end
 
     it 'handles deeply nested multipart' do

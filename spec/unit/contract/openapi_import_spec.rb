@@ -210,6 +210,42 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
       expect(param.required?).to be true
     end
 
+    it 'shifts an exclusive integer bound by one' do
+      d = { 'openapi' => '3.0.3',
+            'paths' => {
+              '/counts' => { 'get' => {
+                'operationId' => 'getCounts',
+                'parameters' => [{ 'name' => 'count', 'in' => 'query',
+                                   'schema' => { 'type' => 'integer', 'exclusiveMinimum' => 5 } }],
+                'responses' => {}
+              } }
+            } }
+
+      import = mod.import(d)
+
+      expect(import.definitions[:get_counts].params[:count].min).to eq 6
+      expect(import.notes.join).not_to match(/exclusiveMinimum approximated/)
+    end
+
+    it 'does not shift an exclusive numeric bound for a number schema' do
+      d = { 'openapi' => '3.0.3',
+            'paths' => {
+              '/ratios' => { 'get' => {
+                'operationId' => 'getRatios',
+                'parameters' => [{ 'name' => 'ratio', 'in' => 'query',
+                                   'schema' => { 'type' => 'number', 'exclusiveMinimum' => 5 } }],
+                'responses' => {}
+              } }
+            } }
+
+      import = mod.import(d)
+      param = import.definitions[:get_ratios].params[:ratio]
+
+      expect(param.min).to eq 5
+      expect(import.notes.join).to match(/exclusiveMinimum approximated as an inclusive bound/)
+      expect { param.process!(5.5) }.not_to raise_error
+    end
+
     it 'maps request body properties with required from the schema required array' do
       params = definitions[:create_user].params
       expect(params[:email].required?).to be true

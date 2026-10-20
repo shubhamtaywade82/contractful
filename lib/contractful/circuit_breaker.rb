@@ -108,10 +108,16 @@ module Contractful
     end
 
     # Judge a transmitted response: retryable statuses are failures,
-    # everything else (4xx included) is a success.
+    # everything else (4xx included) is a success. An unknown result (for
+    # example the raw `block_response` path, which has no Response object)
+    # is not evidence of success and leaves the breaker unchanged.
     def record_response(response)
-      code = response.respond_to?(:code) ? response.code.to_i : nil
-      if code && Exceptions.retryable?(code)
+      return unless response.respond_to?(:code)
+
+      code = response.code.to_i
+      return if code.zero?
+
+      if Exceptions.retryable?(code)
         record_failure
       else
         record_success

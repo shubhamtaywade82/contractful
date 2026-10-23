@@ -593,8 +593,12 @@ end
 When a request comes back 401, the executor refreshes the provider in
 **one flight** (concurrent 401s share a single refresh — per-provider
 mutex, posting a `token_refresh` notification) and retries the request
-exactly once with the fresh credential. A second 401 is returned or
-raised like any other declared status; there is no refresh loop.
+exactly once with the fresh credential. A second 401 is judged like any other
+status: returned when the contract declares it, otherwise raised as
+`Contractful::Unauthorized`. There is no refresh loop. The same rule covers
+every undeclared 4xx/5xx on a token-provider contract, including one that
+declares no `responds` at all: it raises the mapped exception instead of
+arriving as a silent success.
 
 Auth is resolved right before the `before_request` callbacks run, so
 callbacks can still inspect or override the resolved credentials. Individual

@@ -73,7 +73,13 @@ module Contractful
       # Declare a parameter. See {Param} for the supported options.
       def param(name, type = nil, **options)
         key = name.to_sym
-        @params[key] = Param.new(key, type, **options)
+        param = Param.new(key, type, **options)
+        if param.location && path_param_names.include?(key)
+          raise InvalidDefinition,
+                "path parameter :#{key} cannot also be a #{param.location} param for :#{@name}"
+        end
+
+        @params[key] = param
       end
 
       # Declare the payload style for non-query params:

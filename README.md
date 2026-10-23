@@ -740,7 +740,9 @@ puts Contractful::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
                                                  class_name: 'Acme::Client')
 ```
 
-What is mapped: path/query/body-object params (types, required, defaults,
+What is mapped: path and query params, plus the properties of a JSON or
+form-urlencoded request body (JSON wins when both are offered), with types,
+required, defaults,
 enum/min/max/length/pattern constraints), `payload_style` (form for
 urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
 (numeric and `2XX` wildcards), JSON body types and open-schema

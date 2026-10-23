@@ -276,6 +276,53 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
       expect(definitions(d)[:post_token].payload_style).to eq :form
     end
 
+    it 'maps form-urlencoded request body properties to params like JSON body properties' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/customers' => { 'post' => {
+          'requestBody' => { 'content' => {
+            'application/x-www-form-urlencoded' => { 'schema' => {
+              'type' => 'object',
+              'required' => ['email'],
+              'properties' => {
+                'email' => { 'type' => 'string' },
+                'name' => { 'type' => 'string' },
+                'balance' => { 'type' => 'integer' }
+              }
+            } }
+          } },
+          'responses' => {}
+        } }
+      } }
+      import = mod.import(d)
+      definition = import.definitions[:post_customers]
+
+      expect(definition.payload_style).to eq :form
+      expect(definition.params.keys).to eq %i[email name balance]
+      expect(definition.params[:email].required?).to be true
+      expect(definition.params[:balance].type).to eq Integer
+      expect(import.notes).to be_empty
+    end
+
+    it 'prefers the JSON body when a request offers both JSON and form media types' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/orders' => { 'post' => {
+          'requestBody' => { 'content' => {
+            'application/json' => { 'schema' => {
+              'type' => 'object', 'properties' => { 'sku' => { 'type' => 'string' } }
+            } },
+            'application/x-www-form-urlencoded' => { 'schema' => {
+              'type' => 'object', 'properties' => { 'coupon' => { 'type' => 'string' } }
+            } }
+          } },
+          'responses' => {}
+        } }
+      } }
+      definition = mod.import(d).definitions[:post_orders]
+
+      expect(definition.params.keys).to eq [:sku]
+      expect(definition.payload_style).to be_nil
+    end
+
     it 'uses payload_style :query for body-less POST/PUT/PATCH with query params' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/search' => { 'post' => {
@@ -611,6 +658,48 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     it 'rejects invalid params before any network traffic' do
       expect { Object.const_get(class_name).new.list_users(page: 0) }
         .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
+      expect(a_request(:any, //)).not_to have_been_made
+    end
+  end
+
+  describe 'generated form-body clients execute end-to-end' do
+    let(:class_name) { "ImportFormSmoke#{object_id.abs}" }
+    let(:doc) do
+      {
+        'openapi' => '3.0.3',
+        'servers' => [{ 'url' => 'https://form.test' }],
+        'paths' => {
+          '/customers' => {
+            'post' => {
+              'operationId' => 'createCustomer',
+              'requestBody' => { 'content' => { 'application/x-www-form-urlencoded' => { 'schema' => {
+                'type' => 'object',
+                'required' => ['email'],
+                'properties' => {
+                  'email' => { 'type' => 'string' },
+                  'balance' => { 'type' => 'integer' }
+                }
+              } } } },
+              'responses' => { '200' => { 'description' => 'ok' } }
+            }
+          }
+        }
+      }
+    end
+
+    before { TOPLEVEL_BINDING.eval(mod.to_ruby(doc, class_name: class_name)) }
+
+    it 'sends the declared body fields as form parameters' do
+      stub = stub_request(:post, 'https://form.test/customers')
+             .with { |req| URI.decode_www_form(req.body).to_h == { 'email' => 'a@b.test', 'balance' => '5' } }
+
+      Object.const_get(class_name).new.create_customer(email: 'a@b.test', balance: 5)
+      expect(stub).to have_been_made
+    end
+
+    it 'rejects a missing required body field before any network traffic' do
+      expect { Object.const_get(class_name).new.create_customer(balance: 5) }
+        .to raise_error(Contractful::Contract::MissingParam, /email/)
       expect(a_request(:any, //)).not_to have_been_made
     end
   end

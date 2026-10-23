@@ -15,6 +15,12 @@
   silently became `8`. Strings are now read in base 10. `"08"` and non-finite
   floats (`NaN`, infinities) raised a raw `ArgumentError` or `FloatDomainError`
   instead of `InvalidParam`; they now raise `InvalidParam`.
+* Fixed: the OpenAPI importer set `payload_style :form` for form-urlencoded
+  request bodies but mapped none of their properties, and reported nothing.
+  Generated clients raised `UnknownParam` for every body field (306 operations
+  in Stripe's 3.0 spec). The properties of a form-urlencoded body now become
+  params, as JSON body properties already did. When a request offers both
+  media types, the JSON body still supplies the params and the payload style.
 
 # 0.1.0
 

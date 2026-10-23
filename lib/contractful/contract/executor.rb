@@ -238,7 +238,7 @@ module Contractful
         end
 
         if definition.response_verifier &&
-           !call_verifier(definition.response_verifier, response, parsed)
+           !call_verifier(definition, definition.response_verifier, response, parsed)
           raise UnexpectedResponse.new(
             "verify_response block rejected the response for #{definition.describe}",
             response: response
@@ -318,17 +318,23 @@ module Contractful
 
       # Arity-aware verifier invocation: blocks that declare two parameters
       # additionally receive the JSON-parsed body (parsed lazily).
-      def call_verifier(block, response, parsed)
-        if block.arity >= 2
-          parsed ||= begin
-            JSON.parse(response.body)
-          rescue StandardError
-            nil
-          end
-          block.call(response, parsed)
-        else
-          block.call(response)
-        end
+      def call_verifier(definition, block, response, parsed)
+        return block.call(response) unless block.arity >= 2
+
+        parsed = verifier_json(definition, response) if parsed.nil?
+        block.call(response, parsed)
+      end
+
+      # The JSON body for a two-parameter verifier. A body that is not JSON is an
+      # unexpected response: handing the block nil would let it mistake a failure
+      # for data.
+      def verifier_json(definition, response)
+        JSON.parse(response.body)
+      rescue JSON::ParserError, TypeError => e
+        raise UnexpectedResponse.new(
+          "verify_response needs a JSON body for #{definition.describe}: #{e.message}",
+          response: response
+        )
       end
 
       # Resolve the contract's auth scheme (unless the contract opted out

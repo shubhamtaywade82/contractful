@@ -253,6 +253,37 @@ RSpec.describe 'Contractful::Contract response validation' do
       expect(client_class.new.list_posts).to be_a(Contractful::Response)
     end
 
+    it 'raises rather than passing nil to a two-parameter block when the body is not JSON' do
+      block_called = false
+      client_class = build_client do
+        contract :list_posts, 'GET /posts' do
+          responds 200
+          verify_response do |_response, parsed|
+            block_called = true
+            parsed.nil? || parsed.is_a?(Array)
+          end
+        end
+      end
+      stub_request(:get, 'https://api.test/posts').to_return(body: '<html>maintenance</html>')
+
+      expect do
+        client_class.new.list_posts
+      end.to raise_error(Contractful::Contract::UnexpectedResponse, /verify_response needs a JSON body/)
+      expect(block_called).to be false
+    end
+
+    it 'passes nil to a two-parameter block when the body is a JSON null' do
+      client_class = build_client do
+        contract :get_post, 'GET /posts/1' do
+          responds 200
+          verify_response { |_response, parsed| parsed.nil? }
+        end
+      end
+      stub_request(:get, 'https://api.test/posts/1').to_return(body: 'null')
+
+      expect(client_class.new.get_post).to be_a(Contractful::Response)
+    end
+
     it 'lets exceptions raised inside the block propagate' do
       client_class = build_client do
         contract :list_posts, 'GET /posts' do

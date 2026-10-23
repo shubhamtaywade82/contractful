@@ -128,6 +128,7 @@ module Contractful
         }
         request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
         merge_meta_options!(request_args, meta)
+        request_args[:idempotent] = true if idempotent_call?(definition, meta)
 
         execute_request(request_args, definition, instance)
       end
@@ -354,6 +355,13 @@ module Contractful
         key = explicit || instance.class.idempotency_generator.call
         header = instance.class.idempotency_header
         ctx[:headers] = ctx[:headers].merge(header => key)
+      end
+
+      # A call is idempotent when the contract declares it or the caller pins
+      # a key. Both cases send a key the server can deduplicate on, which is
+      # what makes retrying a non-GET call safe.
+      def idempotent_call?(definition, meta)
+        definition.idempotent.equal?(true) || !meta[:_idempotency_key].nil?
       end
 
       def symbolize_keys(hash)

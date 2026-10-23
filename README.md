@@ -247,6 +247,25 @@ bad token, a missing resource or a bad payload. Retryable-status retries
 also apply inside the block/error-suppression path, so contract clients get
 them via `_max_retries:` as well.
 
+Retries are limited to idempotent operations. GET, HEAD, OPTIONS, PUT and
+DELETE are idempotent under RFC 9110, so they retry without any declaration.
+POST and PATCH are not: a request that timed out may already have been
+processed, and retrying it can repeat the operation (an order placed twice,
+for example). A positive `:max_retries` on such a request raises
+`ArgumentError` before any network traffic. Declare the request idempotent
+only when the server deduplicates requests, for example with an
+`Idempotency-Key` header:
+
+```ruby
+Contractful::Request.execute(method: :post, url: 'https://api.example.com/orders',
+                             payload: body, idempotent: true, max_retries: 2)
+```
+
+Contract clients get the same rule: `_max_retries:` on a non-idempotent
+contract raises, while `idempotent true` on the contract (see
+[Idempotency keys](#idempotency-keys)) or a per-call `_idempotency_key:`
+makes the retries safe.
+
 Request payloads are rewound between attempts, so bodies are retransmitted in
 full. If a payload cannot be rewound (for example a non-seekable request
 stream), the request is not retried and the original network error is raised.

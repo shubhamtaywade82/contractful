@@ -42,6 +42,11 @@ module Contractful
   #     EPIPE) or when the response carries a retryable HTTP status (see
   #     :retry_after). Defaults to 0 (disabled). Retries use exponential
   #     backoff (or the server's Retry-After for HTTP statuses).
+  # * :idempotent declares that repeating the request has the same effect as
+  #     sending it once. Defaults to true for GET, HEAD, OPTIONS, TRACE, PUT and
+  #     DELETE (RFC 9110 §9.2.2) and to false otherwise. A positive :max_retries
+  #     requires an idempotent request: a timed-out POST may already have been
+  #     processed by the server, so retrying it can repeat the operation.
   # * :retry_interval base delay in seconds between retries (default 0.5).
   #     The delay doubles with each retry: retry_interval, retry_interval * 2,
   #     retry_interval * 4, ...
@@ -169,6 +174,11 @@ module Contractful
       Errno::EPIPE
     ].freeze
 
+    # Methods RFC 9110 §9.2.2 defines as idempotent: repeating one has the same
+    # effect as sending it once, so a retry cannot duplicate it. POST and PATCH
+    # are deliberately absent.
+    IDEMPOTENT_METHODS = %w[get head options trace put delete].freeze
+
     def inspect
       "<Contractful::Request @method=#{@method.inspect}, @url=#{redacted_url.inspect}>"
     end
@@ -253,6 +263,24 @@ module Contractful
         raise ArgumentError.new(
           ':max_retries must be a non-negative Integer, ' +
           "got #{@max_retries.inspect}"
+        )
+      end
+
+      @idempotent = args.fetch(:idempotent, IDEMPOTENT_METHODS.include?(@method))
+      unless [true, false].include?(@idempotent)
+        raise ArgumentError.new(
+          ':idempotent must be true or false, ' +
+          "got #{@idempotent.inspect}"
+        )
+      end
+      if @max_retries.positive? && !@idempotent
+        raise ArgumentError.new(
+          ':max_retries requires an idempotent operation, but this ' +
+          "#{@method.upcase} request is not. A timed-out or 5xx request may " +
+          'already have been processed, so a retry can repeat it. Declare the ' +
+          'operation idempotent (idempotent: true on Request, `idempotent true` ' +
+          'on a contract) only if the server deduplicates requests, for example ' +
+          'with an Idempotency-Key header.'
         )
       end
 

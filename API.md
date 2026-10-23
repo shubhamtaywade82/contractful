@@ -45,6 +45,7 @@ meta options):
 | `:cookies` | Cookie hash or jar |
 | `:persistent` | Use the keep-alive connection pool (2.3+) |
 | `:max_retries`, `:retry_interval` | Automatic retry count and base delay (exponential backoff) (2.3+) |
+| `:idempotent` | Repeating the request has the same effect as sending it once. Defaults to true for GET, HEAD, OPTIONS, TRACE, PUT and DELETE (RFC 9110), false otherwise. A positive `:max_retries` requires it to be true. |
 | `:retry_after`, `:max_retry_after` | Honor server `Retry-After` and cap its value (2.5+) |
 | `:log` | Per-request logger override |
 | `:block_response` | Raw response handler |

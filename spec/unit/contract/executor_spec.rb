@@ -449,6 +449,7 @@ RSpec.describe 'Contractful::Contract executor' do
         contract :create_order, 'POST /orders' do
           param :security_id, String, required: true
           responds 200, 201, 503
+          idempotent true
         end
       end
 

@@ -52,6 +52,11 @@ module Contractful
 
       MAX_REF_DEPTH = 10
 
+      # Where bundled external files live inside the document.
+      EXTERNAL_KEY = 'x-contractful-external'
+      # A URL scheme makes a $ref remote (scheme://...).
+      REMOTE_REF = %r{\A[a-zA-Z][a-zA-Z0-9+.-]*://}
+
       module_function
 
       # --- public API -------------------------------------------------------
@@ -380,7 +385,15 @@ module Contractful
         false
       end
 
+      # A document read from a file: its external $refs are bundled relative to
+      # that file (see bundle_external_refs).
       def load_file(path)
+        doc = parse_file(path)
+        bundle_external_refs(doc, File.expand_path(path)) if doc.is_a?(Hash)
+        doc
+      end
+
+      def parse_file(path)
         raise Error, "no such file: #{path}" unless File.file?(path)
 
         if YAML.respond_to?(:safe_load_file)
@@ -406,6 +419,60 @@ module Contractful
         YAML.safe_load(stripped, aliases: true) || raise(Error, 'empty document')
       rescue Psych::SyntaxError => e
         raise Error, "invalid YAML/JSON text: #{e.message}"
+      end
+
+      # External $refs (references into other files) are bundled into the
+      # document, so the importer resolves every reference against one document.
+      # Each external file is copied once, under EXTERNAL_KEY, and its refs are
+      # rewritten to point there. Only local files are read: remote URLs stay
+      # unresolved and are reported on the notes, so nothing is fetched.
+      def bundle_external_refs(doc, root_path)
+        state = { root: doc, root_path: root_path, ids: {}, visited: {}.compare_by_identity }
+        rewrite_refs(state, doc, File.dirname(root_path), '#')
+        doc
+      end
+
+      def rewrite_refs(state, node, dir, prefix)
+        case node
+        when Hash
+          return if state[:visited].key?(node)
+
+          state[:visited][node] = true
+          ref = node['$ref']
+          if ref.is_a?(String) && !ref.match?(REMOTE_REF)
+            node['$ref'] = ref.start_with?('#') ? local_ref(prefix, ref) : external_ref(state, ref, dir)
+          end
+          # A snapshot: bundling adds EXTERNAL_KEY to the root while it is walked.
+          node.to_a.each { |_key, value| rewrite_refs(state, value, dir, prefix) }
+        when Array
+          node.each { |value| rewrite_refs(state, value, dir, prefix) }
+        end
+      end
+
+      # A local ref inside an external file points into that file's copy.
+      def local_ref(prefix, ref)
+        prefix == '#' ? ref : "#{prefix}#{ref[1..]}"
+      end
+
+      def external_ref(state, ref, dir)
+        file, fragment = ref.split('#', 2)
+        path = File.expand_path(file, dir)
+        return "##{fragment}" if path == state[:root_path]
+
+        "#/#{EXTERNAL_KEY}/#{external_id(state, path)}#{fragment}"
+      end
+
+      # The id of an external file's copy, copying it on first use. The id is
+      # assigned before the file's own refs are rewritten, so cycles terminate.
+      def external_id(state, path)
+        return state[:ids][path] if state[:ids].key?(path)
+
+        id = state[:ids].size + 1
+        state[:ids][path] = id
+        target = parse_file(path)
+        (state[:root][EXTERNAL_KEY] ||= {})[id.to_s] = target
+        rewrite_refs(state, target, File.dirname(path), "#/#{EXTERNAL_KEY}/#{id}")
+        id
       end
 
       # JSON Pointer ($ref) resolution inside the document, with ~0/~1

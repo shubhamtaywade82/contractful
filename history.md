@@ -1,5 +1,8 @@
 # Unreleased
 
+* Fixed: a two-parameter `verify_response` block received `nil` when the body
+  was not JSON, so it could pass a response that was never parsed. It now
+  raises `UnexpectedResponse` and the block is not called.
 * Fixed: a positive `:max_retries` on a non-idempotent request (POST, PATCH)
   is refused with `ArgumentError` before any network traffic, unless the
   request is declared `idempotent: true` (contracts: `idempotent true`, or a

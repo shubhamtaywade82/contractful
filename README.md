@@ -511,6 +511,11 @@ contract :list_posts, 'GET /posts' do
 end
 ```
 
+A two-parameter `verify_response` block receives the JSON-parsed body. When
+the body is not JSON, the block is not called and the response raises
+`UnexpectedResponse`; the block never sees `nil` for a body that failed to
+parse. A body that is the JSON value `null` still reaches the block as `nil`.
+
 Declaring any 4xx/5xx status suppresses contractful's default
 exception-raising for that contract: the response is returned and judged by
 the contract instead (redirects are still followed). Anything unexpected —

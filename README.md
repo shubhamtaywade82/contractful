@@ -746,9 +746,10 @@ Clients also accept instance-level overrides: `GitHubAPI.new(base:
 
 ### Importing an OpenAPI document
 
-If a vendor publishes a machine-readable OpenAPI 3.x document, the opt-in
-import helper converts it into `contract` declarations — a development-time
-tool, not a runtime dependency (it is not loaded by `require 'contractful'`):
+If a vendor publishes a machine-readable OpenAPI 3.x or Swagger 2.0 document,
+the opt-in import helper converts it into `contract` declarations — a
+development-time tool, not a runtime dependency (it is not loaded by
+`require 'contractful'`):
 
 ```ruby
 require 'contractful/contract/openapi_import'
@@ -763,6 +764,13 @@ import.notes         # every lossy mapping decision, for review
 puts Contractful::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
                                                  class_name: 'Acme::Client')
 ```
+
+A Swagger 2.0 document (`swagger: '2.0'`) is converted to OpenAPI 3.0 first, in
+the same import: `host`, `basePath` and `schemes` become the base URL; body and
+formData parameters become a request body; definitions, responses and
+`securityDefinitions` map to their OpenAPI 3.0 counterparts. Swagger 2.0 files
+bundled through `$ref` are converted as they are read. The conversion keeps the
+same notes as the OpenAPI import, so unmapped constructs stay visible.
 
 What is mapped: path, query, header and cookie params (header and cookie
 params become `header:` and `cookie:` options), plus the properties of a JSON or

@@ -125,9 +125,9 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
         .to raise_error(mod::Error, /invalid YAML/)
     end
 
-    it 'raises on Swagger 2.x documents' do
+    it 'rejects an openapi field with a 2.x value, which is not a version (Swagger 2.0 uses swagger:)' do
       expect { definitions({ 'openapi' => '2.0', 'paths' => {} }) }
-        .to raise_error(mod::Error, /convert the document to OpenAPI 3\.x/)
+        .to raise_error(mod::Error, /'openapi' version field "2\.0" \(expected 3\.x\)/)
     end
 
     it 'raises on a missing or non-3.x version' do
@@ -400,6 +400,272 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
               } }
             } }
       expect(definitions(d)[:get_things].params[:limit].max).to eq 100
+    end
+  end
+
+  describe 'Swagger 2.0 conversion' do
+    let(:document) do
+      {
+        'swagger' => '2.0',
+        'info' => { 'title' => 'Legacy', 'version' => '1' },
+        'host' => 'api.legacy.test',
+        'basePath' => '/v2',
+        'schemes' => %w[http https],
+        'definitions' => { 'Pet' => { 'type' => 'object', 'required' => ['name'],
+                                      'properties' => { 'name' => { 'type' => 'string' } } } },
+        'paths' => {}
+      }
+    end
+    let(:pet_ref) { { '$ref' => '#/definitions/Pet' } }
+
+    # Converts the document with one POST /pets operation.
+    def convert_operation(operation, extra = {})
+      Contractful::Contract::Swagger2.convert(
+        document.merge(extra).merge('paths' => { '/pets' => { 'post' => operation } })
+      )
+    end
+
+    def operation_at(converted, method = 'post')
+      converted.dig('paths', '/pets', method)
+    end
+
+    def request_content(params, consumes)
+      operation_at(convert_operation('consumes' => consumes, 'parameters' => params, 'responses' => {}))
+        .dig('requestBody', 'content')
+    end
+
+    describe '.swagger?' do
+      it 'recognizes a Swagger 2.x document by its swagger key' do
+        expect(Contractful::Contract::Swagger2.swagger?(document)).to be true
+      end
+
+      it 'does not claim OpenAPI 3 documents or non-hashes', :aggregate_failures do
+        expect(Contractful::Contract::Swagger2.swagger?({ 'openapi' => '3.0.3' })).to be false
+        expect(Contractful::Contract::Swagger2.swagger?('swagger: 2.0')).to be false
+      end
+    end
+
+    describe 'document metadata' do
+      it 'declares OpenAPI 3.0.3, keeps info and x- extensions', :aggregate_failures do
+        converted = Contractful::Contract::Swagger2.convert(document.merge('x-team' => 'payments'))
+
+        expect(converted['openapi']).to eq '3.0.3'
+        expect(converted['info']).to eq('title' => 'Legacy', 'version' => '1')
+        expect(converted['x-team']).to eq 'payments'
+      end
+
+      it 'builds a server from host, basePath and the preferred scheme' do
+        servers = Contractful::Contract::Swagger2.convert(document)['servers']
+        expect(servers).to eq [{ 'url' => 'https://api.legacy.test/v2' }]
+      end
+
+      it 'keeps a relative server when the document has no host' do
+        doc = document.merge('host' => nil, 'schemes' => nil)
+        expect(Contractful::Contract::Swagger2.convert(doc)['servers']).to eq [{ 'url' => '/v2' }]
+      end
+
+      it 'declares no servers when there is neither host nor basePath' do
+        doc = document.except('host', 'basePath')
+        expect(Contractful::Contract::Swagger2.convert(doc)['servers']).to eq []
+      end
+    end
+
+    describe 'definitions and references' do
+      it 'moves definitions to components/schemas and rewrites references to them', :aggregate_failures do
+        converted = convert_operation(
+          'parameters' => [{ 'name' => 'pet', 'in' => 'body', 'required' => true, 'schema' => pet_ref }],
+          'responses' => { '200' => { 'description' => 'ok', 'schema' => pet_ref } }
+        )
+
+        expect(converted['components']['schemas']['Pet']['required']).to eq ['name']
+        expect(operation_at(converted).dig('requestBody', 'content', 'application/json', 'schema'))
+          .to eq('$ref' => '#/components/schemas/Pet')
+      end
+    end
+
+    describe 'parameters' do
+      it 'turns a body parameter into a requestBody using the first consumes media type', :aggregate_failures do
+        body = { 'name' => 'pet', 'in' => 'body', 'required' => true, 'schema' => { 'type' => 'object' } }
+        request = operation_at(convert_operation('consumes' => %w[application/xml application/json],
+                                                 'parameters' => [body], 'responses' => {}))['requestBody']
+
+        expect(request['required']).to be true
+        expect(request['content'].keys).to eq ['application/xml']
+      end
+
+      it 'maps formData parameters to an urlencoded object body with required fields' do
+        params = [{ 'name' => 'email', 'in' => 'formData', 'type' => 'string', 'required' => true },
+                  { 'name' => 'balance', 'in' => 'formData', 'type' => 'integer', 'format' => 'int32' }]
+        content = request_content(params, %w[application/x-www-form-urlencoded])
+        schema = content['application/x-www-form-urlencoded']['schema']
+
+        expect(schema).to eq('type' => 'object', 'required' => ['email'],
+                             'properties' => { 'email' => { 'type' => 'string' },
+                                               'balance' => { 'type' => 'integer', 'format' => 'int32' } })
+      end
+
+      it 'uses multipart when a formData parameter is a file', :aggregate_failures do
+        avatar = { 'name' => 'avatar', 'in' => 'formData', 'type' => 'file' }
+        content = request_content([avatar], %w[multipart/form-data])
+
+        expect(content.keys).to eq ['multipart/form-data']
+        avatar_schema = content['multipart/form-data']['schema']['properties']['avatar']
+        expect(avatar_schema).to eq('type' => 'string', 'format' => 'binary')
+      end
+
+      it 'converts query and path parameters into OpenAPI 3 parameter schemas' do
+        params = [{ 'name' => 'limit', 'in' => 'query', 'type' => 'integer', 'minimum' => 1, 'maximum' => 100,
+                    'collectionFormat' => 'multi', 'default' => 20 },
+                  { 'name' => 'id', 'in' => 'path', 'required' => true, 'type' => 'string' }]
+        converted = operation_at(convert_operation('parameters' => params, 'responses' => {}))['parameters']
+
+        expect(converted).to eq [
+          { 'name' => 'limit', 'in' => 'query',
+            'schema' => { 'type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 20 } },
+          { 'name' => 'id', 'in' => 'path', 'required' => true, 'schema' => { 'type' => 'string' } }
+        ]
+      end
+
+      it 'merges path-level parameters into each operation, with the operation winning' do
+        item = { 'parameters' => [{ 'name' => 'trace', 'in' => 'header', 'type' => 'string' },
+                                  { 'name' => 'limit', 'in' => 'query', 'type' => 'integer' }],
+                 'post' => { 'parameters' => [{ 'name' => 'limit', 'in' => 'query', 'type' => 'string' }],
+                             'responses' => {} } }
+        converted = Contractful::Contract::Swagger2.convert(document.merge('paths' => { '/pets' => item }))
+        params = operation_at(converted)['parameters']
+
+        pairs = params.map { |param| [param['name'], param['schema']['type']] }
+        expect(pairs).to eq [%w[trace string], %w[limit string]]
+      end
+
+      it 'resolves parameter references to the global parameters section' do
+        global = { 'PageSize' => { 'name' => 'page_size', 'in' => 'query', 'type' => 'integer' } }
+        item = { 'get' => { 'parameters' => [{ '$ref' => '#/parameters/PageSize' }], 'responses' => {} } }
+        doc = document.merge('parameters' => global, 'paths' => { '/pets' => item })
+
+        expect(Contractful::Contract::Swagger2.convert(doc).dig('paths', '/pets', 'get', 'parameters'))
+          .to eq [{ 'name' => 'page_size', 'in' => 'query', 'schema' => { 'type' => 'integer' } }]
+      end
+    end
+
+    describe 'responses' do
+      it 'uses the first produces media type and keeps the default response', :aggregate_failures do
+        responses = {
+          '200' => { 'description' => 'ok', 'schema' => { 'type' => 'array' } },
+          'default' => { 'description' => 'error' }
+        }
+        converted = convert_operation('produces' => %w[application/json application/xml], 'responses' => responses)
+        responses = operation_at(converted)['responses']
+
+        expect(responses['200']['content'].keys).to eq ['application/json']
+        expect(responses['default']).to eq('description' => 'error')
+      end
+
+      it 'keeps response references and moves the global responses to components/responses', :aggregate_failures do
+        global = { 'NotFound' => { 'description' => 'missing' } }
+        item = { 'get' => { 'responses' => { '404' => { '$ref' => '#/responses/NotFound' } } } }
+        doc = document.merge('responses' => global, 'paths' => { '/pets' => item })
+        converted = Contractful::Contract::Swagger2.convert(doc)
+
+        expect(converted.dig('paths', '/pets', 'get', 'responses', '404'))
+          .to eq('$ref' => '#/components/responses/NotFound')
+        expect(converted.dig('components', 'responses', 'NotFound')).to eq('description' => 'missing')
+      end
+
+      it 'maps a file response schema to a binary string' do
+        response = { '200' => { 'description' => 'file', 'schema' => { 'type' => 'file' } } }
+        schema = operation_at(convert_operation('responses' => response))
+                 .dig('responses', '200', 'content', 'application/json', 'schema')
+
+        expect(schema).to eq('type' => 'string', 'format' => 'binary')
+      end
+    end
+
+    describe 'security definitions' do
+      let(:definitions) do
+        { 'basic' => { 'type' => 'basic' },
+          'key' => { 'type' => 'apiKey', 'name' => 'X-Key', 'in' => 'header' },
+          'oauth' => { 'type' => 'oauth2', 'flow' => 'accessCode', 'authorizationUrl' => 'https://auth.test/authorize',
+                       'tokenUrl' => 'https://auth.test/token', 'scopes' => { 'read' => 'read data' } } }
+      end
+
+      it 'maps basic, apiKey and oauth2 definitions to securitySchemes', :aggregate_failures do
+        doc = document.merge('securityDefinitions' => definitions)
+        schemes = Contractful::Contract::Swagger2.convert(doc).dig('components', 'securitySchemes')
+
+        expect(schemes['basic']).to eq('type' => 'http', 'scheme' => 'basic')
+        expect(schemes['key']).to eq('type' => 'apiKey', 'name' => 'X-Key', 'in' => 'header')
+        expect(schemes['oauth']['flows'].keys).to eq ['authorizationCode']
+      end
+    end
+  end
+
+  describe 'Swagger 2.0 documents' do
+    let(:swagger) do
+      {
+        'swagger' => '2.0',
+        'info' => { 'title' => 'Legacy', 'version' => '1' },
+        'host' => 'api.legacy.test',
+        'basePath' => '/v2',
+        'schemes' => ['https'],
+        'securityDefinitions' => { 'basic' => { 'type' => 'basic' } },
+        'definitions' => {
+          'Pet' => { 'type' => 'object', 'required' => ['name'],
+                     'properties' => { 'name' => { 'type' => 'string' }, 'tag' => { 'type' => 'string' } } }
+        },
+        'paths' => { '/pets' => { 'post' => {
+          'operationId' => 'createPet',
+          'parameters' => [{ 'name' => 'pet', 'in' => 'body', 'required' => true,
+                             'schema' => { '$ref' => '#/definitions/Pet' } }],
+          'responses' => { '200' => { 'description' => 'ok', 'schema' => { '$ref' => '#/definitions/Pet' } } }
+        } } }
+      }
+    end
+
+    it 'imports the body, response fields, base URL and security as an OpenAPI 3 document would' do
+      import = mod.import(swagger)
+      definition = import.definitions[:create_pet]
+
+      expect(import.base_url).to eq 'https://api.legacy.test/v2'
+      expect(import.auth_hints.join).to match(/auth basic/)
+      expect(definition.params.keys).to eq %i[name tag]
+      expect(definition.params[:name].required?).to be true
+      expect(definition.response_fields.keys).to eq %i[name tag]
+    end
+
+    it 'renders a client whose contracts describe identically to the import' do
+      import = mod.import(swagger)
+      generated = Module.new
+      generated.module_eval(mod.to_ruby(swagger, class_name: 'LegacyPets'))
+      contract = generated.const_get(:LegacyPets).contract_for(:create_pet)
+
+      expect(contract.describe).to eq import.definitions[:create_pet].describe
+      expect(mod.to_ruby(swagger, class_name: 'LegacyPets')).to include('# Source: Legacy (Swagger 2.0, version 1)')
+    end
+
+    it 'bundles an external Swagger 2.0 file and resolves its own definitions' do
+      Dir.mktmpdir do |dir|
+        defs = {
+          'swagger' => '2.0', 'info' => { 'title' => 'defs', 'version' => '1' }, 'paths' => {},
+          'definitions' => {
+            'User' => { 'type' => 'object',
+                        'properties' => { 'id' => { 'type' => 'integer' },
+                                          'address' => { '$ref' => '#/definitions/Address' } } },
+            'Address' => { 'type' => 'object', 'properties' => { 'city' => { 'type' => 'string' } } }
+          }
+        }
+        File.write(File.join(dir, 'defs.yaml'), YAML.dump(defs))
+        ok = { 'description' => 'ok', 'schema' => { '$ref' => 'defs.yaml#/definitions/User' } }
+        root_doc = swagger.merge('paths' => { '/users' => { 'get' => { 'operationId' => 'listUsers',
+                                                                       'responses' => { '200' => ok } } } })
+        root_path = File.join(dir, 'api.yaml')
+        File.write(root_path, YAML.dump(root_doc))
+
+        definition = mod.import(root_path).definitions[:list_users]
+
+        expect(definition.response_fields[:id].type).to eq Integer
+        expect(definition.response_fields[:address].type).to eq Hash
+      end
     end
   end
 

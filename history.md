@@ -1,5 +1,11 @@
 # Unreleased
 
+* Added: the OpenAPI import helper accepts Swagger 2.0 documents. They are
+  converted to OpenAPI 3.0 before import: `host`, `basePath` and `schemes`
+  give the base URL, body and formData parameters give a request body, and
+  definitions, responses and `securityDefinitions` map across. Swagger 2.0
+  files bundled through `$ref` are converted as they are read. The `openapi:
+  2.0` field is still rejected, because it is not a version.
 * Added: the OpenAPI importer resolves `$ref`s into other local files when
   the document is read from a file. Each referenced file is bundled once, and
   refs inside it resolve relative to it. Circular references terminate. A

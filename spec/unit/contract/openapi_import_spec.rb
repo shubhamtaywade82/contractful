@@ -2,6 +2,7 @@
 
 require_relative '../../spec_helper'
 require 'contractful/contract/openapi_import'
+require 'fileutils'
 require 'tmpdir'
 require 'pathname'
 
@@ -399,6 +400,114 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
               } }
             } }
       expect(definitions(d)[:get_things].params[:limit].max).to eq 100
+    end
+  end
+
+  describe 'external file $refs' do
+    let(:dir) { Dir.mktmpdir }
+    let(:user_schema) do
+      { 'User' => { 'type' => 'object', 'required' => ['id'],
+                    'properties' => { 'id' => { 'type' => 'integer' } } } }
+    end
+
+    after { FileUtils.remove_entry(dir) }
+
+    def write_yaml(name, data)
+      path = File.join(dir, name)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, YAML.dump(data))
+      path
+    end
+
+    def root_document(ref, extra = {})
+      {
+        'openapi' => '3.0.3',
+        'paths' => { '/users' => { 'get' => {
+          'operationId' => 'listUsers',
+          'responses' => { '200' => { 'description' => 'ok', 'content' => { 'application/json' => {
+            'schema' => { '$ref' => ref }
+          } } } }
+        } } }
+      }.merge(extra)
+    end
+
+    it 'bundles a schema from a sibling file and types its fields' do
+      write_yaml('schemas/user.yaml', user_schema)
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[id]
+      expect(definition.response_fields[:id].required?).to be true
+      expect(definition.response_type).to eq Hash
+    end
+
+    it 'resolves local refs inside an external file against that file' do
+      write_yaml('schemas/user.yaml', {
+                   'User' => { 'type' => 'object', 'properties' => { 'address' => { '$ref' => '#/Address' } } },
+                   'Address' => { 'type' => 'object', 'properties' => { 'city' => { 'type' => 'string' } } }
+                 })
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields[:address].type).to eq Hash
+    end
+
+    it 'resolves refs inside an external file relative to that file' do
+      write_yaml('schemas/common/ids.yaml', { 'Id' => { 'type' => 'integer' } })
+      write_yaml('schemas/user.yaml', {
+                   'User' => { 'type' => 'object', 'properties' => { 'id' => { '$ref' => 'common/ids.yaml#/Id' } } }
+                 })
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      import = mod.import(root)
+
+      expect(import.definitions[:list_users].response_fields[:id].type).to eq Integer
+      expect(import.notes.grep(/unresolvable/)).to be_empty
+    end
+
+    it 'terminates on circular references between external files' do
+      write_yaml('a.yaml', { 'A' => { 'type' => 'object', 'properties' => { 'b' => { '$ref' => 'b.yaml#/B' } } } })
+      write_yaml('b.yaml', { 'B' => { 'type' => 'object', 'properties' => { 'a' => { '$ref' => 'a.yaml#/A' } } } })
+      root = write_yaml('api.yaml', root_document('a.yaml#/A'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[b]
+    end
+
+    it 'resolves a ref back into the root document without copying the root' do
+      components = { 'components' => { 'schemas' => {
+        'User' => { 'type' => 'object', 'properties' => { 'id' => { 'type' => 'integer' } } }
+      } } }
+      root = write_yaml('api.yaml', root_document('other.yaml#/Wrapper', components))
+      write_yaml('other.yaml', {
+                   'Wrapper' => { 'type' => 'object',
+                                  'properties' => { 'user' => { '$ref' => 'api.yaml#/components/schemas/User' } } }
+                 })
+
+      import = mod.import(root)
+      definition = import.definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[user]
+      expect(definition.response_fields[:user].type).to eq Hash
+      expect(import.document['x-contractful-external'].size).to eq 1
+    end
+
+    it 'raises when a referenced file cannot be read' do
+      root = write_yaml('api.yaml', root_document('schemas/missing.yaml#/User'))
+
+      expect { mod.import(root) }.to raise_error(mod::Error, /no such file/)
+    end
+
+    it 'never fetches remote refs and reports them as unresolved' do
+      root = write_yaml('api.yaml', root_document('https://example.test/schemas.yaml#/User'))
+
+      import = mod.import(root)
+
+      expect(import.notes.join).to match(%r{unresolvable \$ref "https://example\.test})
+      expect(a_request(:any, //)).not_to have_been_made
     end
   end
 

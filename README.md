@@ -777,6 +777,13 @@ urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
 `response_field` bindings, the base URL from `servers`, and auth hints from
 `securitySchemes` (as comments — credentials are never invented).
 
+When the document is read from a file, `$ref`s into other local files
+(`schemas/user.yaml#/User`) resolve relative to the file that contains them,
+and the referenced files are bundled into the import. Remote URLs are never
+fetched: they stay unresolved and are reported on `import.notes`. A document
+given as a Hash or as YAML text has no file to resolve against, so its
+external refs are reported as unresolved too.
+
 An `allOf` whose members are objects is flattened into one set of fields
 (first definition of a name wins), and a single scalar `allOf` reference
 that only adds annotations is unwrapped. What is NOT mapped is reported on

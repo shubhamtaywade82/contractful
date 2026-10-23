@@ -1,5 +1,10 @@
 # Unreleased
 
+* Added: the OpenAPI importer resolves `$ref`s into other local files when
+  the document is read from a file. Each referenced file is bundled once, and
+  refs inside it resolve relative to it. Circular references terminate. A
+  missing file raises `OpenAPIImport::Error`. Remote URLs are never fetched;
+  they stay unresolved and are reported on the notes.
 * Added: `header:` and `cookie:` options on contract params. The value is sent
   as that request header or cookie instead of in the query or payload. Scalar
   types only; names must be HTTP tokens; a header value with control

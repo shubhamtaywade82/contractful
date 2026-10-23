@@ -127,7 +127,7 @@ describe Contractful::Request, :include_helpers do
                                                  .to_raise(Errno::ECONNRESET).then.to_return(body: 'ok')
       expect(
         Contractful::Request.execute(url: 'http://some/resource', method: :post,
-                                     payload: 'payload-data',
+                                     payload: 'payload-data', idempotent: true,
                                      max_retries: 1, retry_interval: 0)
       ).to eq 'ok'
       expect(a_request(:post, 'http://some/resource').with(body: 'payload-data'))
@@ -149,7 +149,7 @@ describe Contractful::Request, :include_helpers do
       stub = stub_request(:post, 'http://some/resource').to_raise(Errno::ECONNRESET)
       expect do
         Contractful::Request.execute(url: 'http://some/resource', method: :post,
-                                     payload: stream,
+                                     payload: stream, idempotent: true,
                                      max_retries: 3, retry_interval: 0)
       end.to raise_error(Errno::ECONNRESET)
       expect(stub).to have_been_made.once
@@ -313,6 +313,65 @@ describe Contractful::Request, :include_helpers do
                                      retry_after: false)
       end.to raise_error(Contractful::ServiceUnavailable)
       expect(stub).to have_been_made.once
+    end
+  end
+
+  describe 'retry safety by HTTP method' do
+    let(:url) { 'http://some/resource' }
+
+    %i[get put delete].each do |verb|
+      it "retries #{verb.upcase} without any declaration (RFC 9110 idempotent)" do
+        stub_request(verb, url).to_timeout.then.to_return(status: 200, body: 'ok')
+
+        expect(
+          Contractful::Request.execute(url: url, method: verb, max_retries: 1, retry_interval: 0)
+        ).to eq 'ok'
+        expect(a_request(verb, url)).to have_been_made.twice
+      end
+    end
+
+    it 'refuses :max_retries on POST before any network traffic' do
+      stub = stub_request(:post, url)
+
+      expect do
+        Contractful::Request.new(url: url, method: :post, max_retries: 2)
+      end.to raise_error(ArgumentError, /requires an idempotent operation.*POST request is not/)
+      expect(stub).not_to have_been_requested
+    end
+
+    it 'refuses :max_retries on PATCH unless the request is declared idempotent' do
+      expect do
+        Contractful::Request.new(url: url, method: :patch, max_retries: 1)
+      end.to raise_error(ArgumentError, /PATCH request is not/)
+    end
+
+    it 'refuses :max_retries on a GET explicitly declared non-idempotent' do
+      expect do
+        Contractful::Request.new(url: url, method: :get, idempotent: false, max_retries: 1)
+      end.to raise_error(ArgumentError, /GET request is not/)
+    end
+
+    it 'retries a POST that is declared idempotent' do
+      stub_request(:post, url).to_timeout.then.to_return(status: 201, body: 'ok')
+
+      expect(
+        Contractful::Request.execute(url: url, method: :post, idempotent: true,
+                                     max_retries: 1, retry_interval: 0)
+      ).to eq 'ok'
+      expect(a_request(:post, url)).to have_been_made.twice
+    end
+
+    it 'sends a POST once when retries are not requested' do
+      stub_request(:post, url).to_return(status: 201, body: 'ok')
+
+      expect(Contractful::Request.execute(url: url, method: :post)).to eq 'ok'
+      expect(a_request(:post, url)).to have_been_made.once
+    end
+
+    it 'rejects a non-boolean :idempotent' do
+      expect do
+        Contractful::Request.new(url: url, method: :get, idempotent: 'yes')
+      end.to raise_error(ArgumentError, /:idempotent must be true or false/)
     end
   end
 

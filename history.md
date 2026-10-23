@@ -1,3 +1,12 @@
+# Unreleased
+
+* Fixed: a positive `:max_retries` on a non-idempotent request (POST, PATCH)
+  is refused with `ArgumentError` before any network traffic, unless the
+  request is declared `idempotent: true` (contracts: `idempotent true`, or a
+  pinned `_idempotency_key`). Previously a timed-out order POST was sent
+  twice. New `:idempotent` request option; GET, HEAD, OPTIONS, TRACE, PUT and
+  DELETE default to idempotent (RFC 9110).
+
 # 0.1.0
 
 First release published as **contractful**. The version restarts at 0.1.0

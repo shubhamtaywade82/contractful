@@ -89,6 +89,24 @@ end
     expect(keys.uniq.length).to eq 1
   end
 
+  it 'refuses _max_retries on a non-idempotent contract before any network traffic' do
+    stub = stub_request(:post, 'https://api.test/events')
+
+    expect { client.fire_and_forget(name: 'tick', _max_retries: 2) }
+      .to raise_error(ArgumentError, /requires an idempotent operation/)
+    expect(stub).not_to have_been_requested
+  end
+
+  it 'retries a non-idempotent contract when the caller pins the key' do
+    keys = []
+    stub_request(:post, 'https://api.test/events')
+      .with { |req| keys << req.headers['Idempotency-Key'] }
+      .to_timeout.then.to_return(status: 201, body: '{}')
+
+    client.fire_and_forget(name: 'tick', _idempotency_key: 'caller-key', _max_retries: 1)
+    expect(keys).to eq %w[caller-key caller-key]
+  end
+
   it 'honors a custom header name' do
     client_class = build_client do
       base 'https://api.test'

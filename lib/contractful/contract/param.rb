@@ -329,7 +329,9 @@ module Contractful
         case value
         when Integer then value
         when Float
-          raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless value == value.to_i
+          unless value.finite? && value == value.to_i
+            raise InvalidParam, "expected Integer, got #{describe_value(value)}"
+          end
 
           value.to_i
           
@@ -338,7 +340,8 @@ module Contractful
         when String
           raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless /\A[+-]?\d+\z/.match?(value)
 
-          Integer(value)
+          # Base 10 explicitly: Kernel#Integer reads a leading zero as octal.
+          Integer(value, 10)
           
             
           

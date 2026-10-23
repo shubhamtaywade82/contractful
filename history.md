@@ -1,5 +1,9 @@
 # Unreleased
 
+* Added: the OpenAPI importer flattens `allOf` compositions of object schemas
+  into one set of params or response fields, and unwraps a single scalar
+  `allOf` reference (common for enums with a description). Mixed `allOf`s are
+  still reported on `import.notes`.
 * Fixed: a two-parameter `verify_response` block received `nil` when the body
   was not JSON, so it could pass a response that was never parsed. It now
   raises `UnexpectedResponse` and the block is not called.

@@ -116,4 +116,16 @@ RSpec.describe Contractful::Contract::Definition do
       expect(definition.describe).to eq 'POST /repos/:owner/:repo/issues (params: :owner, :repo, :title)'
     end
   end
+
+  describe 'header and cookie params' do
+    describe 'path placeholders' do
+      it 'rejects a header or cookie on a path placeholder' do
+        expect do
+          described_class.new(:show, :get, '/items/:id') do
+            param :id, String, header: 'X-Id'
+          end
+        end.to raise_error(Contractful::Contract::InvalidDefinition, /path parameter :id cannot also be a header/)
+      end
+    end
+  end
 end

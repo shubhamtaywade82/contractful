@@ -402,6 +402,56 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     end
   end
 
+  describe 'header and cookie parameters' do
+    let(:parameters) do
+      [
+        { 'name' => 'X-Request-Id', 'in' => 'header', 'required' => true, 'schema' => { 'type' => 'string' } },
+        { 'name' => 'X-Trace', 'in' => 'header', 'schema' => { 'type' => 'integer', 'default' => 1 } },
+        { 'name' => 'session_id', 'in' => 'cookie', 'schema' => { 'type' => 'string' } },
+        { 'name' => 'X-List', 'in' => 'header', 'schema' => { 'type' => 'array', 'items' => { 'type' => 'string' } } },
+        { 'name' => 'bad name', 'in' => 'header', 'schema' => { 'type' => 'string' } }
+      ]
+    end
+    let(:doc) do
+      {
+        'openapi' => '3.0.3',
+        'paths' => { '/items' => { 'get' => {
+          'operationId' => 'listItems', 'parameters' => parameters, 'responses' => {}
+        } } }
+      }
+    end
+
+    it 'maps header params to header: declarations with snake_cased names' do
+      definition = mod.import(doc).definitions[:list_items]
+
+      expect(definition.params[:x_request_id].header).to eq 'X-Request-Id'
+      expect(definition.params[:x_request_id].required?).to be true
+      expect(definition.params[:x_trace].header).to eq 'X-Trace'
+      expect(definition.params[:x_trace].default_value).to eq 1
+    end
+
+    it 'maps cookie params to cookie: declarations' do
+      expect(mod.import(doc).definitions[:list_items].params[:session_id].cookie).to eq 'session_id'
+    end
+
+    it 'notes header params that cannot be sent as a scalar header or a header name' do
+      notes = mod.import(doc).notes.join("\n")
+
+      expect(notes).to match(/X-List.*not representable as a scalar header value/)
+      expect(notes).to match(/bad name.*not a valid HTTP header name/)
+    end
+
+    it 'renders header and cookie options that re-evaluate to the same contract' do
+      source = mod.to_ruby(doc, class_name: 'HeaderRoundTrip')
+      generated = Module.new
+      generated.module_eval(source)
+      contract = generated.const_get(:HeaderRoundTrip).contract_for(:list_items)
+
+      expect(contract.params[:x_request_id].header).to eq 'X-Request-Id'
+      expect(contract.params[:session_id].cookie).to eq 'session_id'
+    end
+  end
+
   describe 'allOf composition' do
     let(:components) do
       {
@@ -548,19 +598,20 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
   end
 
   describe 'the notes channel' do
-    it 'reports header and cookie params as not representable' do
+    it 'reports header and cookie params that cannot be carried as a scalar on the wire' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/w' => { 'get' => {
           'parameters' => [
-            { 'name' => 'X-Request-Id', 'in' => 'header', 'schema' => { 'type' => 'string' } },
-            { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+            { 'name' => 'X-List', 'in' => 'header',
+              'schema' => { 'type' => 'array', 'items' => { 'type' => 'string' } } },
+            { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
           ],
           'responses' => {}
         } }
       } }
       notes = mod.import(d).notes
-      expect(notes).to include(/header param "X-Request-Id": header parameters are not representable/)
-      expect(notes).to include(/cookie param "sid": cookie parameters are not representable/)
+      expect(notes).to include(/header param "X-List": not representable as a scalar header value/)
+      expect(notes).to include(/cookie param "bad sid": name "bad sid" is not a valid cookie name/)
     end
 
     it 'reports multipart and non-JSON bodies' do
@@ -642,13 +693,13 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     it 'deduplicates repeated notes' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/a' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+          { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
         ], 'responses' => {} } },
         '/b' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+          { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
         ], 'responses' => {} } }
       } }
-      cookie_notes = mod.import(d).notes.grep(/cookie param "sid"/)
+      cookie_notes = mod.import(d).notes.grep(/cookie param "bad sid"/)
       expect(cookie_notes.size).to eq 2 # distinct labels stay distinct
     end
   end

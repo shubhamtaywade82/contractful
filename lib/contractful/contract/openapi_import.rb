@@ -276,6 +276,8 @@ module Contractful
             value = p.default_value
             args << "default: #{value.inspect}"
           end
+          args << "header: #{p.header.inspect}" if p.header
+          args << "cookie: #{p.cookie.inspect}" if p.cookie
           args << "inclusion: #{wrap_range(p.inclusion)}" if p.inclusion
           args << "min: #{wrap_range(p.min)}" if p.min
           args << "max: #{wrap_range(p.max)}" if p.max
@@ -565,10 +567,7 @@ module Contractful
             end
             declarations[pname.to_sym] = param_declaration(ctx, p, label)
           when 'header', 'cookie'
-            ctx.note(
-              "#{label}: #{location} parameters are not representable as contract " \
-              'params — wire them via default_headers or before_request'
-            )
+            declare_transported_param(ctx, declarations, p, label, location)
           else
             ctx.note("#{label}: unknown parameter location — skipped")
           end
@@ -603,6 +602,39 @@ module Contractful
         options[:description] = p['description'] || schema['description']
 
         { name: p['name'].to_sym, type: type, options: options }
+      end
+
+      # A header or cookie param becomes a param with a header: or cookie: option.
+      # Its name must be a token and its type a scalar; the Ruby name is the
+      # snake-cased wire name. Anything else is reported on the notes, not guessed.
+      def declare_transported_param(ctx, declarations, p, label, location)
+        wire = p['name'].to_s
+        unless wire.match?(Param::HTTP_TOKEN)
+          kind = location == 'header' ? 'HTTP header' : 'cookie'
+          return ctx.note("#{label}: name #{wire.inspect} is not a valid #{kind} name — skipped")
+        end
+
+        decl = param_declaration(ctx, p, label)
+        unless [String, Integer, Float, :boolean].include?(decl[:type])
+          return ctx.note("#{label}: not representable as a scalar #{location} value — skipped")
+        end
+
+        key = header_param_key(wire)
+        if key.nil? || declarations.key?(key)
+          return ctx.note("#{label}: name #{wire.inspect} collides with another param — skipped")
+        end
+
+        decl[:name] = key
+        decl[:options][location == 'header' ? :header : :cookie] = wire
+        declarations[key] = decl
+      end
+
+      # 'X-Request-Id' → :x_request_id. Nil when nothing identifier-like remains.
+      def header_param_key(wire)
+        key = wire.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase.gsub(/[^a-z0-9]+/, '_').gsub(/\A_+|_+\z/, '')
+        return nil if key.empty?
+
+        key.match?(/\A\d/) ? :"_#{key}" : key.to_sym
       end
 
       def collect_body_params(ctx, verb, path, body, declarations)

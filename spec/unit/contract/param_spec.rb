@@ -432,4 +432,47 @@ RSpec.describe Contractful::Contract::Param do
         .to raise_error(Contractful::Contract::InvalidParam, /length 9 is outside 3\.\.4/)
     end
   end
+
+  describe 'header and cookie params' do
+    describe 'declaration' do
+      it 'rejects a header and a cookie on the same param' do
+        expect { described_class.new(:x, String, header: 'X-A', cookie: 'a') }
+          .to raise_error(Contractful::Contract::InvalidDefinition, /only one of header: or cookie:/)
+      end
+
+      it 'rejects a header name that is not an HTTP token' do
+        expect { described_class.new(:x, String, header: 'X Bad') }
+          .to raise_error(Contractful::Contract::InvalidDefinition, /header name must be an HTTP token/)
+      end
+
+      it 'rejects a cookie name that is not a token' do
+        expect { described_class.new(:x, String, cookie: 'a=b') }
+          .to raise_error(Contractful::Contract::InvalidDefinition, /cookie name must be an HTTP token/)
+      end
+
+      it 'rejects a non-scalar type for a header or cookie' do
+        expect { described_class.new(:x, Array, header: 'X-List') }
+          .to raise_error(Contractful::Contract::InvalidDefinition, /header or cookie params must be scalar/)
+      end
+    end
+
+    describe 'value checks' do
+      let(:header_param) { described_class.new(:request_id, String, header: 'X-Request-Id') }
+      let(:cookie_param) { described_class.new(:session, String, cookie: 'session_id') }
+
+      it 'refuses a header value that would split the header block' do
+        expect { header_param.process!("abc\r\nX-Injected: 1") }
+          .to raise_error(Contractful::Contract::InvalidParam, /cannot be sent as a header/)
+      end
+
+      it 'refuses a cookie value that contains cookie delimiters' do
+        expect { cookie_param.process!('a;b') }
+          .to raise_error(Contractful::Contract::InvalidParam, /cannot be sent as a cookie/)
+      end
+
+      it 'accepts scalar values for a header' do
+        expect(described_class.new(:n, Integer, header: 'X-N').process!(7)).to eq 7
+      end
+    end
+  end
 end

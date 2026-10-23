@@ -1,5 +1,13 @@
 # Unreleased
 
+* Added: `header:` and `cookie:` options on contract params. The value is sent
+  as that request header or cookie instead of in the query or payload. Scalar
+  types only; names must be HTTP tokens; a header value with control
+  characters or a cookie value outside RFC 6265 cookie-octets raises
+  `InvalidParam` before any traffic. The OpenAPI importer maps `in: header`
+  and `in: cookie` parameters to these options. Names that are not tokens and
+  non-scalar types stay on `import.notes`. `before_request` contexts gain a
+  `cookies:` key.
 * Added: the OpenAPI importer flattens `allOf` compositions of object schemas
   into one set of params or response fields, and unwraps a single scalar
   `allOf` reference (common for enums with a description). Mixed `allOf`s are

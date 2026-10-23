@@ -60,6 +60,8 @@ module Contractful
 
         verb = definition.verb
         headers = instance.__contract_effective_headers(meta[:_headers])
+        transported, remaining = split_transported_params(definition, remaining)
+        headers = headers.merge(transported[:headers]) unless transported[:headers].empty?
         payload, query, headers =
           build_body_and_query(instance, definition, verb, remaining, headers)
 
@@ -69,7 +71,8 @@ module Contractful
           url: url,
           headers: headers,
           payload: payload,
-          query: query
+          query: query,
+          cookies: transported[:cookies]
         }
 
         apply_auth!(ctx, instance, definition)
@@ -127,6 +130,7 @@ module Contractful
           payload: ctx[:payload]
         }
         request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
+        request_args[:cookies] = ctx[:cookies] if ctx[:cookies] && !ctx[:cookies].empty?
         merge_meta_options!(request_args, meta)
         request_args[:idempotent] = true if idempotent_call?(definition, meta)
 
@@ -438,6 +442,22 @@ module Contractful
         definition.payload_style ||
           instance.class.__merged_scalar(:payload_style) ||
           (QUERY_VERBS.include?(verb) ? :query : :json)
+      end
+
+      # Header and cookie params leave the path/query/payload routing. Their
+      # values come back keyed by wire name: a header hash and a cookie hash.
+      def split_transported_params(definition, remaining)
+        transported = { headers: {}, cookies: {} }
+        body = {}
+        remaining.each do |key, value|
+          param = definition.params[key]
+          case param&.location
+          when :header then transported[:headers][param.header] = value.to_s
+          when :cookie then transported[:cookies][param.cookie] = value.to_s
+          else body[key] = value
+          end
+        end
+        [transported, body]
       end
 
       def build_body_and_query(instance, definition, verb, remaining, headers)

@@ -448,6 +448,23 @@ contract :search, 'GET /search' do
 end
 ```
 
+A param can travel in a request header or in a cookie instead of the query
+string or the payload. `header:` names the header and `cookie:` the cookie:
+
+```ruby
+contract :get_item, 'GET /items/:id' do
+  param :request_id, String, header: 'X-Request-Id', required: true
+  param :session,    String, cookie: 'session_id'
+  param :trace,      Integer, header: 'X-Trace', default: 1
+end
+```
+
+Only scalar types (`String`, `Integer`, `Float`, `:boolean`) can be sent this
+way, and a header or cookie param cannot be a path placeholder. Values are
+checked before any traffic: a header value with a control character (CR or LF
+would split the header block) and a cookie value outside RFC 6265
+cookie-octets raise `InvalidParam`.
+
 Params also carry the closed-schema constraints known from JSON Schema /
 OpenAPI: `min:` / `max:` (inclusive bounds on any Comparable), `length:`
 (exact Integer or a Range, over String/Array/Hash) and `pattern:` (Regexp on
@@ -686,7 +703,7 @@ window before resorting to exponential backoff.
 ### Callbacks
 
 `before_request` receives a *mutable* context
-(`definition:, method:, url:, headers:, payload:, query:`) — mutating it
+(`definition:, method:, url:, headers:, payload:, query:, cookies:`) — mutating it
 changes the outgoing request, which is ideal for auth injection.
 `after_response` receives the validated response. Both accumulate down the
 inheritance chain, root-most first, so a base client class can hold shared
@@ -750,7 +767,8 @@ puts Contractful::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
                                                  class_name: 'Acme::Client')
 ```
 
-What is mapped: path and query params, plus the properties of a JSON or
+What is mapped: path, query, header and cookie params (header and cookie
+params become `header:` and `cookie:` options), plus the properties of a JSON or
 form-urlencoded request body (JSON wins when both are offered), with types,
 required, defaults,
 enum/min/max/length/pattern constraints), `payload_style` (form for
@@ -762,7 +780,8 @@ urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
 An `allOf` whose members are objects is flattened into one set of fields
 (first definition of a name wins), and a single scalar `allOf` reference
 that only adds annotations is unwrapped. What is NOT mapped is reported on
-`import.notes` instead of guessed away: cookie params, multipart bodies,
+`import.notes` instead of guessed away: header and cookie params whose name is
+not an HTTP token or whose type is not a scalar, multipart bodies,
 `oneOf`/`anyOf` unions and `allOf`s that mix object and scalar members,
 `default` responses, operation-level server overrides. The generated source
 round-trips: evaluating it yields a class whose contracts `describe`

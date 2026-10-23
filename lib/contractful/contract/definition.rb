@@ -18,7 +18,10 @@ module Contractful
     # Path placeholders (+:owner+, +:repo+) are automatically synthesized as
     # required params unless they were explicitly declared.
     class Definition
-      PATH_PLACEHOLDER = /:([a-zA-Z_][a-zA-Z0-9_]*)/
+      # A placeholder is +:name+. A colon written directly after a placeholder
+      # starts a literal suffix instead (group 2), so custom verbs such as
+      # '/things/:id:archive' (the Google-style '{id}:archive') keep their colon.
+      PATH_PLACEHOLDER = /:([a-zA-Z_][a-zA-Z0-9_]*)((?::[a-zA-Z_][a-zA-Z0-9_]*)?)/
 
       VALID_VERBS = %i[get head post put patch delete options].freeze
 
@@ -189,12 +192,13 @@ module Contractful
         remaining = params.dup
         expanded = @path_template.gsub(PATH_PLACEHOLDER) do
           key = Regexp.last_match(1).to_sym
+          suffix = Regexp.last_match(2)
           unless remaining.key?(key)
             raise MissingParam,
                   "path param :#{key} is required by #{@path_template.inspect} " \
                   'but was not provided'
           end
-          escape_path_segment(remaining.delete(key))
+          escape_path_segment(remaining.delete(key)) + suffix
         end
         [expanded, remaining]
       end

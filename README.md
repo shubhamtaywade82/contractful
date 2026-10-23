@@ -477,7 +477,9 @@ or `:query` per contract, or `payload_style :form` at class level.
 
 Path placeholders (`:owner`, `:repo`) are automatically declared as required
 params, interpolated into the path, URI-escaped, and never duplicated into
-the query string or payload.
+the query string or payload. A colon written directly after a placeholder is
+a literal suffix, so custom verbs keep their colon: `POST /things/:id:archive`
+declares one param, `:id`, and expands to `/things/5:archive`.
 
 ### Per-call meta options
 

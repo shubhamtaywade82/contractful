@@ -21,6 +21,12 @@
   in Stripe's 3.0 spec). The properties of a form-urlencoded body now become
   params, as JSON body properties already did. When a request offers both
   media types, the JSON body still supplies the params and the payload style.
+* Fixed: a colon directly after a path placeholder was read as a second
+  placeholder. `POST /things/:id:archive` required a stray `archive` param and
+  expanded to `/things/5archive`, dropping the colon. The colon is now a literal
+  suffix, so it expands to `/things/5:archive`. Behavior change: a template
+  such as `/:year:month` now declares one placeholder with a literal `:month`
+  suffix; it previously declared two.
 
 # 0.1.0
 

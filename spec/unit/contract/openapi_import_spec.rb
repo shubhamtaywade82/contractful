@@ -323,6 +323,23 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
       expect(definition.payload_style).to be_nil
     end
 
+    it 'keeps a custom-verb suffix that follows a path placeholder' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/things/{id}:archive' => { 'post' => {
+          'operationId' => 'archiveThing',
+          'parameters' => [{ 'name' => 'id', 'in' => 'path', 'required' => true,
+                             'schema' => { 'type' => 'integer' } }],
+          'responses' => {}
+        } }
+      } }
+      definition = definitions(d)[:archive_thing]
+
+      expect(definition.path_template).to eq '/things/:id:archive'
+      expect(definition.path_param_names).to eq %i[id]
+      expect(definition.params[:id].type).to eq Integer
+      expect(definition.expand_path(id: 5).first).to eq '/things/5:archive'
+    end
+
     it 'uses payload_style :query for body-less POST/PUT/PATCH with query params' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/search' => { 'post' => {

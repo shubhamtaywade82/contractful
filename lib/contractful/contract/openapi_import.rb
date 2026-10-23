@@ -607,13 +607,12 @@ module Contractful
 
       def collect_body_params(ctx, verb, path, body, declarations)
         content = body['content'].is_a?(Hash) ? body['content'] : {}
-        json_media = content.find do |type, _|
-          type.to_s.split(';').first.to_s.strip == 'application/json'
-        end
-        return unless json_media
+        media = find_media(content, 'application/json') ||
+                find_media(content, 'application/x-www-form-urlencoded')
+        return unless media
 
         label = op_label(path, verb)
-        schema = deref(ctx, json_media[1]['schema'], "#{label} request body") || {}
+        schema = deref(ctx, media[1]['schema'], "#{label} request body") || {}
         note_nullable(ctx, schema, "#{label} request body")
 
         if schema['type'] && schema['type'] != 'object'
@@ -761,6 +760,12 @@ module Contractful
 
       # --- payload style --------------------------------------------------------
 
+      # The first entry of a content map whose media type (ignoring parameters
+      # such as charset) is +wanted+, or nil.
+      def find_media(content, wanted)
+        content.find { |type, _| type.to_s.split(';').first.to_s.strip == wanted }
+      end
+
       # Choose payload_style from the request body content:
       #   application/json                  → :json (the DSL default; no line)
       #   application/x-www-form-urlencoded → :form
@@ -772,15 +777,13 @@ module Contractful
 
         if body
           content = body['content'].is_a?(Hash) ? body['content'] : {}
-          if content.any? { |t, _| t.to_s.split(';').first.to_s.strip == 'application/x-www-form-urlencoded' }
-            return :form
-          end
+          # JSON wins when both are offered, matching collect_body_params.
+          return nil if find_media(content, 'application/json')
+          return :form if find_media(content, 'application/x-www-form-urlencoded')
 
-          unless content.any? { |t, _| t.to_s.split(';').first.to_s.strip == 'application/json' }
-            ctx.note("#{label}: request body content types " \
-                     "[#{content.keys.map(&:inspect).join(', ')}] are not representable as " \
-                     'contract params (multipart/raw bodies need manual payload handling)')
-          end
+          ctx.note("#{label}: request body content types " \
+                   "[#{content.keys.map(&:inspect).join(', ')}] are not representable as " \
+                   'contract params (multipart/raw bodies need manual payload handling)')
           return nil
         end
 

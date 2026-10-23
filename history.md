@@ -1,5 +1,12 @@
 # Unreleased
 
+* Added: a Postman Collection importer, `Contractful::Contract::PostmanImport`
+  (opt-in, `require 'contractful/contract/postman_import'`). It reads v2.0 and
+  v2.1 exports: folders flatten into one contract per request, `{{variables}}`
+  resolve from the collection and the caller, query keys and static headers
+  become params, and JSON, urlencoded and GraphQL bodies become params. Every
+  lossy mapping is reported on the notes. `Authorization` is never mapped to a
+  credential; collection auth becomes a commented hint.
 * Added: the OpenAPI import helper accepts Swagger 2.0 documents. They are
   converted to OpenAPI 3.0 before import: `host`, `basePath` and `schemes`
   give the base URL, body and formData parameters give a request body, and

@@ -802,6 +802,35 @@ not an HTTP token or whose type is not a scalar, multipart bodies,
 round-trips: evaluating it yields a class whose contracts `describe`
 exactly like the imported definitions.
 
+### Importing a Postman collection
+
+A Postman collection (a v2.0 or v2.1 JSON export) imports the same way, through
+its own opt-in helper:
+
+```ruby
+require 'contractful/contract/postman_import'
+
+Contractful::Contract::PostmanImport.import('acme.postman_collection.json',
+                                            variables: { 'baseUrl' => 'https://api.acme.test/v1' })
+puts Contractful::Contract::PostmanImport.to_ruby('acme.postman_collection.json', class_name: 'Acme::Client')
+```
+
+Every request becomes one contract, named after the request, and folders are
+flattened. Collection variables resolve `{{name}}` in URLs, and `variables:`
+supplies the rest, such as an environment's `baseUrl`. A request whose origin
+or path cannot be resolved is skipped and reported.
+
+A collection carries example values rather than schemas, so its params are
+untyped and none is required, except a GraphQL query. The requests must share
+one origin, because a client has one base URL. Others are skipped and
+reported. Static headers become header params whose default is the header's
+value. `Authorization` is not mapped; the collection's auth becomes a
+commented-out auth hint that reads an environment variable, so no credential is
+invented. A JSON example body declares its keys as params and turns
+`strict_params` off for that operation, because the example may omit fields.
+Raw non-JSON bodies and multipart bodies with file fields are reported on
+`import.notes`.
+
 ### Testing sequences with recorded fixtures
 
 Contracts deliberately do not express ordering, timing or cross-call state

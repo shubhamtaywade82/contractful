@@ -212,7 +212,8 @@ module Contractful
           info = import.document['info'].is_a?(Hash) ? import.document['info'] : {}
           if info['title'] || info['version']
             origin = import.document['x-contractful-source'] || "OpenAPI #{import.document['openapi']}"
-            out << "# Source: #{info['title']} (#{origin}, version #{info['version']})"
+            version = info['version'] ? ", version #{info['version']}" : ''
+            out << "# Source: #{info['title']} (#{origin}#{version})"
           end
           unless import.notes.empty?
             out << '#'
@@ -248,6 +249,7 @@ module Contractful
             lines << "    param #{param_args(param)}"
           end
           lines << "    payload_style #{d.payload_style.inspect}" if d.payload_style
+          lines << '    strict_params false' if d.strict == false
 
           if d.response_statuses
             rendered = d.response_statuses.map { |s| render_status(s) }

@@ -170,6 +170,38 @@ RSpec.describe 'refresh-on-401 end-to-end' do
     end
   end
 
+  context 'when the contract declares no responses at all' do
+    let(:client) do
+      prov = provider
+      Class.new do
+        include Contractful::Contract
+
+        base 'http://auth.test'
+        auth token_provider: prov
+        contract :get_data, 'GET /data'
+      end.new
+    end
+
+    it 'raises the mapped exception for an undeclared server error instead of returning it' do
+      stub_request(:get, 'http://auth.test/data').to_return(status: 500, body: 'boom')
+
+      expect { client.get_data }.to raise_error(Contractful::InternalServerError)
+    end
+
+    it 'raises Unauthorized when the refreshed token is still rejected' do
+      stub_request(:get, 'http://auth.test/data').to_return(status: 401)
+
+      expect { client.get_data }.to raise_error(Contractful::Unauthorized)
+      expect(provider.refreshes).to eq 1
+    end
+
+    it 'still returns a successful response' do
+      stub_request(:get, 'http://auth.test/data').to_return(body: 'ok')
+
+      expect(client.get_data.body).to eq 'ok'
+    end
+  end
+
   it 'does not refresh when the contract opts out of auth' do
     prov = provider
     opt_out_client = Class.new do

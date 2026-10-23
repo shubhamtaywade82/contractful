@@ -194,6 +194,11 @@ module Contractful
       # Validate the response against the contract's response declaration:
       # declared statuses, JSON body type and verify_response blocks.
       def validate_response!(definition, response)
+        # Execution suppresses the classic raise so that declared error statuses
+        # can come back as values. An error status the contract never declared
+        # must still raise, or it would reach the caller as a silent success.
+        response.return! if definition.response_statuses.nil? && response.code >= 400
+
         return response unless needs_validation?(definition)
 
         status = response.code

@@ -6,6 +6,11 @@
   pinned `_idempotency_key`). Previously a timed-out order POST was sent
   twice. New `:idempotent` request option; GET, HEAD, OPTIONS, TRACE, PUT and
   DELETE default to idempotent (RFC 9110).
+* Fixed: on a contract with `auth token_provider:` and no `responds`, an
+  undeclared 4xx/5xx was returned as a value instead of raising. It now raises
+  the mapped exception (for example `InternalServerError`, or `Unauthorized`
+  when the refreshed token is still rejected), as it does on every other
+  contract.
 
 # 0.1.0
 

@@ -402,6 +402,91 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     end
   end
 
+  describe 'allOf composition' do
+    let(:components) do
+      {
+        'Base' => { 'type' => 'object', 'required' => ['id'],
+                    'properties' => { 'id' => { 'type' => 'integer' } } },
+        'Role' => { 'type' => 'string', 'enum' => %w[admin member] }
+      }
+    end
+
+    def doc_with(operation)
+      {
+        'openapi' => '3.0.3',
+        'components' => { 'schemas' => components },
+        'paths' => { '/items' => { 'post' => { 'responses' => {} }.merge(operation) } }
+      }
+    end
+
+    it 'flattens an allOf of object schemas into one body with merged required fields' do
+      d = doc_with(
+        'operationId' => 'createItem',
+        'requestBody' => { 'content' => { 'application/json' => { 'schema' => {
+          'allOf' => [
+            { '$ref' => '#/components/schemas/Base' },
+            { 'type' => 'object', 'required' => ['name'],
+              'properties' => { 'name' => { 'type' => 'string', 'minLength' => 1, 'maxLength' => 40 } } }
+          ]
+        } } } }
+      )
+      import = mod.import(d)
+      params = import.definitions[:create_item].params
+
+      expect(params.keys).to eq %i[id name]
+      expect(params[:id].required?).to be true
+      expect(params[:name].required?).to be true
+      expect(params[:name].length).to eq(1..40)
+      expect(import.notes.grep(/allOf/)).to be_empty
+    end
+
+    it 'flattens an allOf response schema so its members become response fields' do
+      d = doc_with(
+        'operationId' => 'getItem',
+        'responses' => { '200' => { 'description' => 'ok', 'content' => { 'application/json' => { 'schema' => {
+          'allOf' => [
+            { '$ref' => '#/components/schemas/Base' },
+            { 'type' => 'object', 'properties' => { 'label' => { 'type' => 'string' } } }
+          ]
+        } } } } }
+      )
+      definition = mod.import(d).definitions[:get_item]
+
+      expect(definition.response_type).to eq Hash
+      expect(definition.response_fields.keys).to eq %i[id label]
+      expect(definition.response_fields[:id].required?).to be true
+    end
+
+    it 'unwraps a single allOf reference that only adds annotations' do
+      d = doc_with(
+        'operationId' => 'setRole',
+        'parameters' => [{ 'name' => 'role', 'in' => 'query', 'schema' => {
+          'allOf' => [{ '$ref' => '#/components/schemas/Role' }],
+          'description' => 'Access level'
+        } }]
+      )
+      import = mod.import(d)
+      param = import.definitions[:set_role].params[:role]
+
+      expect(param.type).to eq String
+      expect(param.inclusion).to eq %w[admin member]
+      expect(import.notes.grep(/allOf/)).to be_empty
+    end
+
+    it 'keeps an allOf that mixes object and scalar members as a note' do
+      d = doc_with(
+        'operationId' => 'mixed',
+        'parameters' => [{ 'name' => 'filter', 'in' => 'query', 'schema' => {
+          'allOf' => [{ 'type' => 'object' }, { 'type' => 'string' }]
+        } }]
+      )
+      import = mod.import(d)
+
+      expect(import.definitions[:mixed].params[:filter].type).to be_nil
+      expect(import.notes.join).to match(/allOf schemas are not representable/)
+    end
+  end
+
   describe '.definitions — responses' do
     it 'collects statuses sorted and derives the body type from the first 2xx JSON schema' do
       d = definitions[:list_users]

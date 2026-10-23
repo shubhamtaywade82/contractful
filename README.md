@@ -759,9 +759,12 @@ urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
 `response_field` bindings, the base URL from `servers`, and auth hints from
 `securitySchemes` (as comments — credentials are never invented).
 
-What is NOT mapped is reported on `import.notes` instead of guessed away:
-header/cookie params, multipart bodies, `oneOf`/`anyOf` unions, `default`
-responses, operation-level server overrides. The generated source
+An `allOf` whose members are objects is flattened into one set of fields
+(first definition of a name wins), and a single scalar `allOf` reference
+that only adds annotations is unwrapped. What is NOT mapped is reported on
+`import.notes` instead of guessed away: cookie params, multipart bodies,
+`oneOf`/`anyOf` unions and `allOf`s that mix object and scalar members,
+`default` responses, operation-level server overrides. The generated source
 round-trips: evaluating it yields a class whose contracts `describe`
 exactly like the imported definitions.
 

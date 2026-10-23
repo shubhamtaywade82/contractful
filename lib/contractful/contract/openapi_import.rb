@@ -592,7 +592,7 @@ module Contractful
       end
 
       def param_declaration(ctx, p, label, required: false)
-        schema = deref(ctx, p['schema'] || {}, label) || {}
+        schema = merge_all_of(ctx, deref(ctx, p['schema'] || {}, label) || {}, label)
         note_nullable(ctx, schema, label)
 
         type, type_note = map_type(ctx, schema, label)
@@ -612,7 +612,8 @@ module Contractful
         return unless media
 
         label = op_label(path, verb)
-        schema = deref(ctx, media[1]['schema'], "#{label} request body") || {}
+        schema = merge_all_of(ctx, deref(ctx, media[1]['schema'], "#{label} request body") || {},
+                              "#{label} request body")
         note_nullable(ctx, schema, "#{label} request body")
 
         if schema['type'] && schema['type'] != 'object'
@@ -632,7 +633,7 @@ module Contractful
           next unless pname.to_s.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/)
 
           prop_label = "#{label} body param #{pname.to_s.inspect}"
-          prop_schema = deref(ctx, raw_schema, prop_label) || {}
+          prop_schema = merge_all_of(ctx, deref(ctx, raw_schema, prop_label) || {}, prop_label)
           note_nullable(ctx, prop_schema, prop_label)
           type, type_note = map_type(ctx, prop_schema, prop_label)
           ctx.note("#{prop_label}: #{type_note}") if type_note
@@ -643,6 +644,45 @@ module Contractful
 
           declarations[pname.to_sym] = { name: pname.to_sym, type: type, options: options }
         end
+      end
+
+      # Flatten an allOf into one schema. Object members merge their properties
+      # (the first definition of a name wins) and their required lists; a single
+      # scalar member, with no other typed member, is unwrapped with the outer
+      # keys (description, default) laid over it. Anything else is returned
+      # unchanged, so the caller's combinator check reports it.
+      def merge_all_of(ctx, schema, label, depth: 0)
+        return schema unless schema.is_a?(Hash) && schema['allOf'].is_a?(Array)
+        return schema if depth > MAX_REF_DEPTH
+
+        members = schema['allOf'].map { |raw| deref(ctx, raw, label) }
+        return schema if members.any?(&:nil?)
+
+        members = members.map { |m| merge_all_of(ctx, m, label, depth: depth + 1) }
+        return schema if members.any? { |m| (m.keys & %w[oneOf anyOf not]).any? }
+
+        own = schema.except('allOf')
+        typed = members.reject { |m| m['type'].nil? && !m.key?('properties') }
+        if typed.empty?
+          own
+        elsif typed.all? { |m| m['type'].nil? || m['type'] == 'object' }
+          merge_object_members(own, typed)
+        elsif typed.size == 1
+          typed.first.merge(own)
+        else
+          schema
+        end
+      end
+
+      def merge_object_members(own, members)
+        properties = {}
+        required = []
+        [own, *members].each do |part|
+          part_properties = part['properties'].is_a?(Hash) ? part['properties'] : {}
+          part_properties.each { |name, prop| properties[name] = prop unless properties.key?(name) }
+          required |= Array(part['required']).map(&:to_s)
+        end
+        own.merge('type' => 'object', 'properties' => properties, 'required' => required)
       end
 
       # Schema → [param type, note]. Untyped/unsupported combinations yield
@@ -838,6 +878,7 @@ module Contractful
         fields_schema = nil
         if source
           schema, = json_schema_of(ctx, source[1], source[2])
+          schema = merge_all_of(ctx, schema, source[2])
           type = case schema['type']
                  when 'array' then :array
                  when 'object' then :hash
@@ -887,7 +928,7 @@ module Contractful
           next unless pname.to_s.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/)
 
           label = "#{definition.name} response field #{pname.to_s.inspect}"
-          field_schema = deref(ctx, raw_schema, label) || {}
+          field_schema = merge_all_of(ctx, deref(ctx, raw_schema, label) || {}, label)
           type, type_note = map_type(ctx, field_schema, label)
           ctx.note("#{label}: #{type_note}") if type_note
 

@@ -56,6 +56,31 @@ RSpec.describe Contractful::Contract::Param do
     end
   end
 
+  describe 'Integer coercion' do
+    it 'reads digit strings in base 10, so a leading zero is not octal' do
+      expect(process('010', Integer)).to eq 10
+      expect(process('0012', Integer)).to eq 12
+      expect(process('08', Integer)).to eq 8
+    end
+
+    it 'accepts an explicit sign on digit strings' do
+      expect(process('+5', Integer)).to eq 5
+      expect(process('-0012', Integer)).to eq(-12)
+    end
+
+    it 'rejects strings that are not plain decimal digits' do
+      expect { process('1_000', Integer) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer/)
+      expect { process('0x1A', Integer) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer/)
+      expect { process('1e3', Integer) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer/)
+    end
+
+    it 'rejects non-finite floats as InvalidParam instead of leaking FloatDomainError' do
+      [Float::NAN, Float::INFINITY, -Float::INFINITY].each do |value|
+        expect { process(value, Integer) }.to raise_error(Contractful::Contract::InvalidParam, /expected Integer/)
+      end
+    end
+  end
+
   describe 'boolean coercion' do
     it 'accepts case-insensitive string forms and 1/0 integers' do
       expect(process('TRUE', :boolean)).to be true

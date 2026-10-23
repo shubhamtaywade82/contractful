@@ -434,6 +434,11 @@ HTTP traffic happens. Supported types: `String`, `Integer`, `Float`,
 (its return value is used). Options: `required:`, `default:` (lazy procs
 allowed), `inclusion:` and `coerce: false` for strict type checking.
 
+An `Integer` param accepts an Integer, a whole Float, or a string of decimal
+digits with an optional sign. Strings are read in base 10, so `"010"` is ten
+and never octal. Anything else, including `NaN` and infinities, raises
+`InvalidParam`.
+
 ```ruby
 contract :search, 'GET /search' do
   param :q,        String,  required: true

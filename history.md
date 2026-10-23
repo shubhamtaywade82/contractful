@@ -11,6 +11,10 @@
   the mapped exception (for example `InternalServerError`, or `Unauthorized`
   when the refreshed token is still rejected), as it does on every other
   contract.
+* Fixed: `Integer` params read digit strings with `Kernel#Integer`, so `"010"`
+  silently became `8`. Strings are now read in base 10. `"08"` and non-finite
+  floats (`NaN`, infinities) raised a raw `ArgumentError` or `FloatDomainError`
+  instead of `InvalidParam`; they now raise `InvalidParam`.
 
 # 0.1.0
 

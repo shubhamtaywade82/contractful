@@ -231,6 +231,18 @@ module Contractful
       # Never downgrade an encrypted request to plaintext.
       raise exception_with_response if request.uri.scheme == 'https' && target.scheme == 'http'
 
+      # Reject redirect targets that are not http/https. Without this
+      # check, contractful follows file://, data:, gopher:// and other
+      # exotic schemes; Net::HTTP then fails with a confusing error
+      # after the request itself has been issued. More importantly, the
+      # SSRF surface is wider than intended: a 302 to http://localhost:6379
+      # or http://169.254.169.254 (cloud metadata) is followed as-is.
+      # Sensitive headers (Authorization, Cookie) are stripped cross-origin
+      # below, but the request body still goes out to an attacker-chosen
+      # target. Restrict to http/https so at least the protocol surface
+      # stays bounded.
+      raise exception_with_response unless %w[http https].include?(target.scheme.to_s.downcase)
+
       new_args[:url] = target.to_s
 
       if same_origin?(request.uri, target)

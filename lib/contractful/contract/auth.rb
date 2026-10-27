@@ -174,24 +174,49 @@ module Contractful
     # One-flight refresh coordination for token providers: concurrent 401s
     # for the same provider never run #refresh concurrently — the first
     # caller holds the per-provider mutex while refreshing, later callers
-    # block and then proceed with the fresh token (their #token call sees
-    # the new credential). Refreshes post a `token_refresh` notification.
+    # block and then re-resolve the token (their #token call sees the
+    # new credential). Refreshes post a `token_refresh` notification.
+    #
+    # The previous implementation did NOT deduplicate: every caller that
+    # acquired the per-provider mutex ALSO called `provider.refresh`, so
+    # N concurrent 401s produced N sequential refresh calls (defeating
+    # the "one-flight" goal). Track a `@last_refreshed_at[provider]`
+    # timestamp inside the per-provider lock; later callers that arrive
+    # within the deduplication window skip the refresh call and just
+    # re-resolve via `provider.token`.
     module TokenRefresh
       @registry = {}
+      @last_refreshed_at = {}
       @mutex = Mutex.new
+      DEDUP_WINDOW_SECONDS = 5
 
       class << self
         def refresh(provider)
-          lock_for(provider).synchronize do
-            token = provider.refresh
-            Notifications.post('token_refresh',
-                               provider: provider.class.name)
+          lock = lock_for(provider)
+          lock.synchronize do
+            now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            last = @last_refreshed_at[provider]
+            if last && (now - last) < DEDUP_WINDOW_SECONDS
+              # A refresh completed within the dedup window — skip the
+              # refresh call and re-resolve the token. The provider's
+              # implementation is responsible for returning a fresh
+              # token via #token.
+              token = provider.token
+            else
+              token = provider.refresh
+              @last_refreshed_at[provider] = now
+              Notifications.post('token_refresh',
+                                 provider: provider.class.name)
+            end
             token
           end
         end
 
         def clear!
-          @mutex.synchronize { @registry.clear }
+          @mutex.synchronize do
+            @registry.clear
+            @last_refreshed_at.clear
+          end
         end
 
         private

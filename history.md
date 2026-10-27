@@ -1,3 +1,66 @@
+# Unreleased
+
+* Added: a Postman Collection importer, `Contractful::Contract::PostmanImport`
+  (opt-in, `require 'contractful/contract/postman_import'`). It reads v2.0 and
+  v2.1 exports: folders flatten into one contract per request, `{{variables}}`
+  resolve from the collection and the caller, query keys and static headers
+  become params, and JSON, urlencoded and GraphQL bodies become params. Every
+  lossy mapping is reported on the notes. `Authorization` is never mapped to a
+  credential; collection auth becomes a commented hint.
+* Added: the OpenAPI import helper accepts Swagger 2.0 documents. They are
+  converted to OpenAPI 3.0 before import: `host`, `basePath` and `schemes`
+  give the base URL, body and formData parameters give a request body, and
+  definitions, responses and `securityDefinitions` map across. Swagger 2.0
+  files bundled through `$ref` are converted as they are read. The `openapi:
+  2.0` field is still rejected, because it is not a version.
+* Added: the OpenAPI importer resolves `$ref`s into other local files when
+  the document is read from a file. Each referenced file is bundled once, and
+  refs inside it resolve relative to it. Circular references terminate. A
+  missing file raises `OpenAPIImport::Error`. Remote URLs are never fetched;
+  they stay unresolved and are reported on the notes.
+* Added: `header:` and `cookie:` options on contract params. The value is sent
+  as that request header or cookie instead of in the query or payload. Scalar
+  types only; names must be HTTP tokens; a header value with control
+  characters or a cookie value outside RFC 6265 cookie-octets raises
+  `InvalidParam` before any traffic. The OpenAPI importer maps `in: header`
+  and `in: cookie` parameters to these options. Names that are not tokens and
+  non-scalar types stay on `import.notes`. `before_request` contexts gain a
+  `cookies:` key.
+* Added: the OpenAPI importer flattens `allOf` compositions of object schemas
+  into one set of params or response fields, and unwraps a single scalar
+  `allOf` reference (common for enums with a description). Mixed `allOf`s are
+  still reported on `import.notes`.
+* Fixed: a two-parameter `verify_response` block received `nil` when the body
+  was not JSON, so it could pass a response that was never parsed. It now
+  raises `UnexpectedResponse` and the block is not called.
+* Fixed: a positive `:max_retries` on a non-idempotent request (POST, PATCH)
+  is refused with `ArgumentError` before any network traffic, unless the
+  request is declared `idempotent: true` (contracts: `idempotent true`, or a
+  pinned `_idempotency_key`). Previously a timed-out order POST was sent
+  twice. New `:idempotent` request option; GET, HEAD, OPTIONS, TRACE, PUT and
+  DELETE default to idempotent (RFC 9110).
+* Fixed: on a contract with `auth token_provider:` and no `responds`, an
+  undeclared 4xx/5xx was returned as a value instead of raising. It now raises
+  the mapped exception (for example `InternalServerError`, or `Unauthorized`
+  when the refreshed token is still rejected), as it does on every other
+  contract.
+* Fixed: `Integer` params read digit strings with `Kernel#Integer`, so `"010"`
+  silently became `8`. Strings are now read in base 10. `"08"` and non-finite
+  floats (`NaN`, infinities) raised a raw `ArgumentError` or `FloatDomainError`
+  instead of `InvalidParam`; they now raise `InvalidParam`.
+* Fixed: the OpenAPI importer set `payload_style :form` for form-urlencoded
+  request bodies but mapped none of their properties, and reported nothing.
+  Generated clients raised `UnknownParam` for every body field (306 operations
+  in Stripe's 3.0 spec). The properties of a form-urlencoded body now become
+  params, as JSON body properties already did. When a request offers both
+  media types, the JSON body still supplies the params and the payload style.
+* Fixed: a colon directly after a path placeholder was read as a second
+  placeholder. `POST /things/:id:archive` required a stray `archive` param and
+  expanded to `/things/5archive`, dropping the colon. The colon is now a literal
+  suffix, so it expands to `/things/5:archive`. Behavior change: a template
+  such as `/:year:month` now declares one placeholder with a literal `:month`
+  suffix; it previously declared two.
+
 # 0.1.0
 
 First release published as **contractful**. The version restarts at 0.1.0

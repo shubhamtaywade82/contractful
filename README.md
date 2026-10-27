@@ -250,6 +250,25 @@ bad token, a missing resource or a bad payload. Retryable-status retries
 also apply inside the block/error-suppression path, so contract clients get
 them via `_max_retries:` as well.
 
+Retries are limited to idempotent operations. GET, HEAD, OPTIONS, PUT and
+DELETE are idempotent under RFC 9110, so they retry without any declaration.
+POST and PATCH are not: a request that timed out may already have been
+processed, and retrying it can repeat the operation (an order placed twice,
+for example). A positive `:max_retries` on such a request raises
+`ArgumentError` before any network traffic. Declare the request idempotent
+only when the server deduplicates requests, for example with an
+`Idempotency-Key` header:
+
+```ruby
+Contractful::Request.execute(method: :post, url: 'https://api.example.com/orders',
+                             payload: body, idempotent: true, max_retries: 2)
+```
+
+Contract clients get the same rule: `_max_retries:` on a non-idempotent
+contract raises, while `idempotent true` on the contract (see
+[Idempotency keys](#idempotency-keys)) or a per-call `_idempotency_key:`
+makes the retries safe.
+
 Request payloads are rewound between attempts, so bodies are retransmitted in
 full. If a payload cannot be rewound (for example a non-seekable request
 stream), the request is not retried and the original network error is raised.
@@ -415,6 +434,11 @@ HTTP traffic happens. Supported types: `String`, `Integer`, `Float`,
 (its return value is used). Options: `required:`, `default:` (lazy procs
 allowed), `inclusion:` and `coerce: false` for strict type checking.
 
+An `Integer` param accepts an Integer, a whole Float, or a string of decimal
+digits with an optional sign. Strings are read in base 10, so `"010"` is ten
+and never octal. Anything else, including `NaN` and infinities, raises
+`InvalidParam`.
+
 ```ruby
 contract :search, 'GET /search' do
   param :q,        String,  required: true
@@ -423,6 +447,23 @@ contract :search, 'GET /search' do
   param :sort,     String,  inclusion: %w[asc desc], default: 'desc'
 end
 ```
+
+A param can travel in a request header or in a cookie instead of the query
+string or the payload. `header:` names the header and `cookie:` the cookie:
+
+```ruby
+contract :get_item, 'GET /items/:id' do
+  param :request_id, String, header: 'X-Request-Id', required: true
+  param :session,    String, cookie: 'session_id'
+  param :trace,      Integer, header: 'X-Trace', default: 1
+end
+```
+
+Only scalar types (`String`, `Integer`, `Float`, `:boolean`) can be sent this
+way, and a header or cookie param cannot be a path placeholder. Values are
+checked before any traffic: a header value with a control character (CR or LF
+would split the header block) and a cookie value outside RFC 6265
+cookie-octets raise `InvalidParam`.
 
 Params also carry the closed-schema constraints known from JSON Schema /
 OpenAPI: `min:` / `max:` (inclusive bounds on any Comparable), `length:`
@@ -453,7 +494,9 @@ or `:query` per contract, or `payload_style :form` at class level.
 
 Path placeholders (`:owner`, `:repo`) are automatically declared as required
 params, interpolated into the path, URI-escaped, and never duplicated into
-the query string or payload.
+the query string or payload. A colon written directly after a placeholder is
+a literal suffix, so custom verbs keep their colon: `POST /things/:id:archive`
+declares one param, `:id`, and expands to `/things/5:archive`.
 
 ### Per-call meta options
 
@@ -484,6 +527,11 @@ contract :list_posts, 'GET /posts' do
   verify_response { |_response, parsed| parsed.is_a?(Array) }
 end
 ```
+
+A two-parameter `verify_response` block receives the JSON-parsed body. When
+the body is not JSON, the block is not called and the response raises
+`UnexpectedResponse`; the block never sees `nil` for a body that failed to
+parse. A body that is the JSON value `null` still reaches the block as `nil`.
 
 Declaring any 4xx/5xx status suppresses contractful's default
 exception-raising for that contract: the response is returned and judged by
@@ -574,8 +622,12 @@ end
 When a request comes back 401, the executor refreshes the provider in
 **one flight** (concurrent 401s share a single refresh — per-provider
 mutex, posting a `token_refresh` notification) and retries the request
-exactly once with the fresh credential. A second 401 is returned or
-raised like any other declared status; there is no refresh loop.
+exactly once with the fresh credential. A second 401 is judged like any other
+status: returned when the contract declares it, otherwise raised as
+`Contractful::Unauthorized`. There is no refresh loop. The same rule covers
+every undeclared 4xx/5xx on a token-provider contract, including one that
+declares no `responds` at all: it raises the mapped exception instead of
+arriving as a silent success.
 
 Auth is resolved right before the `before_request` callbacks run, so
 callbacks can still inspect or override the resolved credentials. Individual
@@ -651,7 +703,7 @@ window before resorting to exponential backoff.
 ### Callbacks
 
 `before_request` receives a *mutable* context
-(`definition:, method:, url:, headers:, payload:, query:`) — mutating it
+(`definition:, method:, url:, headers:, payload:, query:, cookies:`) — mutating it
 changes the outgoing request, which is ideal for auth injection.
 `after_response` receives the validated response. Both accumulate down the
 inheritance chain, root-most first, so a base client class can hold shared
@@ -697,9 +749,10 @@ Clients also accept instance-level overrides: `GitHubAPI.new(base:
 
 ### Importing an OpenAPI document
 
-If a vendor publishes a machine-readable OpenAPI 3.x document, the opt-in
-import helper converts it into `contract` declarations — a development-time
-tool, not a runtime dependency (it is not loaded by `require 'contractful'`):
+If a vendor publishes a machine-readable OpenAPI 3.x or Swagger 2.0 document,
+the opt-in import helper converts it into `contract` declarations — a
+development-time tool, not a runtime dependency (it is not loaded by
+`require 'contractful'`):
 
 ```ruby
 require 'contractful/contract/openapi_import'
@@ -715,18 +768,68 @@ puts Contractful::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
                                                  class_name: 'Acme::Client')
 ```
 
-What is mapped: path/query/body-object params (types, required, defaults,
+A Swagger 2.0 document (`swagger: '2.0'`) is converted to OpenAPI 3.0 first, in
+the same import: `host`, `basePath` and `schemes` become the base URL; body and
+formData parameters become a request body; definitions, responses and
+`securityDefinitions` map to their OpenAPI 3.0 counterparts. Swagger 2.0 files
+bundled through `$ref` are converted as they are read. The conversion keeps the
+same notes as the OpenAPI import, so unmapped constructs stay visible.
+
+What is mapped: path, query, header and cookie params (header and cookie
+params become `header:` and `cookie:` options), plus the properties of a JSON or
+form-urlencoded request body (JSON wins when both are offered), with types,
+required, defaults,
 enum/min/max/length/pattern constraints), `payload_style` (form for
 urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
 (numeric and `2XX` wildcards), JSON body types and open-schema
 `response_field` bindings, the base URL from `servers`, and auth hints from
 `securitySchemes` (as comments — credentials are never invented).
 
-What is NOT mapped is reported on `import.notes` instead of guessed away:
-header/cookie params, multipart bodies, `oneOf`/`anyOf` unions, `default`
-responses, operation-level server overrides. The generated source
+When the document is read from a file, `$ref`s into other local files
+(`schemas/user.yaml#/User`) resolve relative to the file that contains them,
+and the referenced files are bundled into the import. Remote URLs are never
+fetched: they stay unresolved and are reported on `import.notes`. A document
+given as a Hash or as YAML text has no file to resolve against, so its
+external refs are reported as unresolved too.
+
+An `allOf` whose members are objects is flattened into one set of fields
+(first definition of a name wins), and a single scalar `allOf` reference
+that only adds annotations is unwrapped. What is NOT mapped is reported on
+`import.notes` instead of guessed away: header and cookie params whose name is
+not an HTTP token or whose type is not a scalar, multipart bodies,
+`oneOf`/`anyOf` unions and `allOf`s that mix object and scalar members,
+`default` responses, operation-level server overrides. The generated source
 round-trips: evaluating it yields a class whose contracts `describe`
 exactly like the imported definitions.
+
+### Importing a Postman collection
+
+A Postman collection (a v2.0 or v2.1 JSON export) imports the same way, through
+its own opt-in helper:
+
+```ruby
+require 'contractful/contract/postman_import'
+
+Contractful::Contract::PostmanImport.import('acme.postman_collection.json',
+                                            variables: { 'baseUrl' => 'https://api.acme.test/v1' })
+puts Contractful::Contract::PostmanImport.to_ruby('acme.postman_collection.json', class_name: 'Acme::Client')
+```
+
+Every request becomes one contract, named after the request, and folders are
+flattened. Collection variables resolve `{{name}}` in URLs, and `variables:`
+supplies the rest, such as an environment's `baseUrl`. A request whose origin
+or path cannot be resolved is skipped and reported.
+
+A collection carries example values rather than schemas, so its params are
+untyped and none is required, except a GraphQL query. The requests must share
+one origin, because a client has one base URL. Others are skipped and
+reported. Static headers become header params whose default is the header's
+value. `Authorization` is not mapped; the collection's auth becomes a
+commented-out auth hint that reads an environment variable, so no credential is
+invented. A JSON example body declares its keys as params and turns
+`strict_params` off for that operation, because the example may omit fields.
+Raw non-JSON bodies and multipart bodies with file fields are reported on
+`import.notes`.
 
 ### Testing sequences with recorded fixtures
 

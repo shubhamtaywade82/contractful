@@ -45,6 +45,7 @@ meta options):
 | `:cookies` | Cookie hash or jar |
 | `:persistent` | Use the keep-alive connection pool (2.3+) |
 | `:max_retries`, `:retry_interval` | Automatic retry count and base delay (exponential backoff) (2.3+) |
+| `:idempotent` | Repeating the request has the same effect as sending it once. Defaults to true for GET, HEAD, OPTIONS, TRACE, PUT and DELETE (RFC 9110), false otherwise. A positive `:max_retries` requires it to be true. |
 | `:retry_after`, `:max_retry_after` | Honor server `Retry-After` and cap its value (2.5+) |
 | `:log` | Per-request logger override |
 | `:block_response` | Raw response handler |
@@ -104,7 +105,7 @@ Class-level macros (on the client class):
 | `payload_style(:json \| :form)` | Class default payload routing |
 | `auth bearer: / api_key: / basic:` | Scheme declaration; values may be callables, invoked per request; `api_key:` accepts an array for dual-header schemes and `in: :query` |
 | `idempotency_header(name)`, `idempotency_generator(callable)` | Key header customization |
-| `before_request { \|ctx\| }` | Mutable context: `definition:, method:, url:, headers:, payload:, query:` |
+| `before_request { \|ctx\| }` | Mutable context: `definition:, method:, url:, headers:, payload:, query:, cookies:` |
 | `after_response { \|resp\| }` | Observe validated responses |
 | `resource :posts, path:, only:, except:, update_with:, singular:` | Generates the five CRUD contracts (non-strict) |
 | `contract :name, 'VERB /path' do ... end` | Declare one operation |
@@ -113,7 +114,7 @@ Inside a contract block:
 
 | Declaration | Meaning |
 | --- | --- |
-| `param :name, Type, required:, default:, inclusion:, min:, max:, length:, pattern:, coerce:, description:` | Closed-schema param (String, Integer, Float, `:boolean`, Array, Hash, any class, any Proc) |
+| `param :name, Type, required:, default:, inclusion:, min:, max:, length:, pattern:, coerce:, description:, header:, cookie:` | Closed-schema param (String, Integer, Float, `:boolean`, Array, Hash, any class, any Proc). `header:` / `cookie:` send the value as that request header or cookie instead of the query or payload; they take a scalar type only and cannot be a path placeholder |
 | `responds 200, (200..299), type: Array/:hash/:json/...` | Expected statuses + body shape; declaring 4xx/5xx converts them to returned values and judges everything by the contract |
 | `response_field :name, type, required:, strict:` | Open-schema response binding: required+type bind; undeclared fields are data |
 | `verify_response { \|resp, parsed\| }` | Custom assertion; falsey raises `UnexpectedResponse` |

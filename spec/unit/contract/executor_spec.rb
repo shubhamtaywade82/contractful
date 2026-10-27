@@ -449,6 +449,7 @@ RSpec.describe 'Contractful::Contract executor' do
         contract :create_order, 'POST /orders' do
           param :security_id, String, required: true
           responds 200, 201, 503
+          idempotent true
         end
       end
 
@@ -459,6 +460,57 @@ RSpec.describe 'Contractful::Contract executor' do
       response = client_class.new.create_order(security_id: 'X1', _max_retries: 2)
       expect(response.code).to eq 201
       expect(a_request(:post, 'https://api.test/orders')).to have_been_made.twice
+    end
+  end
+
+  describe 'requests' do
+    let(:client_class) do
+      build_client do
+        base 'https://api.test'
+
+        contract :get_item, 'GET /items/:id' do
+          param :request_id, String, header: 'X-Request-Id', required: true
+          param :session, String, cookie: 'session_id'
+          param :trace, Integer, header: 'X-Trace', default: 1
+          param :q, String
+        end
+      end
+    end
+
+    it 'sends header params as request headers, never in the query string' do
+      stub = stub_request(:get, 'https://api.test/items/9')
+             .with(query: { 'q' => 'x' }, headers: { 'X-Request-Id' => 'r-1', 'X-Trace' => '1' })
+
+      client_class.new.get_item(id: 9, request_id: 'r-1', q: 'x')
+      expect(stub).to have_been_made
+    end
+
+    it 'sends cookie params in the Cookie header' do
+      stub = stub_request(:get, 'https://api.test/items/9')
+             .with(headers: { 'Cookie' => 'session_id=abc' })
+
+      client_class.new.get_item(id: 9, request_id: 'r-1', session: 'abc')
+      expect(stub).to have_been_made
+    end
+
+    it 'enforces a required header param' do
+      expect { client_class.new.get_item(id: 9) }
+        .to raise_error(Contractful::Contract::MissingParam, /request_id/)
+    end
+
+    it 'sends nothing when a required header param is missing', :aggregate_failures do
+      expect { client_class.new.get_item(id: 9) }.to raise_error(Contractful::Contract::MissingParam)
+      expect(a_request(:any, //)).not_to have_been_made
+    end
+
+    it 'refuses an unsafe header value' do
+      expect { client_class.new.get_item(id: 9, request_id: "a\r\nb") }
+        .to raise_error(Contractful::Contract::InvalidParam, /cannot be sent as a header/)
+    end
+
+    it 'sends nothing when a header value is unsafe', :aggregate_failures do
+      expect { client_class.new.get_item(id: 9, request_id: "a\r\nb") }.to raise_error(Contractful::Contract::InvalidParam)
+      expect(a_request(:any, //)).not_to have_been_made
     end
   end
 end

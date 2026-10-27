@@ -60,6 +60,8 @@ module Contractful
 
         verb = definition.verb
         headers = instance.__contract_effective_headers(meta[:_headers])
+        transported, remaining = split_transported_params(definition, remaining)
+        headers = headers.merge(transported[:headers]) unless transported[:headers].empty?
         payload, query, headers =
           build_body_and_query(instance, definition, verb, remaining, headers)
 
@@ -69,7 +71,8 @@ module Contractful
           url: url,
           headers: headers,
           payload: payload,
-          query: query
+          query: query,
+          cookies: transported[:cookies]
         }
 
         apply_auth!(ctx, instance, definition)
@@ -127,7 +130,9 @@ module Contractful
           payload: ctx[:payload]
         }
         request_args[:headers] = request_args[:headers].merge(params: ctx[:query]) if ctx[:query] && !ctx[:query].empty?
+        request_args[:cookies] = ctx[:cookies] if ctx[:cookies] && !ctx[:cookies].empty?
         merge_meta_options!(request_args, meta)
+        request_args[:idempotent] = true if idempotent_call?(definition, meta)
 
         execute_request(request_args, definition, instance)
       end
@@ -193,6 +198,11 @@ module Contractful
       # Validate the response against the contract's response declaration:
       # declared statuses, JSON body type and verify_response blocks.
       def validate_response!(definition, response)
+        # Execution suppresses the classic raise so that declared error statuses
+        # can come back as values. An error status the contract never declared
+        # must still raise, or it would reach the caller as a silent success.
+        response.return! if definition.response_statuses.nil? && response.code >= 400
+
         return response unless needs_validation?(definition)
 
         status = response.code
@@ -232,7 +242,7 @@ module Contractful
         end
 
         if definition.response_verifier &&
-           !call_verifier(definition.response_verifier, response, parsed)
+           !call_verifier(definition, definition.response_verifier, response, parsed)
           raise UnexpectedResponse.new(
             "verify_response block rejected the response for #{definition.describe}",
             response: response
@@ -312,17 +322,23 @@ module Contractful
 
       # Arity-aware verifier invocation: blocks that declare two parameters
       # additionally receive the JSON-parsed body (parsed lazily).
-      def call_verifier(block, response, parsed)
-        if block.arity >= 2
-          parsed ||= begin
-            JSON.parse(response.body)
-          rescue StandardError
-            nil
-          end
-          block.call(response, parsed)
-        else
-          block.call(response)
-        end
+      def call_verifier(definition, block, response, parsed)
+        return block.call(response) unless block.arity >= 2
+
+        parsed = verifier_json(definition, response) if parsed.nil?
+        block.call(response, parsed)
+      end
+
+      # The JSON body for a two-parameter verifier. A body that is not JSON is an
+      # unexpected response: handing the block nil would let it mistake a failure
+      # for data.
+      def verifier_json(definition, response)
+        JSON.parse(response.body)
+      rescue JSON::ParserError, TypeError => e
+        raise UnexpectedResponse.new(
+          "verify_response needs a JSON body for #{definition.describe}: #{e.message}",
+          response: response
+        )
       end
 
       # Resolve the contract's auth scheme (unless the contract opted out
@@ -354,6 +370,13 @@ module Contractful
         key = explicit || instance.class.idempotency_generator.call
         header = instance.class.idempotency_header
         ctx[:headers] = ctx[:headers].merge(header => key)
+      end
+
+      # A call is idempotent when the contract declares it or the caller pins
+      # a key. Both cases send a key the server can deduplicate on, which is
+      # what makes retrying a non-GET call safe.
+      def idempotent_call?(definition, meta)
+        definition.idempotent.equal?(true) || !meta[:_idempotency_key].nil?
       end
 
       def symbolize_keys(hash)
@@ -419,6 +442,22 @@ module Contractful
         definition.payload_style ||
           instance.class.__merged_scalar(:payload_style) ||
           (QUERY_VERBS.include?(verb) ? :query : :json)
+      end
+
+      # Header and cookie params leave the path/query/payload routing. Their
+      # values come back keyed by wire name: a header hash and a cookie hash.
+      def split_transported_params(definition, remaining)
+        transported = { headers: {}, cookies: {} }
+        body = {}
+        remaining.each do |key, value|
+          param = definition.params[key]
+          case param&.location
+          when :header then transported[:headers][param.header] = value.to_s
+          when :cookie then transported[:cookies][param.cookie] = value.to_s
+          else body[key] = value
+          end
+        end
+        [transported, body]
       end
 
       def build_body_and_query(instance, definition, verb, remaining, headers)

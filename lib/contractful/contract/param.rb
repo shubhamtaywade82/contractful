@@ -54,11 +54,24 @@ module Contractful
       BOOLEAN_TRUTHY = %w[true 1 on yes].freeze
       BOOLEAN_FALSY = %w[false 0 off no].freeze
 
-      attr_reader :name, :type, :inclusion, :description, :min, :max, :length, :pattern
+      # Header and cookie names are tokens (RFC 9110 §5.6.2; RFC 6265 cookie-name).
+      HTTP_TOKEN = /\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/
+      # A header value may not hold control characters: CR or LF would split the
+      # header block.
+      HEADER_VALUE = /\A[^\x00-\x08\x0A-\x1F\x7F]*\z/
+      # RFC 6265 cookie-octet: printable ASCII without space, DQUOTE, comma,
+      # semicolon or backslash.
+      COOKIE_VALUE = /\A[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]*\z/
+      # Scalar types a header or cookie value can carry.
+      TRANSPORT_TYPES = [String, Integer, Float, :boolean].freeze
+
+      attr_reader :name, :type, :inclusion, :description, :min, :max, :length, :pattern,
+                  :header, :cookie
 
       def initialize(name, type = nil, required: false, default: NO_DEFAULT,
                      inclusion: nil, coerce: true, description: nil,
-                     min: nil, max: nil, length: nil, pattern: nil)
+                     min: nil, max: nil, length: nil, pattern: nil,
+                     header: nil, cookie: nil)
         @name = name.to_sym
         @type = normalize_type(type)
         @required = required ? true : false
@@ -70,7 +83,19 @@ module Contractful
         @max = max
         @length = length
         @pattern = pattern
+        @header = header
+        @cookie = cookie
         validate_definition!
+        validate_transport_definition!
+      end
+
+      # Where the value travels when it is not part of the path, query or
+      # payload: :header, :cookie or nil.
+      def location
+        return :header if @header
+        return :cookie if @cookie
+
+        nil
       end
 
       def required?
@@ -105,6 +130,7 @@ module Contractful
         coerced = @coerce ? coerce_value(value) : strict_check(value)
         validate_inclusion!(coerced)
         validate_constraints!(coerced)
+        validate_transport!(coerced)
         coerced
       rescue InvalidParam => e
         raise InvalidParam, "param :#{@name}: #{e.message}"
@@ -172,6 +198,35 @@ module Contractful
         raise InvalidDefinition,
               "param :#{@name}: pattern must be a Regexp, got #{@pattern.inspect}"
         
+      end
+
+      def validate_transport_definition!
+        return unless location
+
+        raise InvalidDefinition, "param :#{@name}: use only one of header: or cookie:" if @header && @cookie
+        if location == :header && !(@header.is_a?(String) && HTTP_TOKEN.match?(@header))
+          raise InvalidDefinition,
+                "param :#{@name}: header name must be an HTTP token, got #{@header.inspect}"
+        end
+        if location == :cookie && !(@cookie.is_a?(String) && HTTP_TOKEN.match?(@cookie))
+          raise InvalidDefinition,
+                "param :#{@name}: cookie name must be an HTTP token, got #{@cookie.inspect}"
+        end
+        return if TRANSPORT_TYPES.include?(@type)
+
+        raise InvalidDefinition,
+              "param :#{@name}: header or cookie params must be scalar (String, Integer, Float or boolean)"
+      end
+
+      # A header or cookie value travels as text, so it must survive the wire.
+      def validate_transport!(value)
+        if location == :header && !HEADER_VALUE.match?(value.to_s)
+          raise InvalidParam, 'value cannot be sent as a header (it contains control characters)'
+        end
+        return unless location == :cookie && !COOKIE_VALUE.match?(value.to_s)
+
+        raise InvalidParam,
+              'value cannot be sent as a cookie (it contains characters outside RFC 6265 cookie-octet)'
       end
 
       def valid_length_constraint?(constraint)
@@ -329,7 +384,9 @@ module Contractful
         case value
         when Integer then value
         when Float
-          raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless value == value.to_i
+          unless value.finite? && value == value.to_i
+            raise InvalidParam, "expected Integer, got #{describe_value(value)}"
+          end
 
           value.to_i
           
@@ -338,7 +395,8 @@ module Contractful
         when String
           raise InvalidParam, "expected Integer, got #{describe_value(value)}" unless /\A[+-]?\d+\z/.match?(value)
 
-          Integer(value)
+          # Base 10 explicitly: Kernel#Integer reads a leading zero as octal.
+          Integer(value, 10)
           
             
           

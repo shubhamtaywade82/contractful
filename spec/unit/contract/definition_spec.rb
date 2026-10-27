@@ -61,6 +61,31 @@ RSpec.describe Contractful::Contract::Definition do
     end
   end
 
+  describe 'colon-suffixed custom verbs' do
+    it 'treats a colon right after a placeholder as a literal suffix' do
+      definition = described_class.new(:archive, :post, '/things/:id:archive')
+
+      expect(definition.path_param_names).to eq %i[id]
+      expect(definition.params.keys).to eq %i[id]
+      path, remaining = definition.expand_path(id: 5)
+      expect(path).to eq '/things/5:archive'
+      expect(remaining).to eq({})
+    end
+
+    it 'still recognizes a placeholder that follows a literal underscore' do
+      definition = described_class.new(:show, :get, '/items_:id')
+
+      expect(definition.path_param_names).to eq %i[id]
+      expect(definition.expand_path(id: 3).first).to eq '/items_3'
+    end
+
+    it 'keeps the suffix when the placeholder value needs escaping' do
+      definition = described_class.new(:archive, :post, '/things/:id:archive')
+
+      expect(definition.expand_path(id: 'a b/c').first).to eq '/things/a%20b%2Fc:archive'
+    end
+  end
+
   describe '#expand_path' do
     it 'substitutes placeholders and returns the remaining params' do
       definition = described_class.new(:show, :get, '/repos/:owner/:repo/issues')
@@ -89,6 +114,18 @@ RSpec.describe Contractful::Contract::Definition do
         param :title, String, required: true
       end
       expect(definition.describe).to eq 'POST /repos/:owner/:repo/issues (params: :owner, :repo, :title)'
+    end
+  end
+
+  describe 'header and cookie params' do
+    describe 'path placeholders' do
+      it 'rejects a header or cookie on a path placeholder' do
+        expect do
+          described_class.new(:show, :get, '/items/:id') do
+            param :id, String, header: 'X-Id'
+          end
+        end.to raise_error(Contractful::Contract::InvalidDefinition, /path parameter :id cannot also be a header/)
+      end
     end
   end
 end

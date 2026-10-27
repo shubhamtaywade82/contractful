@@ -2,6 +2,7 @@
 
 require_relative '../../spec_helper'
 require 'contractful/contract/openapi_import'
+require 'fileutils'
 require 'tmpdir'
 require 'pathname'
 
@@ -124,9 +125,9 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
         .to raise_error(mod::Error, /invalid YAML/)
     end
 
-    it 'raises on Swagger 2.x documents' do
+    it 'rejects an openapi field with a 2.x value, which is not a version (Swagger 2.0 uses swagger:)' do
       expect { definitions({ 'openapi' => '2.0', 'paths' => {} }) }
-        .to raise_error(mod::Error, /convert the document to OpenAPI 3\.x/)
+        .to raise_error(mod::Error, /'openapi' version field "2\.0" \(expected 3\.x\)/)
     end
 
     it 'raises on a missing or non-3.x version' do
@@ -276,6 +277,70 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
       expect(definitions(d)[:post_token].payload_style).to eq :form
     end
 
+    it 'maps form-urlencoded request body properties to params like JSON body properties' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/customers' => { 'post' => {
+          'requestBody' => { 'content' => {
+            'application/x-www-form-urlencoded' => { 'schema' => {
+              'type' => 'object',
+              'required' => ['email'],
+              'properties' => {
+                'email' => { 'type' => 'string' },
+                'name' => { 'type' => 'string' },
+                'balance' => { 'type' => 'integer' }
+              }
+            } }
+          } },
+          'responses' => {}
+        } }
+      } }
+      import = mod.import(d)
+      definition = import.definitions[:post_customers]
+
+      expect(definition.payload_style).to eq :form
+      expect(definition.params.keys).to eq %i[email name balance]
+      expect(definition.params[:email].required?).to be true
+      expect(definition.params[:balance].type).to eq Integer
+      expect(import.notes).to be_empty
+    end
+
+    it 'prefers the JSON body when a request offers both JSON and form media types' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/orders' => { 'post' => {
+          'requestBody' => { 'content' => {
+            'application/json' => { 'schema' => {
+              'type' => 'object', 'properties' => { 'sku' => { 'type' => 'string' } }
+            } },
+            'application/x-www-form-urlencoded' => { 'schema' => {
+              'type' => 'object', 'properties' => { 'coupon' => { 'type' => 'string' } }
+            } }
+          } },
+          'responses' => {}
+        } }
+      } }
+      definition = mod.import(d).definitions[:post_orders]
+
+      expect(definition.params.keys).to eq [:sku]
+      expect(definition.payload_style).to be_nil
+    end
+
+    it 'keeps a custom-verb suffix that follows a path placeholder' do
+      d = { 'openapi' => '3.0.3', 'paths' => {
+        '/things/{id}:archive' => { 'post' => {
+          'operationId' => 'archiveThing',
+          'parameters' => [{ 'name' => 'id', 'in' => 'path', 'required' => true,
+                             'schema' => { 'type' => 'integer' } }],
+          'responses' => {}
+        } }
+      } }
+      definition = definitions(d)[:archive_thing]
+
+      expect(definition.path_template).to eq '/things/:id:archive'
+      expect(definition.path_param_names).to eq %i[id]
+      expect(definition.params[:id].type).to eq Integer
+      expect(definition.expand_path(id: 5).first).to eq '/things/5:archive'
+    end
+
     it 'uses payload_style :query for body-less POST/PUT/PATCH with query params' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/search' => { 'post' => {
@@ -335,6 +400,318 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
               } }
             } }
       expect(definitions(d)[:get_things].params[:limit].max).to eq 100
+    end
+  end
+
+  describe 'Swagger 2.0 documents' do
+    let(:swagger) do
+      {
+        'swagger' => '2.0',
+        'info' => { 'title' => 'Legacy', 'version' => '1' },
+        'host' => 'api.legacy.test',
+        'basePath' => '/v2',
+        'schemes' => ['https'],
+        'securityDefinitions' => { 'basic' => { 'type' => 'basic' } },
+        'definitions' => {
+          'Pet' => { 'type' => 'object', 'required' => ['name'],
+                     'properties' => { 'name' => { 'type' => 'string' }, 'tag' => { 'type' => 'string' } } }
+        },
+        'paths' => { '/pets' => { 'post' => {
+          'operationId' => 'createPet',
+          'parameters' => [{ 'name' => 'pet', 'in' => 'body', 'required' => true,
+                             'schema' => { '$ref' => '#/definitions/Pet' } }],
+          'responses' => { '200' => { 'description' => 'ok', 'schema' => { '$ref' => '#/definitions/Pet' } } }
+        } } }
+      }
+    end
+
+    it 'imports the body, response fields, base URL and security as an OpenAPI 3 document would' do
+      import = mod.import(swagger)
+      definition = import.definitions[:create_pet]
+
+      expect(import.base_url).to eq 'https://api.legacy.test/v2'
+      expect(import.auth_hints.join).to match(/auth basic/)
+      expect(definition.params.keys).to eq %i[name tag]
+      expect(definition.params[:name].required?).to be true
+      expect(definition.response_fields.keys).to eq %i[name tag]
+    end
+
+    it 'renders a client whose contracts describe identically to the import' do
+      import = mod.import(swagger)
+      generated = Module.new
+      generated.module_eval(mod.to_ruby(swagger, class_name: 'LegacyPets'))
+      contract = generated.const_get(:LegacyPets).contract_for(:create_pet)
+
+      expect(contract.describe).to eq import.definitions[:create_pet].describe
+      expect(mod.to_ruby(swagger, class_name: 'LegacyPets')).to include('# Source: Legacy (Swagger 2.0, version 1)')
+    end
+
+    it 'bundles an external Swagger 2.0 file and resolves its own definitions' do
+      Dir.mktmpdir do |dir|
+        defs = {
+          'swagger' => '2.0', 'info' => { 'title' => 'defs', 'version' => '1' }, 'paths' => {},
+          'definitions' => {
+            'User' => { 'type' => 'object',
+                        'properties' => { 'id' => { 'type' => 'integer' },
+                                          'address' => { '$ref' => '#/definitions/Address' } } },
+            'Address' => { 'type' => 'object', 'properties' => { 'city' => { 'type' => 'string' } } }
+          }
+        }
+        File.write(File.join(dir, 'defs.yaml'), YAML.dump(defs))
+        ok = { 'description' => 'ok', 'schema' => { '$ref' => 'defs.yaml#/definitions/User' } }
+        root_doc = swagger.merge('paths' => { '/users' => { 'get' => { 'operationId' => 'listUsers',
+                                                                       'responses' => { '200' => ok } } } })
+        root_path = File.join(dir, 'api.yaml')
+        File.write(root_path, YAML.dump(root_doc))
+
+        definition = mod.import(root_path).definitions[:list_users]
+
+        expect(definition.response_fields[:id].type).to eq Integer
+        expect(definition.response_fields[:address].type).to eq Hash
+      end
+    end
+  end
+
+  describe 'external file $refs' do
+    let(:dir) { Dir.mktmpdir }
+    let(:user_schema) do
+      { 'User' => { 'type' => 'object', 'required' => ['id'],
+                    'properties' => { 'id' => { 'type' => 'integer' } } } }
+    end
+
+    after { FileUtils.remove_entry(dir) }
+
+    def write_yaml(name, data)
+      path = File.join(dir, name)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, YAML.dump(data))
+      path
+    end
+
+    def root_document(ref, extra = {})
+      {
+        'openapi' => '3.0.3',
+        'paths' => { '/users' => { 'get' => {
+          'operationId' => 'listUsers',
+          'responses' => { '200' => { 'description' => 'ok', 'content' => { 'application/json' => {
+            'schema' => { '$ref' => ref }
+          } } } }
+        } } }
+      }.merge(extra)
+    end
+
+    it 'bundles a schema from a sibling file and types its fields' do
+      write_yaml('schemas/user.yaml', user_schema)
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[id]
+      expect(definition.response_fields[:id].required?).to be true
+      expect(definition.response_type).to eq Hash
+    end
+
+    it 'resolves local refs inside an external file against that file' do
+      write_yaml('schemas/user.yaml', {
+                   'User' => { 'type' => 'object', 'properties' => { 'address' => { '$ref' => '#/Address' } } },
+                   'Address' => { 'type' => 'object', 'properties' => { 'city' => { 'type' => 'string' } } }
+                 })
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields[:address].type).to eq Hash
+    end
+
+    it 'resolves refs inside an external file relative to that file' do
+      write_yaml('schemas/common/ids.yaml', { 'Id' => { 'type' => 'integer' } })
+      write_yaml('schemas/user.yaml', {
+                   'User' => { 'type' => 'object', 'properties' => { 'id' => { '$ref' => 'common/ids.yaml#/Id' } } }
+                 })
+      root = write_yaml('api.yaml', root_document('schemas/user.yaml#/User'))
+
+      import = mod.import(root)
+
+      expect(import.definitions[:list_users].response_fields[:id].type).to eq Integer
+      expect(import.notes.grep(/unresolvable/)).to be_empty
+    end
+
+    it 'terminates on circular references between external files' do
+      write_yaml('a.yaml', { 'A' => { 'type' => 'object', 'properties' => { 'b' => { '$ref' => 'b.yaml#/B' } } } })
+      write_yaml('b.yaml', { 'B' => { 'type' => 'object', 'properties' => { 'a' => { '$ref' => 'a.yaml#/A' } } } })
+      root = write_yaml('api.yaml', root_document('a.yaml#/A'))
+
+      definition = mod.import(root).definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[b]
+    end
+
+    it 'resolves a ref back into the root document without copying the root' do
+      components = { 'components' => { 'schemas' => {
+        'User' => { 'type' => 'object', 'properties' => { 'id' => { 'type' => 'integer' } } }
+      } } }
+      root = write_yaml('api.yaml', root_document('other.yaml#/Wrapper', components))
+      write_yaml('other.yaml', {
+                   'Wrapper' => { 'type' => 'object',
+                                  'properties' => { 'user' => { '$ref' => 'api.yaml#/components/schemas/User' } } }
+                 })
+
+      import = mod.import(root)
+      definition = import.definitions[:list_users]
+
+      expect(definition.response_fields.keys).to eq %i[user]
+      expect(definition.response_fields[:user].type).to eq Hash
+      expect(import.document['x-contractful-external'].size).to eq 1
+    end
+
+    it 'raises when a referenced file cannot be read' do
+      root = write_yaml('api.yaml', root_document('schemas/missing.yaml#/User'))
+
+      expect { mod.import(root) }.to raise_error(mod::Error, /no such file/)
+    end
+
+    it 'never fetches remote refs and reports them as unresolved' do
+      root = write_yaml('api.yaml', root_document('https://example.test/schemas.yaml#/User'))
+
+      import = mod.import(root)
+
+      expect(import.notes.join).to match(%r{unresolvable \$ref "https://example\.test})
+      expect(a_request(:any, //)).not_to have_been_made
+    end
+  end
+
+  describe 'header and cookie parameters' do
+    let(:parameters) do
+      [
+        { 'name' => 'X-Request-Id', 'in' => 'header', 'required' => true, 'schema' => { 'type' => 'string' } },
+        { 'name' => 'X-Trace', 'in' => 'header', 'schema' => { 'type' => 'integer', 'default' => 1 } },
+        { 'name' => 'session_id', 'in' => 'cookie', 'schema' => { 'type' => 'string' } },
+        { 'name' => 'X-List', 'in' => 'header', 'schema' => { 'type' => 'array', 'items' => { 'type' => 'string' } } },
+        { 'name' => 'bad name', 'in' => 'header', 'schema' => { 'type' => 'string' } }
+      ]
+    end
+    let(:doc) do
+      {
+        'openapi' => '3.0.3',
+        'paths' => { '/items' => { 'get' => {
+          'operationId' => 'listItems', 'parameters' => parameters, 'responses' => {}
+        } } }
+      }
+    end
+
+    it 'maps header params to header: declarations with snake_cased names' do
+      definition = mod.import(doc).definitions[:list_items]
+
+      expect(definition.params[:x_request_id].header).to eq 'X-Request-Id'
+      expect(definition.params[:x_request_id].required?).to be true
+      expect(definition.params[:x_trace].header).to eq 'X-Trace'
+      expect(definition.params[:x_trace].default_value).to eq 1
+    end
+
+    it 'maps cookie params to cookie: declarations' do
+      expect(mod.import(doc).definitions[:list_items].params[:session_id].cookie).to eq 'session_id'
+    end
+
+    it 'notes header params that cannot be sent as a scalar header or a header name' do
+      notes = mod.import(doc).notes.join("\n")
+
+      expect(notes).to match(/X-List.*not representable as a scalar header value/)
+      expect(notes).to match(/bad name.*not a valid HTTP header name/)
+    end
+
+    it 'renders header and cookie options that re-evaluate to the same contract' do
+      source = mod.to_ruby(doc, class_name: 'HeaderRoundTrip')
+      generated = Module.new
+      generated.module_eval(source)
+      contract = generated.const_get(:HeaderRoundTrip).contract_for(:list_items)
+
+      expect(contract.params[:x_request_id].header).to eq 'X-Request-Id'
+      expect(contract.params[:session_id].cookie).to eq 'session_id'
+    end
+  end
+
+  describe 'allOf composition' do
+    let(:components) do
+      {
+        'Base' => { 'type' => 'object', 'required' => ['id'],
+                    'properties' => { 'id' => { 'type' => 'integer' } } },
+        'Role' => { 'type' => 'string', 'enum' => %w[admin member] }
+      }
+    end
+
+    def doc_with(operation)
+      {
+        'openapi' => '3.0.3',
+        'components' => { 'schemas' => components },
+        'paths' => { '/items' => { 'post' => { 'responses' => {} }.merge(operation) } }
+      }
+    end
+
+    it 'flattens an allOf of object schemas into one body with merged required fields' do
+      d = doc_with(
+        'operationId' => 'createItem',
+        'requestBody' => { 'content' => { 'application/json' => { 'schema' => {
+          'allOf' => [
+            { '$ref' => '#/components/schemas/Base' },
+            { 'type' => 'object', 'required' => ['name'],
+              'properties' => { 'name' => { 'type' => 'string', 'minLength' => 1, 'maxLength' => 40 } } }
+          ]
+        } } } }
+      )
+      import = mod.import(d)
+      params = import.definitions[:create_item].params
+
+      expect(params.keys).to eq %i[id name]
+      expect(params[:id].required?).to be true
+      expect(params[:name].required?).to be true
+      expect(params[:name].length).to eq(1..40)
+      expect(import.notes.grep(/allOf/)).to be_empty
+    end
+
+    it 'flattens an allOf response schema so its members become response fields' do
+      d = doc_with(
+        'operationId' => 'getItem',
+        'responses' => { '200' => { 'description' => 'ok', 'content' => { 'application/json' => { 'schema' => {
+          'allOf' => [
+            { '$ref' => '#/components/schemas/Base' },
+            { 'type' => 'object', 'properties' => { 'label' => { 'type' => 'string' } } }
+          ]
+        } } } } }
+      )
+      definition = mod.import(d).definitions[:get_item]
+
+      expect(definition.response_type).to eq Hash
+      expect(definition.response_fields.keys).to eq %i[id label]
+      expect(definition.response_fields[:id].required?).to be true
+    end
+
+    it 'unwraps a single allOf reference that only adds annotations' do
+      d = doc_with(
+        'operationId' => 'setRole',
+        'parameters' => [{ 'name' => 'role', 'in' => 'query', 'schema' => {
+          'allOf' => [{ '$ref' => '#/components/schemas/Role' }],
+          'description' => 'Access level'
+        } }]
+      )
+      import = mod.import(d)
+      param = import.definitions[:set_role].params[:role]
+
+      expect(param.type).to eq String
+      expect(param.inclusion).to eq %w[admin member]
+      expect(import.notes.grep(/allOf/)).to be_empty
+    end
+
+    it 'keeps an allOf that mixes object and scalar members as a note' do
+      d = doc_with(
+        'operationId' => 'mixed',
+        'parameters' => [{ 'name' => 'filter', 'in' => 'query', 'schema' => {
+          'allOf' => [{ 'type' => 'object' }, { 'type' => 'string' }]
+        } }]
+      )
+      import = mod.import(d)
+
+      expect(import.definitions[:mixed].params[:filter].type).to be_nil
+      expect(import.notes.join).to match(/allOf schemas are not representable/)
     end
   end
 
@@ -399,19 +776,20 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
   end
 
   describe 'the notes channel' do
-    it 'reports header and cookie params as not representable' do
+    it 'reports header and cookie params that cannot be carried as a scalar on the wire' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/w' => { 'get' => {
           'parameters' => [
-            { 'name' => 'X-Request-Id', 'in' => 'header', 'schema' => { 'type' => 'string' } },
-            { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+            { 'name' => 'X-List', 'in' => 'header',
+              'schema' => { 'type' => 'array', 'items' => { 'type' => 'string' } } },
+            { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
           ],
           'responses' => {}
         } }
       } }
       notes = mod.import(d).notes
-      expect(notes).to include(/header param "X-Request-Id": header parameters are not representable/)
-      expect(notes).to include(/cookie param "sid": cookie parameters are not representable/)
+      expect(notes).to include(/header param "X-List": not representable as a scalar header value/)
+      expect(notes).to include(/cookie param "bad sid": name "bad sid" is not a valid cookie name/)
     end
 
     it 'reports multipart and non-JSON bodies' do
@@ -493,13 +871,13 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     it 'deduplicates repeated notes' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/a' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+          { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
         ], 'responses' => {} } },
         '/b' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+          { 'name' => 'bad sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
         ], 'responses' => {} } }
       } }
-      cookie_notes = mod.import(d).notes.grep(/cookie param "sid"/)
+      cookie_notes = mod.import(d).notes.grep(/cookie param "bad sid"/)
       expect(cookie_notes.size).to eq 2 # distinct labels stay distinct
     end
   end
@@ -611,6 +989,48 @@ RSpec.describe Contractful::Contract::OpenAPIImport do
     it 'rejects invalid params before any network traffic' do
       expect { Object.const_get(class_name).new.list_users(page: 0) }
         .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
+      expect(a_request(:any, //)).not_to have_been_made
+    end
+  end
+
+  describe 'generated form-body clients execute end-to-end' do
+    let(:class_name) { "ImportFormSmoke#{object_id.abs}" }
+    let(:doc) do
+      {
+        'openapi' => '3.0.3',
+        'servers' => [{ 'url' => 'https://form.test' }],
+        'paths' => {
+          '/customers' => {
+            'post' => {
+              'operationId' => 'createCustomer',
+              'requestBody' => { 'content' => { 'application/x-www-form-urlencoded' => { 'schema' => {
+                'type' => 'object',
+                'required' => ['email'],
+                'properties' => {
+                  'email' => { 'type' => 'string' },
+                  'balance' => { 'type' => 'integer' }
+                }
+              } } } },
+              'responses' => { '200' => { 'description' => 'ok' } }
+            }
+          }
+        }
+      }
+    end
+
+    before { TOPLEVEL_BINDING.eval(mod.to_ruby(doc, class_name: class_name)) }
+
+    it 'sends the declared body fields as form parameters' do
+      stub = stub_request(:post, 'https://form.test/customers')
+             .with { |req| URI.decode_www_form(req.body).to_h == { 'email' => 'a@b.test', 'balance' => '5' } }
+
+      Object.const_get(class_name).new.create_customer(email: 'a@b.test', balance: 5)
+      expect(stub).to have_been_made
+    end
+
+    it 'rejects a missing required body field before any network traffic' do
+      expect { Object.const_get(class_name).new.create_customer(balance: 5) }
+        .to raise_error(Contractful::Contract::MissingParam, /email/)
       expect(a_request(:any, //)).not_to have_been_made
     end
   end

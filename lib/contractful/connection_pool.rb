@@ -44,7 +44,11 @@ module Contractful
       @mutex.synchronize { conn = @idle[key].shift }
 
       if conn && !revive(conn)
-        # Idle connection was closed or otherwise unusable; build a new one.
+        # Idle connection was closed or otherwise unusable; close it
+        # before discarding the reference so any half-opened socket is
+        # released immediately rather than waiting for GC to finalize
+        # the Net::HTTP object.
+        shutdown(conn)
         conn = nil
       end
 
@@ -57,17 +61,31 @@ module Contractful
     # Return a healthy connection to the pool for future reuse. If the pool is
     # already retaining `max_idle` connections for this key, the connection is
     # closed instead.
+    #
+    # Guard the counter decrement against drift: invalidate() decrements
+    # conditionally (only if positive), but checkin() previously decremented
+    # unconditionally, which would push the count below zero on a
+    # double-checkin or checkin-without-checkout. Both methods now share the
+    # same guard.
     def checkin(key, conn)
-      keep = false
+      keep = checkin_under_lock(key, conn)
+      shutdown(conn) unless keep
+      nil
+    end
+
+    # @api private
+    def checkin_under_lock(key, conn)
       @mutex.synchronize do
+        return nil unless @checked_out[key].positive?
+
         @checked_out[key] -= 1
         if @idle[key].size < @max_idle
           @idle[key].push(conn)
-          keep = true
+          true
+        else
+          false
         end
       end
-      shutdown(conn) unless keep
-      nil
     end
 
     # Discard a connection whose state may no longer be trusted (for example
@@ -128,8 +146,18 @@ end
 
   # The process-wide connection pool used by requests created with
   # `persistent: true`.
+  #
+  # Initialized eagerly at module load. The previous `||=` form was not
+  # atomic: two threads racing on first use both observed @connection_pool
+  # as nil and each built a fresh pool — one was discarded, and its idle
+  # connections' sockets leaked until GC finalized the Net::HTTP objects
+  # (Net::HTTP has no finalizer that closes them). The same pattern exists
+  # in Contractful::CircuitBreaker.registry and Contractful::Pacer.registry
+  # — those modules share the same fix shape.
+  @connection_pool = ConnectionPool.new
+
   def self.connection_pool
-    @connection_pool ||= ConnectionPool.new
+    @connection_pool
   end
 
   def self.connection_pool=(pool)

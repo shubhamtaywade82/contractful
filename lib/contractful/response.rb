@@ -98,7 +98,9 @@ module Contractful
     def body_truncated(length)
       b = body
       if b.length > length
-        b[0..length] + '...'
+        # b[0..length] is inclusive, returning length+1 chars before the
+        # ellipsis — use b[0, length] for an exact cut.
+        "#{b[0, length]}..."
       else
         b
       end

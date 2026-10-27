@@ -52,6 +52,11 @@ module Contractful
     # - A two element array, e.g. ['foo', 'bar']
     # - A one element array, e.g. ['foo']
     #
+    # The recursive `pair.to_a` branch previously could infinite-loop on
+    # an object whose `to_a` returns itself (or another non-Hash/Array),
+    # and crashed on `nil.to_a` (which returns []) because the recursive
+    # call would then raise IndexError on `pair.fetch(0)`. Reject those
+    # inputs up front with a clear error message.
     def process_pair(pair)
       case pair
       when Hash
@@ -63,8 +68,17 @@ module Contractful
 
         [pair.fetch(0), pair[1]]
       else
-        # recurse, converting any non-array to an array
-        process_pair(pair.to_a)
+        # recurse, converting any non-array to an array — but only if
+        # to_a actually returns an Array (to_a on a custom Object can
+        # legitimately return something else, e.g. an Enumerator).
+        coerced = pair.to_a
+        unless coerced.is_a?(Array)
+          raise ArgumentError,
+                'ParamsArray pair must be a Hash, Array, or respond to ' \
+                "to_a with an Array, got #{pair.class}: #{pair.inspect}"
+        end
+
+        process_pair(coerced)
       end
     end
   end

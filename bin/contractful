@@ -24,8 +24,13 @@ end
 
 @url = ARGV.shift || 'http://localhost:4567'
 
+# Parse ~/.contractful with YAML.safe_load_file instead of YAML.load_file.
+# The unsafe form deserializes arbitrary Ruby objects (e.g.
+# `--- !ruby/object:Gem::Installer`), which is an RCE vector if an attacker
+# can write to the file. The safe form only permits plain scalars, arrays
+# and hashes — the documented schema (`{'url':, 'username':, 'password':}`).
 config = begin
-           YAML.load_file(ENV.fetch('HOME') + '/.contractful')
+           YAML.safe_load_file(File.join(ENV.fetch('HOME'), '.contractful'))
 rescue StandardError
            {}
 end
@@ -45,8 +50,13 @@ else
   @password = ARGV[1]
 end
 
-usage("invalid url '#{@url}") unless @url =~ /^https?/
-usage('too few args') unless ARGV.size < 3
+# Anchored scheme check: \Ahttps?:// rejects substrings like
+# 'ftp://http.evil.com' or 'httpx://evil' that the unanchored /^https?/
+# regex would pass.
+usage("invalid url '#{@url}") unless @url =~ %r{\Ahttps?://}i
+# Message is about argument count after the URL — the previous "too
+# few args" was inverted: it fired when ARGV had *too many* entries.
+usage('too many args') unless ARGV.size < 3
 
 def r
   @r ||= Contractful::Resource.new(@url, @username, @password)
@@ -79,7 +89,10 @@ def method_missing(sym, ...)
     begin
       r.send(sym, ...)
     rescue Contractful::RequestFailed => e
-      print $stderr, e.response.body
+      # `print $stderr, body` is a bug — it writes the IO object's inspect
+      # AND the body to $stdout instead of writing the body to $stderr.
+      # Use warn() which writes to $stderr and adds a newline.
+      warn(e.response.body) if e.respond_to?(:response) && e.response
       raise e
     end
   else
@@ -92,8 +105,22 @@ require 'irb/completion'
 
 ENV['IRBRC'] = '.irbrc' if File.exist? '.irbrc'
 
+# ~/.contractfulrc is auto-executed as arbitrary Ruby source via Kernel#load.
+# This is a foot-gun: any process or copy step that places a hostile file
+# there runs in the user's interactive contractful shell. Keep the file
+# for backward compatibility, but warn loudly so users notice when this
+# path is in play. Set CONTRACTFUL_NO_RCFILE_WARN=1 to silence.
 rcfile = File.expand_path('~/.contractfulrc')
-load(rcfile) if File.exist?(rcfile)
+if File.exist?(rcfile)
+  unless ENV['CONTRACTFUL_NO_RCFILE_WARN']
+    warn(
+      '~/.contractfulrc is being executed as Ruby source by contractful. ' \
+      'Remove the file or set CONTRACTFUL_NO_RCFILE_WARN=1 to silence ' \
+      'this warning.'
+    )
+  end
+  load(rcfile)
+end
 
 ARGV.clear
 

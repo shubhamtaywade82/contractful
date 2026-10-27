@@ -109,11 +109,27 @@ module Contractful
             "#{wait.round(1)}s (max_wait #{@max_wait}s)"
     end
 
+    # Process-wide registry; pacer_for lazily creates one pacer per
+    # scheme/host/port key.
+    #
+    # The previous `||=` form was not atomic: two threads racing on
+    # first use both observed @registry as nil and each built a fresh
+    # Registry — one was discarded, losing track of the pacers it
+    # had created (so the per-origin rate limit diverged per-thread).
+    # Use a Mutex constant to serialize the lazy init. A constant is
+    # used because methods defined inside `class << self` execute with
+    # self = the class, but instance variables assigned inside the
+    # `class << self` block live on the singleton class — the two
+    # scopes do not match.
+    REGISTRY_MUTEX = Mutex.new
+
     class << self
-      # Process-wide registry; pacer_for lazily creates one pacer per
-      # scheme/host/port key.
       def registry
-        @registry ||= Registry.new
+        REGISTRY_MUTEX.synchronize { @registry ||= Registry.new }
+      end
+
+      def reset_registry
+        REGISTRY_MUTEX.synchronize { @registry = nil }
       end
     end
 

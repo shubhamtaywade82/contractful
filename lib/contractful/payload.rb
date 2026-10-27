@@ -19,6 +19,13 @@ module Contractful
     extend self
 
     def generate(params)
+      # nil is a valid input — it means "no body for this request" (the
+      # common case for GET/DELETE/HEAD). Return nil so the request
+      # layer skips the body entirely. Only non-nil unknown types raise
+      # so callers find out immediately instead of silently sending an
+      # empty body (e.g. `Contractful.post(url, 123)`).
+      return nil if params.nil?
+
       if params.is_a?(Contractful::Payload::Base)
         # pass through Payload objects unchanged
         params
@@ -40,6 +47,16 @@ module Contractful
         end
       elsif params.respond_to?(:read)
         Streamed.new(params)
+      else
+        # Previously this branch was silent: any value that did not match
+        # one of the cases above returned nil from generate, and the
+        # request went out with NO body — the user's payload was lost
+        # without any signal. Raise so callers find out immediately
+        # (e.g. `Contractful.post(url, 123)` or `Contractful.post(url, [1,2,3])`).
+        raise ArgumentError,
+              "unsupported payload type #{params.class} " \
+              '(expected String, Hash, ParamsArray, or IO-like ' \
+              'responding to #read)'
       end
     end
 

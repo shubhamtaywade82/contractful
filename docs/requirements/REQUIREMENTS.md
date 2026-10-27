@@ -74,7 +74,7 @@ upstream rest-client release line in which a requirement landed; contractful
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
-| REQ-P01 | Ruby range (FR-24) | Suite green on 3.0–4.0 matrix; `ruby >= 3.0` enforced by gemspec | CI matrix | implemented (2.2) |
+| REQ-P01 | Ruby range (FR-24) | Suite green on 3.2–4.0 matrix; `ruby >= 3.2` enforced by gemspec | CI matrix | implemented (2.2) |
 | REQ-P02 | Windows gem (FR-23) | `contractful.windows.gemspec` builds for `x64-mingw-ucrt` with `ffi ~> 1.16` root-cert loading | `spec/unit/windows/root_certs_spec.rb`, gem build | implemented (2.2) |
 | REQ-P03 | Packaging integrity | Both gemspecs build from a clean checkout; `git ls-files` file list; metadata includes changelog/bugs URIs | gem build in release checklist | implemented (2.2) |
 | REQ-P04 | CI gates | Every push runs unit + integration specs on the matrix; `permissions: contents: read` | `.github/workflows/ci.yml` | implemented (2.2) |

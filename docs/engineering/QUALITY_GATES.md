@@ -12,7 +12,7 @@ suggestion.
 
 | # | Gate | Verification | Enforced by |
 | --- | --- | --- | --- |
-| G1 | Full unit + integration suites green on the Ruby 3.0–4.0 matrix | `rake spec:unit`, `rake spec:integration` in CI | CI (blocking) |
+| G1 | Full unit + integration suites green on the Ruby 3.2–4.0 matrix | `rake spec:unit`, `rake spec:integration` in CI | CI (blocking) |
 | G2 | Contract specs included in the unit run | `spec/unit/**` glob in the Rakefile (fixed 2026-10; previously skipped `spec/unit/contract/` in CI) | CI (blocking) |
 | G3 | Both gemspecs build from a clean checkout | `gem build contractful.gemspec` + `gem build contractful.windows.gemspec` | Release checklist (manual) |
 | G4 | New/changed `lib/` code has verifying specs; bug fixes have failing-then-passing specs | PR diff inspection | Reviewer |
@@ -30,7 +30,7 @@ suggestion.
 
 `.github/workflows/ci.yml` blocks merges on: unit specs (including the
 contract suite), integration specs, RuboCop (pinned, safe-autocorrect only),
-across Ruby 3.0/3.1/3.2/3.3/3.4/4.0, with an experimental non-blocking
+across Ruby 3.2/3.3/3.4/4.0, with an experimental non-blocking
 `ruby-head` job. The unit job also enforces the coverage gate (G13): the
 suite runs under simplecov and fails below 95% line coverage on `lib/`
 (the `windows/` platform shims and `version.rb` — which Bundler evaluates

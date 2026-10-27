@@ -31,5 +31,9 @@ Gem::Specification.new do |s|
   s.add_dependency('mime-types', '>= 1.16', '< 4.0')
   s.add_dependency('netrc', '~> 0.8')
 
-  s.required_ruby_version = '>= 3.0'
+  # Ruby 3.0 and 3.1 are end-of-life and the ubuntu-26.04 GitHub Actions
+  # runner image no longer ships a build for them, so the CI matrix cannot
+  # exercise those releases. The gem runtime still works on 3.0/3.1 in
+  # principle, but the supported and tested floor is 3.2.
+  s.required_ruby_version = '>= 3.2'
 end

@@ -139,11 +139,23 @@ module Contractful
     # @param object [Hash, ParamsArray] The container to flatten
     # @param uri_escape [Boolean] Whether to URI escape keys and values
     # @param parent_key [String] Should not be passed (used for recursion)
+    # @param depth [Integer] Should not be passed (used for recursion).
+    #   Hard cap at MAX_FLATTEN_DEPTH to prevent SystemStackError on
+    #   cyclically-referenced or adversarially-nested input.
     #
-    def self.flatten_params(object, uri_escape = false, parent_key = nil)
+    MAX_FLATTEN_DEPTH = 100
+
+    def self.flatten_params(object, uri_escape = false, parent_key = nil, depth = 0)
       unless object.is_a?(Hash) || object.is_a?(ParamsArray) ||
              (parent_key && object.is_a?(Array))
         raise ArgumentError.new('expected Hash or ParamsArray, got: ' + object.inspect)
+      end
+
+      if depth > MAX_FLATTEN_DEPTH
+        raise ArgumentError,
+              "flatten_params nested deeper than #{MAX_FLATTEN_DEPTH} levels " \
+              '(reject input, or raise MAX_FLATTEN_DEPTH if you have a ' \
+              'legitimate use case)'
       end
 
       # transform empty collections into nil, where possible
@@ -165,7 +177,7 @@ module Contractful
 
         case v
         when Array, Hash, ParamsArray
-          result.concat flatten_params(v, uri_escape, processed_key)
+          result.concat flatten_params(v, uri_escape, processed_key, depth + 1)
         else
           v = escape(v.to_s) if uri_escape && v
           result << [processed_key, v]

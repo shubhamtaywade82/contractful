@@ -240,17 +240,32 @@ module Contractful
       end
 
       def create_regular_field(stream, key, value)
-        stream.write("Content-Disposition: form-data; name=\"#{key}\"")
+        # Multipart field names go into a quoted-string in the
+        # Content-Disposition header. A user-controlled key that contains
+        # `"` or CRLF can break out of the quoted-string and inject a
+        # synthetic part header (or another Content-Disposition with an
+        # attacker-chosen filename). Escape `"` as `\"` and strip CR/LF
+        # so the field name cannot escape its quoted-string slot.
+        safe_key = escape_form_field_name(key)
+        stream.write("Content-Disposition: form-data; name=\"#{safe_key}\"")
         stream.write(EOL)
         stream.write(EOL)
         stream.write(value)
       end
 
       def create_file_field(stream, key, value)
+        # Same header-injection guard as create_regular_field, plus a
+        # filename escape — File.basename(value.path) is user-controlled
+        # (the path on disk of an uploaded file), and a filename containing
+        # `"`, `\r` or `\n` can inject a synthetic filename/content-type
+        # header into the multipart stream.
+        safe_key = escape_form_field_name(key)
         stream.write('Content-Disposition: form-data;')
-        stream.write(" name=\"#{key}\";") unless key.nil? || key == ''
-        stream.write(" filename=\"#{value.respond_to?(:original_filename) ? value.original_filename : File.basename(value.path)}\"#{EOL}")
-        stream.write("Content-Type: #{value.respond_to?(:content_type) ? value.content_type : mime_for(value.path)}#{EOL}")
+        stream.write(" name=\"#{safe_key}\";") unless key.nil? || key == ''
+        filename = value.respond_to?(:original_filename) ? value.original_filename : File.basename(value.path)
+        stream.write(" filename=\"#{escape_form_field_name(filename)}\"#{EOL}")
+        content_type = value.respond_to?(:content_type) ? value.content_type : mime_for(value.path)
+        stream.write("Content-Type: #{content_type}#{EOL}")
         stream.write(EOL)
         while (data = value.read(8124))
           stream.write(data)
@@ -259,8 +274,30 @@ module Contractful
         value.close if value.respond_to?(:close)
       end
 
+      # Escape a multipart form field name (the value of `name=` or
+      # `filename=` in Content-Disposition) so the user input cannot
+      # break out of the quoted-string slot in the header.
+      #
+      # - Replace `"` with `\"` (RFC 2047 quoted-string escape).
+      # - Strip CR and LF entirely. RFC 7578 forbids them inside the
+      #   token, and any CRLF ends the current header line — which is
+      #   the injection vector.
+      # - Return nil for nil so the caller's `unless key.nil? || key == ''`
+      #   branch above keeps working unchanged.
+      def escape_form_field_name(name)
+        return nil if name.nil?
+
+        name.to_s.tr("\r\n", '').gsub('"', '\"')
+      end
+
       def mime_for(path)
-        mime = MIME::Types.type_for path
+        # value.path can legitimately return nil (e.g. a Tempfile that
+        # has been unlinked, or a StringIO subclass). MIME::Types.type_for
+        # calls #split on its argument, so passing nil raises
+        # NoMethodError and crashes the whole multipart build.
+        return 'text/plain' if path.nil? || path.to_s.empty?
+
+        mime = MIME::Types.type_for(path)
         mime.empty? ? 'text/plain' : mime[0].content_type
       end
 

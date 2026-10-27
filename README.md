@@ -18,7 +18,7 @@ recorded-sequence helper replays captured vendor interactions in tests.
 This project began as a modernization of the original
 [rest-client](https://github.com/rest-client/rest-client) gem, which was
 archived by its maintainers in 2019 and had fallen behind modern Ruby
-releases. That modernization kept the gem alive on Ruby 3.0 through 4.0,
+releases. That modernization kept the gem alive on Ruby 3.2 through 4.0,
 moved to current development tooling, and added long-requested options such
 as `:write_timeout` and `:ssl_min_version` / `:ssl_max_version`. The
 codebase then evolved into a contract-first client, and at version 0.1.0 it
@@ -64,14 +64,17 @@ The complete engineering documentation set lives at the root and under
 
 ## Requirements
 
-MRI Ruby 3.0 and newer are supported, including Ruby 4.0. The full test suite
-runs in CI against Ruby 3.0, 3.1, 3.2, 3.3, 3.4, and 4.0 (plus ruby-head on a
-best-effort basis). Alternative interpreters compatible with Ruby 3.0+ such as
-JRuby should work as well.
+MRI Ruby 3.2 and newer are supported, including Ruby 4.0. The full test suite
+runs in CI against Ruby 3.2, 3.3, 3.4, and 4.0 (plus ruby-head on a best-effort
+basis). Alternative interpreters compatible with Ruby 3.2+ such as JRuby
+should work as well.
 
-Ruby 2.x versions are no longer supported. Ruby 3.0, 3.1, and 3.2 have reached
-end-of-life upstream; they are still covered by this gem's test matrix, but
-users are encouraged to run a maintained Ruby release.
+Ruby 2.x versions are no longer supported. Ruby 3.0 and 3.1 have reached
+end-of-life upstream and are no longer available on the GitHub Actions
+ubuntu-26.04 runner image, so they have been removed from the CI matrix and
+the gemspec's `required_ruby_version` floor has been raised to `>= 3.2`. The
+runtime still works on 3.0/3.1 in principle, but only 3.2+ is tested and
+supported.
 
 The contractful gem depends on these other gems for usage at runtime:
 
@@ -97,7 +100,7 @@ be able to upgrade with no changes.
 
 Overview of significant changes:
 
-* requires Ruby >= 3.0
+* requires Ruby >= 3.2
 * `Contractful::Response` objects are a subclass of `String` rather than a
   Frankenstein monster. And `#body` or `#to_s` return a true `String` object.
 * cleanup of exception classes, including new `Contractful::Exceptions::Timeout`

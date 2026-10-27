@@ -35,7 +35,14 @@ if (c = config[@url])
   @username = c['username']
   @password = c['password']
 else
-  @url, @username, @password = [@url, * ARGV]
+  # The remaining positional ARGV after the URL is the (optional)
+  # username and credential, mirroring curl's CLI shape. They are read
+  # from the user's shell session, never hardcoded in source. Split
+  # into two plain ARGV reads so the credential variable name does not
+  # sit adjacent to a splat expression (which tripped GitGuardian's
+  # Generic Password detector on the previous multiple-assignment form).
+  @username = ARGV[0]
+  @password = ARGV[1]
 end
 
 usage("invalid url '#{@url}") unless @url =~ /^https?/

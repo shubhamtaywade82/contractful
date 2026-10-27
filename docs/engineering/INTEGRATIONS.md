@@ -34,7 +34,7 @@ two adaptation layers worth knowing before touching request.rb:
 - **Timeout plumbing** — `:open_timeout`, `:read_timeout`, `:write_timeout`
   (and total `:timeout`) map onto the corresponding Net::HTTP attributes;
   `Net::WriteTimeout` exists only on sufficiently modern Rubies, which the
-  `>= 3.0` requirement guarantees.
+  `>= 3.2` requirement guarantees.
 
 ## Platform integration: Windows
 
@@ -53,7 +53,7 @@ specs cover the Windows loader separately
 | --- | --- | --- |
 | RSpec + WebMock | offline HTTP behavior | see TESTING.md conventions and traps |
 | httpbin.org | live end-to-end target (TLS, redirects, headers, forms) | CI reaches it deliberately; `HTTPBIN_URL` overrides for proxied environments |
-| GitHub Actions | CI matrix 3.0–4.0 + experimental head | `permissions: contents: read` |
+| GitHub Actions | CI matrix 3.2–4.0 + experimental head | `permissions: contents: read` |
 | mise | reference Ruby toolchain (4.0.7) | see SETUP.md |
 | RubyGems | distribution | publication is maintainer-only (`gem push` gated by AGENT_TOOL_POLICY.md) |
 

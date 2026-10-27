@@ -8,8 +8,9 @@ All commands below assume that environment; adapt paths for your own.
 ## Prerequisites
 
 - git
-- Ruby >= 3.0 (the suite is verified on 4.0.x via mise; CI covers
-  3.0, 3.1, 3.2, 3.3, 3.4, 4.0 and experimental `ruby-head`)
+- Ruby >= 3.2 (the suite is verified on 4.0.x via mise; CI covers
+  3.2, 3.3, 3.4, 4.0 and experimental `ruby-head`. Ruby 3.0/3.1 are
+  end-of-life and no longer shipped on the ubuntu-26.04 runner image.)
 - Bundler
 
 ## Initial setup

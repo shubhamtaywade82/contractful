@@ -12,7 +12,7 @@ behavior is not covered by a spec, its correctness is an opinion.
 - **WebMock** >= 3.19, < 5 — HTTP stubbing for offline specs
 - **mise + Ruby 4.0.7** — reference runtime (see
   [SETUP.md](../implementation/SETUP.md)); CI additionally verifies the
-  3.0–4.0 matrix
+  3.2–4.0 matrix
 
 ## Organization
 
@@ -55,7 +55,7 @@ bundle exec rake doc               # specdoc dry-run
 
 Set `LIVE_HTTP_TESTS=1` to include the `:live` examples in any RSpec run.
 CI (`.github/workflows/ci.yml`) runs `spec:unit` and `spec:integration` on
-Ruby 3.0–4.0, plus an experimental non-blocking `ruby-head` job. A red
+Ruby 3.2–4.0, plus an experimental non-blocking `ruby-head` job. A red
 matrix blocks merge; a red `ruby-head` is a warning about tomorrow.
 
 ## Conventions and known traps

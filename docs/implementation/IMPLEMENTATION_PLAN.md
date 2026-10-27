@@ -8,7 +8,7 @@ a time. Requirements referenced here are defined in
 
 ## Current baseline (v2.5.0, branch `feature/contract-first`, PR #2 open)
 
-Shipped across 2.2 → 2.5: full Ruby 3.0–4.0 modernization with CI matrix;
+Shipped across 2.2 → 2.5: full Ruby 3.2–4.0 modernization with CI matrix;
 automatic retries with exponential backoff and `Retry-After`; persistent
 connections via a thread-safe pool; `Response#json`; and the complete
 contract-first layer — typed closed-schema params, open-schema response

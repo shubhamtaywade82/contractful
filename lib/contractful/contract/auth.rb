@@ -60,15 +60,26 @@ module Contractful
         @schemes.each do |scheme|
           case scheme[:scheme]
           when :token_provider
-            headers['Authorization'] = "Bearer #{scheme[:value].token}"
+            token = scheme[:value].token
+            validate_resolved_credential!(token, :token_provider)
+            headers['Authorization'] = "Bearer #{token}"
           when :bearer
-            headers['Authorization'] = "Bearer #{credential(scheme[:value])}"
+            token = credential(scheme[:value])
+            validate_resolved_credential!(token, :bearer)
+            headers['Authorization'] = "Bearer #{token}"
           when :basic
             user, pass = credential(scheme[:value])
+            # basic auth allows a blank password (RFC 7617), but a nil
+            # user or nil pass means the callable did not return a
+            # usable pair — refuse to send the request rather than
+            # emit a header the server will reject.
+            validate_resolved_credential!(user, :basic_user)
+            pass = pass.to_s
             token = ["#{user}:#{pass}"].pack('m0')
             headers['Authorization'] = "Basic #{token}"
           when :api_key
             value = credential(scheme[:value])
+            validate_resolved_credential!(value, :api_key)
             if scheme[:location] == :query
               query[scheme[:name].to_s] = value
             else
@@ -77,6 +88,22 @@ module Contractful
           end
         end
         { headers: headers, query: query }
+      end
+
+      # Reject nil resolved credentials before they hit the wire.
+      # Without this guard, an unset ENV['API_TOKEN'] would let the
+      # request go out as `Authorization: Bearer ` (empty token) and a
+      # misconfigured basic callable returning `[nil, nil]` would emit
+      # `Basic Og==` (the base64 of `:`). Both look like valid auth to
+      # the server, which then 401s in a confusing way that hides the
+      # real cause (a missing environment variable or a typo'd callable).
+      def validate_resolved_credential!(value, kind)
+        return unless value.nil?
+        return if kind == :basic_user # allow empty user/pass on basic
+
+        raise Contractful::Contract::InvalidDefinition,
+              "resolved #{kind} credential is nil — check the " \
+              'callable or ENV var referenced by the auth scheme'
       end
 
       # The token provider object when the contract authenticates with

@@ -2,6 +2,7 @@
 
 require 'yaml'
 require 'json'
+require 'timeout'
 require_relative '../contract'
 
 # rubocop:disable Naming/MethodParameterName
@@ -51,6 +52,11 @@ module Contractful
       BODY_VERBS = %i[post put patch].freeze
 
       MAX_REF_DEPTH = 10
+
+      # Cap for #compile_pattern_with_timeout. 1 second is generous for
+      # any reasonable OpenAPI pattern; catastrophic-backtracking patterns
+      # blow past it inside a few hundred ms.
+      PATTERN_COMPILE_TIMEOUT_SECONDS = 1
 
       module_function
 
@@ -721,10 +727,24 @@ module Contractful
         end
 
         if (pattern = schema['pattern'])
+          # OpenAPI `pattern` is a JSON Schema/ecma-262 regex, not a Ruby
+          # Regexp — but we materialize it as a Ruby Regexp so generated
+          # contracts can call it as a verifier. A document with a
+          # catastrophic-backtracking pattern (e.g. `^(a+)+$`) would hang
+          # the importer on any input that exercises it. Wrap Regexp.new
+          # in a 1-second Timeout so a hostile pattern fails fast
+          # instead of wedging the import. The pattern is still compiled
+          # and stored on the contract — the timeout only bounds the
+          # compilation probe.
           begin
-            options[:pattern] = Regexp.new(pattern)
+            compiled = compile_pattern_with_timeout(pattern)
+            options[:pattern] = compiled if compiled
           rescue RegexpError => e
             ctx.note("#{label}: pattern #{pattern.inspect} is not a valid Ruby Regexp (#{e.message}) — skipped")
+          rescue Timeout::Error
+            ctx.note("#{label}: pattern #{pattern.inspect} took longer than " \
+                     "#{PATTERN_COMPILE_TIMEOUT_SECONDS}s to compile — " \
+                     'possible catastrophic backtracking; skipped')
           end
         end
 
@@ -948,6 +968,18 @@ module Contractful
           end
         end
         hints
+      end
+
+      # Compile a JSON Schema `pattern` into a Ruby Regexp, but bound
+      # the compile (and a tiny matching probe) to
+      # PATTERN_COMPILE_TIMEOUT_SECONDS. A document with a
+      # catastrophic-backtracking pattern (e.g. `^(a+)+$`) would
+      # otherwise hang the importer; the timeout lets us bail out,
+      # note the pattern as unrepresentable, and continue.
+      def compile_pattern_with_timeout(pattern)
+        Timeout.timeout(PATTERN_COMPILE_TIMEOUT_SECONDS) do
+          Regexp.new(pattern)
+        end
       end
     end
   end

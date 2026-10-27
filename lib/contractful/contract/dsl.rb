@@ -412,6 +412,19 @@ module Contractful
 
         if (match = string.match(/\Acall_(.+)\z/)) &&
            (definition = self.class.contract_for(match[1]))
+          # Generated contract methods only accept **kwargs; a positional
+          # arg in a call_* dispatch is almost always a typo (caller meant
+          # to pass keyword args but wrote `client.call_list_posts(1)`).
+          # The previous implementation silently dropped *args, so the
+          # request went out with empty params — a successful but wrong
+          # request. Raise so callers find out immediately.
+          unless args.empty?
+            raise ArgumentError,
+                  "#{name} accepts keyword arguments only (pass them as " \
+                  "#{name}(#{args.map.with_index { |_v, i| "arg#{i}" }.join(', ')}) " \
+                  '=> use keywords instead)'
+          end
+
           return Contract::Executor.call(self, definition, kwargs)
         end
 

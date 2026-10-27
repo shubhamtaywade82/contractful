@@ -113,7 +113,7 @@ and the review-hardening fixes that landed on master ahead of the release.
   the previous pattern skipped the nested `spec/unit/contract/` directory,
   so the contract-first suite never ran under CI's unit job.
 * Add the OpenAPI import helper (REQ-N01): an opt-in, development-time
-  reader (`require 'restclient/contract/openapi_import'`) that converts an
+  reader (`require 'contractful/contract/openapi_import'`) that converts an
   OpenAPI 3.x document into `contract` definitions — typed closed-schema
   params with enum/min/max/length/pattern constraints, `payload_style`
   inference, response statuses (including `2XX` wildcards), JSON body

@@ -696,39 +696,6 @@ Clients also accept instance-level overrides: `GitHubAPI.new(base:
 
 If a vendor publishes a machine-readable OpenAPI 3.x document, the opt-in
 import helper converts it into `contract` declarations — a development-time
-tool, not a runtime dependency (it is not loaded by `require 'rest-client'`):
-
-```ruby
-require 'restclient/contract/openapi_import'
-
-# Build Definition objects from a file, YAML/JSON text or a Hash:
-import = RestClient::Contract::OpenAPIImport.import('vendor_openapi.yaml')
-import.definitions   # => { list_users: #<Definition GET /users ...>, ... }
-import.base_url      # from `servers`
-import.notes         # every lossy mapping decision, for review
-
-# Or render a ready-to-paste client class:
-puts RestClient::Contract::OpenAPIImport.to_ruby('vendor_openapi.yaml',
-                                                 class_name: 'Acme::Client')
-```
-
-What is mapped: path/query/body-object params (types, required, defaults,
-enum/min/max/length/pattern constraints), `payload_style` (form for
-urlencoded bodies, query for body-less POST/PUT/PATCH), response statuses
-(numeric and `2XX` wildcards), JSON body types and open-schema
-`response_field` bindings, the base URL from `servers`, and auth hints from
-`securitySchemes` (as comments — credentials are never invented).
-
-What is NOT mapped is reported on `import.notes` instead of guessed away:
-header/cookie params, multipart bodies, `oneOf`/`anyOf` unions, `default`
-responses, operation-level server overrides. The generated source
-round-trips: evaluating it yields a class whose contracts `describe`
-exactly like the imported definitions.
-
-## Multipart
-
-If a vendor publishes a machine-readable OpenAPI 3.x document, the opt-in
-import helper converts it into `contract` declarations — a development-time
 tool, not a runtime dependency (it is not loaded by `require 'contractful'`):
 
 ```ruby

@@ -40,7 +40,7 @@ verify matrix on master, then the release cadence in DELIVERY.md. Note:
 
 A separate, opt-in reader that converts an OpenAPI 3.x document into
 `contract` declarations (source-to-source, run at development time, not a
-runtime dependency). Shipped as `require 'restclient/contract/openapi_import'`:
+runtime dependency). Shipped as `require 'contractful/contract/openapi_import'`:
 `.import` builds Definitions (typed params with closed-schema constraints,
 payload styles, statuses incl. `2XX` wildcards, open-schema response
 fields), `.to_ruby` renders a client class from those same definitions and

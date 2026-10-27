@@ -146,8 +146,18 @@ end
 
   # The process-wide connection pool used by requests created with
   # `persistent: true`.
+  #
+  # Initialized eagerly at module load. The previous `||=` form was not
+  # atomic: two threads racing on first use both observed @connection_pool
+  # as nil and each built a fresh pool — one was discarded, and its idle
+  # connections' sockets leaked until GC finalized the Net::HTTP objects
+  # (Net::HTTP has no finalizer that closes them). The same pattern exists
+  # in Contractful::CircuitBreaker.registry and Contractful::Pacer.registry
+  # — those modules share the same fix shape.
+  @connection_pool = ConnectionPool.new
+
   def self.connection_pool
-    @connection_pool ||= ConnectionPool.new
+    @connection_pool
   end
 
   def self.connection_pool=(pool)

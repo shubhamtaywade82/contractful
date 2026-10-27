@@ -31,9 +31,9 @@ end
 # and hashes — the documented schema (`{'url':, 'username':, 'password':}`).
 config = begin
            YAML.safe_load_file(File.join(ENV.fetch('HOME'), '.contractful'))
-         rescue StandardError
+rescue StandardError
            {}
-         end
+end
 
 if (c = config[@url])
   @url = c['url']
@@ -53,7 +53,7 @@ end
 # Anchored scheme check: \Ahttps?:// rejects substrings like
 # 'ftp://http.evil.com' or 'httpx://evil' that the unanchored /^https?/
 # regex would pass.
-usage("invalid url '#{@url}") unless @url =~ /\Ahttps?:\/\//i
+usage("invalid url '#{@url}") unless @url =~ %r{\Ahttps?://}i
 # Message is about argument count after the URL — the previous "too
 # few args" was inverted: it fired when ARGV had *too many* entries.
 usage('too many args') unless ARGV.size < 3
@@ -112,8 +112,13 @@ ENV['IRBRC'] = '.irbrc' if File.exist? '.irbrc'
 # path is in play. Set CONTRACTFUL_NO_RCFILE_WARN=1 to silence.
 rcfile = File.expand_path('~/.contractfulrc')
 if File.exist?(rcfile)
-  warn "~/.contractfulrc is being executed as Ruby source by contractful. " \
-       'Remove the file or set CONTRACTFUL_NO_RCFILE_WARN=1 to silence this warning.' unless ENV['CONTRACTFUL_NO_RCFILE_WARN']
+  unless ENV['CONTRACTFUL_NO_RCFILE_WARN']
+    warn(
+      '~/.contractfulrc is being executed as Ruby source by contractful. ' \
+      'Remove the file or set CONTRACTFUL_NO_RCFILE_WARN=1 to silence ' \
+      'this warning.'
+    )
+  end
   load(rcfile)
 end
 

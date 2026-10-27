@@ -27,8 +27,14 @@ module Contractful
     def initialize(tempfile, net_http_res, request, start_time = nil)
       @file = tempfile
 
-      # reopen the tempfile so we can read it
+      # reopen the tempfile so we can read it. Tempfile#open does NOT
+      # preserve the binmode flag that fetch_body_to_tempfile set
+      # (https://github.com/ruby/tempfile/blob/v0.3.0/lib/tempfile.rb).
+      # On Windows the reopened file is text mode, which corrupts binary
+      # bodies (image, gzip) via CRLF translation. Re-apply binmode
+      # unconditionally; on Linux it is a no-op.
       @file.open
+      @file.binmode
 
       response_set_vars(net_http_res, request, start_time)
     end
@@ -45,5 +51,20 @@ module Contractful
     def size
       file.size
     end
+
+    # Close and unlink the underlying tempfile. Long-lived processes
+    # that issue many raw_response: true requests leak a file
+    # descriptor per RawResponse until GC finalizes the Tempfile — call
+    # this method when the body is no longer needed to release the FD
+    # and the on-disk file immediately. After this call, #body and
+    # #size raise (the file is gone); callers that want to keep the
+    # body around should read it into a String before closing.
+    def close
+      return if @file.nil?
+
+      @file.close(true) if @file.respond_to?(:close)
+      @file = nil
+    end
+    alias close! close
   end
 end

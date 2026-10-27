@@ -1304,26 +1304,42 @@ module Contractful
       total = http_response['Content-Length'].to_i
       stream_log_bucket = nil
 
-      http_response.read_body do |chunk|
-        tf.write chunk
-        size += chunk.size
-        if log
-          # Use the redacted URL here as everywhere else in the log: a URL
-          # with embedded basic-auth credentials must not leak into the
-          # streaming progress lines.
-          if total == 0
-            log << format("streaming %s %s (%d of unknown) [0 Content-Length]\n", @method.upcase, redacted_url, size)
-          else
-            percent = (size * 100) / total
-            current_log_bucket, = percent.divmod(@stream_log_percent)
-            if current_log_bucket != stream_log_bucket
-              stream_log_bucket = current_log_bucket
-              log << format("streaming %s %s %d%% done (%d of %d)\n", @method.upcase, redacted_url, (size * 100) / total, size, total)
+      # Wrap the read_body loop in begin/ensure so a write failure (disk
+      # full, broken connection) cannot leak the tempfile's file
+      # descriptor. Tempfile#close (without `true`) keeps the file on
+      # disk for RawResponse to reopen; close(true) would unlink it,
+      # which would break downstream code that reads the body later.
+      begin
+        http_response.read_body do |chunk|
+          tf.write chunk
+          size += chunk.size
+          if log
+            # Use the redacted URL here as everywhere else in the log: a URL
+            # with embedded basic-auth credentials must not leak into the
+            # streaming progress lines.
+            if total == 0
+              log << format("streaming %s %s (%d of unknown) [0 Content-Length]\n", @method.upcase, redacted_url, size)
+            else
+              percent = (size * 100) / total
+              current_log_bucket, = percent.divmod(@stream_log_percent)
+              if current_log_bucket != stream_log_bucket
+                stream_log_bucket = current_log_bucket
+                log << format("streaming %s %s %d%% done (%d of %d)\n", @method.upcase, redacted_url, (size * 100) / total, size, total)
+              end
             end
           end
         end
+      ensure
+        # Defensive close: the tempfile may be a partial double in tests
+        # or a custom IO that does not implement closed?/close, but the
+        # common case (real Tempfile) does. Avoid leaking the FD on a
+        # write/read failure even when the IO shape is unusual.
+        if tf.respond_to?(:closed?) && !tf.closed?
+          tf.close if tf.respond_to?(:close)
+        elsif tf.respond_to?(:close)
+          tf.close
+        end
       end
-      tf.close
       tf
     end
 

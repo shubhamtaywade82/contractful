@@ -745,9 +745,39 @@ module Contractful
     # using OpenSSL::X509::Store#set_default_paths. On Windows, this will use
     # Contractful::Windows::RootCerts to look up the CAs trusted by the system.
     #
+    # The store is memoized as a class instance variable. The previous
+    # implementation rebuilt a fresh OpenSSL::X509::Store on every request
+    # that did not pass ssl_ca_file / ssl_ca_path / cert_store explicitly,
+    # and on Windows that re-loaded every trusted root certificate via FFI
+    # (hundreds of FFI calls + cert parses per request). The Windows cert
+    # store is process-stable; reusing it is a major perf win on Windows
+    # and a no-op on Linux (set_default_paths is cheap there too).
+    #
+    # Tests that want a fresh store can call
+    # Contractful::Request.reset_default_ssl_cert_store!
+    #
     # @return [OpenSSL::X509::Store]
     #
+    @default_ssl_cert_store_mutex = Mutex.new
+
     def self.default_ssl_cert_store
+      return @default_ssl_cert_store if @default_ssl_cert_store
+
+      @default_ssl_cert_store_mutex.synchronize do
+        return @default_ssl_cert_store if @default_ssl_cert_store
+
+        @default_ssl_cert_store = build_default_ssl_cert_store
+      end
+    end
+
+    # Forget the memoized default cert store. Tests that fork the
+    # process or want to re-pick up changes to the Windows root
+    # certificate set call this between scenarios.
+    def self.reset_default_ssl_cert_store!
+      @default_ssl_cert_store_mutex.synchronize { @default_ssl_cert_store = nil }
+    end
+
+    def self.build_default_ssl_cert_store
       cert_store = OpenSSL::X509::Store.new
       cert_store.set_default_paths
 
@@ -755,12 +785,10 @@ module Contractful
       # certificates using the win32 API.
       if Contractful::Platform.windows?
         Contractful::Windows::RootCerts.instance.to_a.uniq.each do |cert|
-          
           cert_store.add_cert(cert)
         rescue OpenSSL::X509::StoreError => e
           # ignore duplicate certs
           raise unless e.message == 'cert already in hash table'
-          
         end
       end
 

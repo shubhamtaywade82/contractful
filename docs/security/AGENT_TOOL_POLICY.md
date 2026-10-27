@@ -1,7 +1,7 @@
 # Agent tool policy — what AI agents may and may not do here
 
 This policy defines the permission boundaries for AI coding agents operating
-on the rest-client repository, complementing [AGENTS.md](../../AGENTS.md)
+on the contractful repository, complementing [AGENTS.md](../../AGENTS.md)
 (how to work) and [AGENT_WORKFLOWS.md](../agents/AGENT_WORKFLOWS.md) (the
 workflow). It exists because agents have shell, file and network access, and
 that access must be bounded by explicit rules rather than vibes. Where an

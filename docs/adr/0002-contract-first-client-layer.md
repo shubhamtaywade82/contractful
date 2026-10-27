@@ -37,7 +37,7 @@ declarations.
 
 ## Decision
 
-Build `RestClient::Contract` on top of the existing request pipeline:
+Build `Contractful::Contract` on top of the existing request pipeline:
 
 1. Contracts are Ruby DSL declarations (`contract :name, 'VERB /path' do
    ... end`) evaluated at class load time into `Definition` objects. The
@@ -53,7 +53,7 @@ Build `RestClient::Contract` on top of the existing request pipeline:
    credentials), idempotency keys (stable across retries), pagination
    (cursor/offset styles with metaprogrammed page enumerators), and
    rate-limit parsing on every response.
-5. Errors are exceptions, rooted at `RestClient::Contract::Error`. Throwing
+5. Errors are exceptions, rooted at `Contractful::Contract::Error`. Throwing
    is the correct default on order-critical paths: a silently misparsed
    order status is worse than an exception.
 6. **Zero new runtime dependencies.** The contract layer is pure Ruby

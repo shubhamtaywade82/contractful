@@ -1,33 +1,35 @@
+# frozen_string_literal: true
+
 require_relative '_lib'
 
-describe RestClient::ConnectionPool do
-  # Minimal stand-in for a started Net::HTTP connection.
-  class PoolTestConnection
-    attr_reader :start_count, :finish_count
+# Minimal stand-in for a started Net::HTTP connection.
+class PoolTestConnection
+  attr_reader :start_count, :finish_count
 
-    def initialize
-      @started = false
-      @start_count = 0
-      @finish_count = 0
-    end
-
-    def started?
-      @started
-    end
-
-    def start
-      @started = true
-      @start_count += 1
-      self
-    end
-
-    def finish
-      @started = false
-      @finish_count += 1
-      self
-    end
+  def initialize
+    @started = false
+    @start_count = 0
+    @finish_count = 0
   end
 
+  def started?
+    @started
+  end
+
+  def start
+    @started = true
+    @start_count += 1
+    self
+  end
+
+  def finish
+    @started = false
+    @finish_count += 1
+    self
+  end
+end
+
+describe Contractful::ConnectionPool do
   subject(:pool) { described_class.new(max_idle: 2) }
 
   # Builders in real usage always hand back started connections.

@@ -2,10 +2,11 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract idempotency keys' do
+RSpec.describe 'Contractful::Contract idempotency keys' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
+
       instance_exec(&block)
     end
   end
@@ -61,8 +62,11 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
 
   it 'generates a fresh key per logical call' do
     keys = []
-    stub = stub_request(:post, 'https://api.test/orders')
-           .with { |req| keys << req.headers['Idempotency-Key']; true }
+    stub_request(:post, 'https://api.test/orders')
+      .with do |req| 
+      keys << req.headers['Idempotency-Key']
+                     true
+end
 
     client.create_order(security_id: 'X1')
     client.create_order(security_id: 'X2')
@@ -73,7 +77,10 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
   it 'keeps the key stable across automatic retries of the same call' do
     keys = []
     stub_request(:post, 'https://api.test/orders')
-      .with { |req| keys << req.headers['Idempotency-Key']; true }
+      .with do |req| 
+      keys << req.headers['Idempotency-Key']
+                     true
+end
       .to_return(status: 503, headers: { 'Retry-After' => '0' })
       .then.to_return(status: 201, body: '{}')
 
@@ -92,10 +99,10 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
     end
 
     stub = stub_request(:post, 'https://api.test/payments')
-           .with { |req|
+           .with do |req|
              req.headers.any? { |k, _| k.casecmp('X-Request-Id').zero? } &&
                !req.headers.key?('Idempotency-Key')
-           }
+           end
 
     client_class.new.pay
     expect(stub).to have_been_made
@@ -137,7 +144,7 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
     stub = stub_request(:post, 'https://api.test/payments')
            .with(headers: {
                    'Authorization' => 'Bearer tok',
-                   'Idempotency-Key' => /\h{8}-/,
+                   'Idempotency-Key' => /\h{8}-/
                  })
 
     client_class.new.pay
@@ -145,19 +152,19 @@ RSpec.describe 'RestClient::Contract idempotency keys' do
   end
 
   it 'rejects invalid header names and generators at definition time' do
-    expect {
+    expect do
       build_client do
         base 'https://api.test'
         idempotency_header ''
       end
-    }.to raise_error(RestClient::Contract::InvalidDefinition, /non-empty String/)
+    end.to raise_error(Contractful::Contract::InvalidDefinition, /non-empty String/)
 
-    expect {
+    expect do
       build_client do
         base 'https://api.test'
         idempotency_generator 'not-callable'
       end
-    }.to raise_error(RestClient::Contract::InvalidDefinition, /respond to #call/)
+    end.to raise_error(Contractful::Contract::InvalidDefinition, /respond to #call/)
   end
 
   it 'marks idempotent contracts in introspection' do

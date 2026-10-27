@@ -7,14 +7,15 @@ specs are green and its row says `implemented`. PRs that change behavior
 must update the affected rows in the same change.
 
 Status vocabulary: `implemented` (specs green in CI), `planned` (agreed,
-not built), `in-progress` (branch work, not merged). Versions note where a
-requirement landed.
+not built), `in-progress` (branch work, not merged). Version markers note the
+upstream rest-client release line in which a requirement landed; contractful
+0.1.0 ships every row marked `implemented`.
 
 ## Core HTTP client
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
-| REQ-C01 | Verb one-liners (FR-1) | `RestClient.get/post/put/patch/delete/head/options` return a String-like `Response` | `spec/unit/restclient_spec.rb` | implemented (1.x) |
+| REQ-C01 | Verb one-liners (FR-1) | `Contractful.get/post/put/patch/delete/head/options` return a String-like `Response` | `spec/unit/contractful_spec.rb` | implemented (1.x) |
 | REQ-C02 | Block form error suppression | With a block, non-2xx returns the response instead of raising | `spec/unit/request_spec.rb` | implemented (1.x) |
 | REQ-C03 | Resource nesting (FR-2) | `Resource#[]` builds sub-paths sharing options | `spec/unit/resource_spec.rb` | implemented (1.x) |
 | REQ-C04 | Payload forms (FR-3) | Hash → form; JSON style accepted; raw String passed through; multipart file parts stream correctly | `spec/unit/payload_spec.rb` | implemented (1.x) |
@@ -41,9 +42,9 @@ requirement landed.
 | --- | --- | --- | --- | --- |
 | REQ-E01 | Status exceptions (FR-8) | Every documented status maps to a rescueable class carrying `.response`, `.http_code`, `.http_body` | `spec/unit/exceptions_spec.rb` | implemented (1.x) |
 | REQ-E02 | Timeout exceptions | Open/Read/Write timeout map to `Exceptions::OpenTimeout`/`ReadTimeout`/`WriteTimeout`, all `retryable?` | `spec/unit/exceptions_spec.rb` | implemented (2.x) |
-| REQ-E03 | Logging hook (FR-9) | `RestClient.log=` / `RESTCLIENT_LOG` route request/response log lines | `spec/unit/request_spec.rb` | implemented (1.x) |
+| REQ-E03 | Logging hook (FR-9) | `Contractful.log=` / `CONTRACTFUL_LOG` route request/response log lines | `spec/unit/request_spec.rb` | implemented (1.x) |
 
-## Contract-first layer (2.4/2.5)
+## Contract-first layer
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
@@ -62,13 +63,19 @@ requirement landed.
 | REQ-F13 | Reflection + dispatch (FR-22) | `contracts/contract_names/contract?/contract_for` on class and instance; `call_*`, `*_contract`, `has_*?` via `method_missing` with `respond_to_missing?` | `spec/unit/contract/introspection_spec.rb` | implemented (2.4) |
 | REQ-F14 | Inheritance | Config, contracts, callbacks merge down the ancestor chain; nearest definition wins | `spec/unit/contract/definition_spec.rb`, `spec/unit/contract/callbacks_spec.rb` | implemented (2.4) |
 | REQ-N01 | OpenAPI import helper | `OpenAPIImport.import` converts an OpenAPI 3.x document into Definitions (types, constraints, payload styles, statuses, response fields); every lossy mapping is reported on `#notes`; `to_ruby` output re-evaluates to contracts that `describe` identically; opt-in require, zero runtime deps | `spec/unit/contract/openapi_import_spec.rb` | implemented (2.6) |
+| REQ-N02 | Recorded-sequence test helper | `Sequence.load` validates a fixture against the client's contracts (unknown calls/keys rejected at load); `run` replays each recorded response through the contract pipeline under WebMock and raises `Failure` on the first violation with the step number; `before_step`/`after_step` hooks carry stateful rules; `expect_request` pins outgoing path/query/headers/payload subsets | `spec/unit/contract/sequence_spec.rb` | implemented (2.6) |
 
+| REQ-N04 | Event notifications | `Notifications.subscribe` receives `request`/`response`/`retry` events with method, url, attempt, status, duration and retry cause; subscribers that raise are logged and skipped; `clear!` detaches all; the ActiveSupport bridge re-posts every event as `contractful.<name>` (opt-in require, activesupport not a runtime dep) | `spec/unit/notifications_spec.rb`, `spec/unit/notifications_active_support_spec.rb` | implemented (0.1.0) |
+| REQ-R01 | Retry jitter | `retry_jitter: :full/:equal/:decorrelated` randomizes computed backoff (Retry-After delays untouched); `:decorrelated` samples [retry_interval, min(cap, previous*3)] with `retry_jitter_cap` (default 30); `retry_rng` injects randomness (seeded Random = deterministic tests); contract layer passes `_retry_jitter`/`_retry_jitter_cap`/`_retry_rng` | `spec/unit/retry_jitter_spec.rb` | implemented (0.1.0) |
+| REQ-R02 | Circuit breaker | `breaker: true/{threshold:, cooldown:}` opens a host-level circuit (scheme/host/port key, process-wide, thread-safe) after N consecutive failure requests (network errors + retryable statuses; 4xx is success), fails fast with `CircuitOpenError` (retryable? false) during cooldown, half-open probe decides next state; transitions post `circuit` notifications; contract layer passes `_breaker` | `spec/unit/circuit_breaker_spec.rb` | implemented (0.1.0) |
+| REQ-R03 | Rate-limit pacing | `pace: true/{limit:, window:, max_wait:}` enforces a process-wide per-host sliding window before transmit (retries acquire per attempt); a full window sleeps and posts a `pace` notification; a wait beyond `max_wait` raises `PacingTimeout`; contract layer passes `_pace` | `spec/unit/pacer_spec.rb` | implemented (0.1.0) |
+| REQ-R04 | OAuth2 refresh-on-401 | `auth token_provider:` accepts an object answering #token/#refresh (validated at definition time); resolves as Bearer per request; a 401 triggers a one-flight refresh (per-provider mutex, `token_refresh` notification) and exactly one retry with the fresh credential — no refresh loop | `spec/unit/contract/token_refresh_spec.rb` | implemented (0.1.0) |
 ## Platform, packaging, compatibility
 
 | ID | Requirement | Acceptance criterion (key) | Verified by | Status |
 | --- | --- | --- | --- | --- |
 | REQ-P01 | Ruby range (FR-24) | Suite green on 3.0–4.0 matrix; `ruby >= 3.0` enforced by gemspec | CI matrix | implemented (2.2) |
-| REQ-P02 | Windows gem (FR-23) | `rest-client.windows.gemspec` builds for `x64-mingw-ucrt` with `ffi ~> 1.16` root-cert loading | `spec/unit/windows/root_certs_spec.rb`, gem build | implemented (2.2) |
+| REQ-P02 | Windows gem (FR-23) | `contractful.windows.gemspec` builds for `x64-mingw-ucrt` with `ffi ~> 1.16` root-cert loading | `spec/unit/windows/root_certs_spec.rb`, gem build | implemented (2.2) |
 | REQ-P03 | Packaging integrity | Both gemspecs build from a clean checkout; `git ls-files` file list; metadata includes changelog/bugs URIs | gem build in release checklist | implemented (2.2) |
 | REQ-P04 | CI gates | Every push runs unit + integration specs on the matrix; `permissions: contents: read` | `.github/workflows/ci.yml` | implemented (2.2) |
 
@@ -76,7 +83,6 @@ requirement landed.
 
 | ID | Requirement | Acceptance criterion (key) | Status |
 | --- | --- | --- | --- |
-| REQ-N02 | Recorded-sequence test helper | Replays recorded vendor response sequences through contracts for ordering/timing tests contracts cannot express | planned |
 | REQ-N03 | Tags for 2.4.0/2.5.0 after PR #2 merge | `v2.4.0`, `v2.5.0` tags exist on master post-merge | planned |
 
 Planned items live in [docs/implementation/IMPLEMENTATION_PLAN.md](docs/implementation/IMPLEMENTATION_PLAN.md); they become `in-progress` only when a branch opens.

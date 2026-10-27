@@ -15,8 +15,8 @@ All commands below assume that environment; adapt paths for your own.
 ## Initial setup
 
 ```sh
-git clone https://github.com/shubhamtaywade82/rest-client.git
-cd rest-client
+git clone https://github.com/shubhamtaywade82/contractful.git
+cd contractful
 
 # with mise (reference environment)
 export PATH="$HOME/.local/bin:$PATH"
@@ -27,7 +27,7 @@ bundle install
 ```
 
 `bundle install` resolves the dev dependencies from
-`rest-client.gemspec`: rspec ~> 3.13, webmock >= 3.19 < 5, pry ~> 0.14,
+`contractful.gemspec`: rspec ~> 3.13, webmock >= 3.19 < 5, pry ~> 0.14,
 rdoc >= 6.0. There are no other setup steps — no database, no services, no
 environment variables required to run the offline suite.
 
@@ -49,26 +49,26 @@ indicating a code problem.
 ## Verifying packaging
 
 ```sh
-gem build rest-client.gemspec          # → rest-client-<version>.gem
-gem build rest-client.windows.gemspec  # → rest-client-<version>-x64-mingw-ucrt.gem
-rm -f rest-client-*.gem                # artifacts are never committed
+gem build contractful.gemspec          # → contractful-<version>.gem
+gem build contractful.windows.gemspec  # → contractful-<version>-x64-mingw-ucrt.gem
+rm -f contractful-*.gem                # artifacts are never committed
 ```
 
 ## Smoke-testing a local build against the real world
 
 ```sh
-ruby -Ilib -e 'require "rest-client";
-  r = RestClient.get("https://httpbin.org/get")
+ruby -Ilib -e 'require "contractful";
+  r = Contractful.get("https://httpbin.org/get")
   puts r.code, r.headers[:content_type]'
 ```
 
 Or exercising the contract layer live:
 
 ```ruby
-require 'rest-client'
+require 'contractful'
 
 class Httpbin
-  include RestClient::Contract
+  include Contractful::Contract
   base 'https://httpbin.org'
 
   contract :get_any, 'GET /get' do
@@ -85,16 +85,16 @@ puts Httpbin.new.get_any(trace: 'setup-check').body
 
 | Variable | Purpose |
 | --- | --- |
-| `RESTCLIENT_LOG` | Route rest-client's own logging to `stdout`/`stderr` while debugging |
+| `CONTRACTFUL_LOG` | Route contractful's own logging to `stdout`/`stderr` while debugging |
 | `HTTPBIN_URL` | Override the live-spec target (proxy-aware environments) |
 | `GITHUB_TOKEN` / operator-provided token file | Push access only; never committed, never embedded in the remote URL permanently |
 
 ## Windows
 
-Development on Windows uses the `rest-client-windows` platform gem
+Development on Windows uses the `contractful-windows` platform gem
 (`ffi`-based root certificate store, `x64-mingw-ucrt`); the specs under
 `spec/unit/windows/` cover the certificate loading. Building the Windows
-gem on Linux works via `gem build rest-client.windows.gemspec` (it is a
+gem on Linux works via `gem build contractful.windows.gemspec` (it is a
 platform gem, not a cross-compiled binary).
 
 ## Troubleshooting

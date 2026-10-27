@@ -7,12 +7,12 @@ too, but this file is written for agents executing work autonomously.
 
 ## What this project is
 
-`rest-client` is a simple HTTP and REST client for Ruby, kept alive after the
+`contractful` is a simple HTTP and REST client for Ruby, kept alive after the
 upstream gem was archived in 2019. This fork supports Ruby 3.0 through 4.0,
 ships a modern CI matrix, and adds a **contract-first architecture layer**
-(`RestClient::Contract`) built on heavy metaprogramming: you declare the HTTP
+(`Contractful::Contract`) built on heavy metaprogramming: you declare the HTTP
 shape of an API and the gem generates the client methods, validation and
-introspection. Current version lives in `lib/restclient/version.rb`; every
+introspection. Current version lives in `lib/contractful/version.rb`; every
 user-facing change is recorded in `history.md`.
 
 ## Reading order
@@ -47,21 +47,21 @@ caused a real bug in this codebase.
    - `URI.parse('http:///').hostname` returns `''` on Ruby 3.4+ (was `nil`);
      any hostname check must treat both as invalid.
    - Ruby 4.0's OpenSSL rejects the `:TLSv1_2` symbol form. Always route SSL
-     version configuration through `RestClient::Request#normalize_ssl_version`
+     version configuration through `Contractful::Request#normalize_ssl_version`
      instead of passing raw symbols to `Net::HTTP`.
    - rspec-mocks treats a bare `.with(hash)` as keyword arguments on modern
      Ruby; wrap expected hashes in explicit braces: `.with({ payload: ... })`.
-4. **Lexical constant shadowing.** Inside `RestClient::Request`, a bare
-   `Exception` resolves to `RestClient::Exception` and `Timeout` to
-   `RestClient::Exceptions::Timeout`. Scope top-level constants explicitly
+4. **Lexical constant shadowing.** Inside `Contractful::Request`, a bare
+   `Exception` resolves to `Contractful::Exception` and `Timeout` to
+   `Contractful::Exceptions::Timeout`. Scope top-level constants explicitly
    (`::Exception`, `::Timeout::Error`) when you mean the Ruby built-ins.
 5. **No new runtime dependency without an ADR** in `docs/adr/`. The runtime
    dependency set (`http-accept`, `http-cookie`, `mime-types`, `netrc`) is a
    deliberate, small surface. The contract layer deliberately adds **zero**
    runtime dependencies.
 6. **Exceptions over silent failure.** A misparsed response is worse than a
-   raised error. Violations raise precise errors (`RestClient::Contract::*`,
-   `RestClient::Exception` subclasses) instead of being swallowed,
+   raised error. Violations raise precise errors (`Contractful::Contract::*`,
+   `Contractful::Exception` subclasses) instead of being swallowed,
    logged-and-ignored, or converted to `nil`.
 7. **Closed requests, open responses.** Request-side validation rejects bad
    input *before* any network traffic. Response-side validation binds only
@@ -104,8 +104,8 @@ caused a real bug in this codebase.
 A change is done when all of the following hold:
 
 - [ ] Full unit + integration suite green (counts reported honestly)
-- [ ] Both gemspecs still build (`rest-client.gemspec`,
-      `rest-client.windows.gemspec`)
+- [ ] Both gemspecs still build (`contractful.gemspec`,
+      `contractful.windows.gemspec`)
 - [ ] `history.md` updated for user-facing changes
 - [ ] README / docs updated when public behavior changes
 - [ ] No secrets, no debug leftovers, no unrelated reformatting in the diff
@@ -114,7 +114,7 @@ A change is done when all of the following hold:
 
 | Path | Contents |
 | ---- | -------- |
-| `lib/restclient/` | Runtime code (`request.rb`, `contract/`, `connection_pool.rb`, ...) |
+| `lib/contractful/` | Runtime code (`request.rb`, `contract/`, `connection_pool.rb`, ...) |
 | `spec/unit`, `spec/integration` | Specs mirroring `lib/` |
 | `docs/` | Requirements, ADRs, engineering, security, operations, agent guides |
 | `history.md` | Release notes, one section per version |

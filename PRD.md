@@ -1,16 +1,16 @@
 # PRD — Product Requirements Document
 
-rest-client is a simple HTTP and REST client for Ruby, inspired by the
+contractful is a simple HTTP and REST client for Ruby, inspired by the
 Sinatra microframework style of specifying actions (`get`, `post`, `put`,
 `delete`). The upstream gem was archived in 2019; this fork keeps it alive
 and carries it forward with two product goals: run flawlessly on modern Ruby
 (3.0–4.0 and beyond), and give API SDK authors a **contract-first layer**
-(`RestClient::Contract`) that turns interface declarations into generated,
+(`Contractful::Contract`) that turns interface declarations into generated,
 validated client code.
 
 ## Goals
 
-1. **Reliable simplicity.** The one-liner `RestClient.get(url)` must keep
+1. **Reliable simplicity.** The one-liner `Contractful.get(url)` must keep
    working exactly as users expect, with sane defaults and precise
    exceptions when things go wrong.
 2. **Modern Ruby, verified.** Every commit is tested on Ruby 3.0, 3.1, 3.2,
@@ -47,11 +47,13 @@ validated client code.
 
 IDs are normative; the traceability matrix in
 [docs/requirements/REQUIREMENTS.md](docs/requirements/REQUIREMENTS.md) maps
-each to acceptance criteria and specs.
+each to acceptance criteria and specs. The "Upstream since" column records
+the rest-client release line in which the feature first appeared;
+contractful ships all of them from 0.1.0.
 
-| ID | Feature | Since |
+| ID | Feature | Upstream since |
 | --- | --- | --- |
-| FR-1 | One-liner DSL: `RestClient.get/post/put/patch/delete/head/options` | 1.x |
+| FR-1 | One-liner DSL: `Contractful.get/post/put/patch/delete/head/options` | 1.x |
 | FR-2 | `Resource` / ActiveResource-style nesting | 1.x |
 | FR-3 | Payloads: form-encoded, JSON, raw, multipart file upload, streaming | 1.x |
 | FR-4 | Headers, params (`ParamsArray` for repeated keys), cookies | 1.x |
@@ -59,7 +61,7 @@ each to acceptance criteria and specs.
 | FR-6 | SSL/TLS control: CA file, client certs, `ssl_min_version`/`ssl_max_version` | 1.x / 2.2 |
 | FR-7 | Redirect following (GET/HEAD by default; opt-in for others) | 1.x |
 | FR-8 | Exception-per-status error model with the response attached | 1.x |
-| FR-9 | Logging hook (`RestClient.log`, `RESTCLIENT_LOG`) | 1.x |
+| FR-9 | Logging hook (`Contractful.log`, `CONTRACTFUL_LOG`) | 1.x |
 | FR-10 | Proxy support (ENV-based and per-request) | 1.x |
 | FR-11 | Automatic retries with exponential backoff, honoring `Retry-After` | 2.3 |
 | FR-12 | Persistent connections via a thread-safe connection pool | 2.3 |

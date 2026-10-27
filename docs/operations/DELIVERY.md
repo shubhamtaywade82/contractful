@@ -10,8 +10,8 @@ work (PR #1 modernization, PR #2 contract-first), tags after merge.
 - **Semantic versioning.** Bug fixes bump patch; new backwards-compatible
   features bump minor; anything that breaks the surface documented in
   [API.md](../../API.md) bumps major.
-- `lib/restclient/version.rb` is the single source of truth
-  (`RestClient::VERSION`); both gemspecs derive from it.
+- `lib/contractful/version.rb` is the single source of truth
+  (`Contractful::VERSION`); both gemspecs derive from it.
 - `history.md` carries one section per release; a release commit without a
   matching history section is incomplete (gate G8). The current series:
   2.2.0 modernization → 2.3.0 retries/pooling/json → 2.4.0 contract core →
@@ -37,15 +37,15 @@ not merge blockers.
 ## Release checklist (maintainer)
 
 1. Confirm the merge landed and CI is green on `master`.
-2. Bump `RestClient::VERSION` (if not already on a release commit) and
+2. Bump `Contractful::VERSION` (if not already on a release commit) and
    finalize the `history.md` section.
-3. Build both gems: `gem build rest-client.gemspec` and
-   `gem build rest-client.windows.gemspec` (or `rake all:build`).
+3. Build both gems: `gem build contractful.gemspec` and
+   `gem build contractful.windows.gemspec` (or `rake all:build`).
 4. Release QA per TESTING.md: full `rake spec`, live httpbin spot-check,
    install the built gem in a scratch gemset, run README smoke snippets.
 5. Commit the release (`Release X.Y.Z: <one-line summary>`), push, tag
    `vX.Y.Z`, push the tag.
-6. Publish: `gem push rest-client-X.Y.Z.gem` and the Windows platform gem
+6. Publish: `gem push contractful-X.Y.Z.gem` and the Windows platform gem
    (`rake all:release` automates build+tag+push). **Publication is
    maintainer-only** — RubyGems credentials and MFA
    (`rubygems_mfa_required`) are never held by automated agents
@@ -55,7 +55,7 @@ not merge blockers.
 
 ## Rollback
 
-- **Bad published gem:** yank (`gem yank rest-client -v X.Y.Z`) removes it
+- **Bad published gem:** yank (`gem yank contractful -v X.Y.Z`) removes it
   from resolution — RubyGems treats yanking as exceptional, so pair it with
   a `history.md` postmortem note. Prefer shipping a fix release; yank only
   for security/corruption-class failures.

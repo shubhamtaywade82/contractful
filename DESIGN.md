@@ -1,6 +1,6 @@
 # DESIGN — Developer-experience and interface design
 
-rest-client has no graphical UI; its "design" surface is the experience of a
+contractful has no graphical UI; its "design" surface is the experience of a
 Ruby developer reading, writing and debugging code against the gem. This
 document records the design principles behind that experience and the rules
 new features must follow, so the gem keeps one coherent voice instead of
@@ -8,7 +8,7 @@ accumulating whatever interface each contributor was used to elsewhere.
 
 ## Design principles
 
-1. **Simple things simple, hard things possible.** `RestClient.get(url)` is
+1. **Simple things simple, hard things possible.** `Contractful.get(url)` is
    one line with zero configuration; SSL client certificates, proxy
    settings and per-request timeouts are all reachable without abandoning
    the same API.
@@ -29,7 +29,7 @@ accumulating whatever interface each contributor was used to elsewhere.
    exist for what declarations cannot express.
 5. **Progressive disclosure.** Three tiers with a smooth gradient:
    one-liner module methods → `Resource` for URL-structured APIs →
-   `RestClient::Contract` for full contract-first clients. Each tier builds
+   `Contractful::Contract` for full contract-first clients. Each tier builds
    on the same `Request`/`Response` core, so nothing learned is wasted.
 
 ## Interface ergonomics
@@ -55,7 +55,7 @@ accumulating whatever interface each contributor was used to elsewhere.
 ## Error design
 
 - Every error a user can hit is a class they can rescue specifically, and
-  every class name states the problem (`RestClient::NotFound`,
+  every class name states the problem (`Contractful::NotFound`,
   `Contract::UnknownParam`, `Contract::PaginationError`).
 - Response-bearing exceptions attach the full `response` object
   (`.response`, `.http_code`, `.http_headers`, `.http_body`); contract
@@ -66,8 +66,8 @@ accumulating whatever interface each contributor was used to elsewhere.
   from terminal (bad credentials, missing resources) so callers can make
   policy decisions without string-matching messages.
 - New error classes nest under the right root: transport failures under
-  `RestClient::Exception`, contract semantics under
-  `RestClient::Contract::Error`. Never raise bare `RuntimeError` or
+  `Contractful::Exception`, contract semantics under
+  `Contractful::Contract::Error`. Never raise bare `RuntimeError` or
   `StandardError` from library code.
 
 ## Configuration design

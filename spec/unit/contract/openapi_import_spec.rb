@@ -1,22 +1,22 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-require 'restclient/contract/openapi_import'
+require 'contractful/contract/openapi_import'
 require 'tmpdir'
 require 'pathname'
 
-RSpec.describe RestClient::Contract::OpenAPIImport do
+RSpec.describe Contractful::Contract::OpenAPIImport do
   subject(:mod) { described_class }
 
   let(:user_schema) do
     {
       'type' => 'object',
-      'required' => ['id', 'email'],
+      'required' => %w[id email],
       'properties' => {
         'id' => { 'type' => 'integer' },
         'email' => { 'type' => 'string' },
-        'role' => { 'type' => 'string', 'enum' => %w[admin member] },
-      },
+        'role' => { 'type' => 'string', 'enum' => %w[admin member] }
+      }
     }
   end
 
@@ -27,7 +27,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       'servers' => [{ 'url' => 'https://api.acme.test/v1' }],
       'components' => {
         'securitySchemes' => { 'bearerAuth' => { 'type' => 'http', 'scheme' => 'bearer' } },
-        'schemas' => { 'User' => user_schema },
+        'schemas' => { 'User' => user_schema }
       },
       'paths' => {
         '/users' => {
@@ -37,14 +37,14 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
               { 'name' => 'page', 'in' => 'query',
                 'schema' => { 'type' => 'integer', 'minimum' => 1, 'default' => 1 } },
               { 'name' => 'role', 'in' => 'query',
-                'schema' => { 'type' => 'string', 'enum' => %w[admin member] } },
+                'schema' => { 'type' => 'string', 'enum' => %w[admin member] } }
             ],
             'responses' => {
               '200' => { 'content' => { 'application/json' => { 'schema' => {
-                'type' => 'array', 'items' => { '$ref' => '#/components/schemas/User' },
+                'type' => 'array', 'items' => { '$ref' => '#/components/schemas/User' }
               } } } },
-              '401' => { 'description' => 'unauthorized' },
-            },
+              '401' => { 'description' => 'unauthorized' }
+            }
           },
           'post' => {
             'operationId' => 'createUser',
@@ -54,33 +54,33 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
                 'email' => { 'type' => 'string' },
                 'age' => { 'type' => 'integer', 'minimum' => 18 },
                 'name' => { 'type' => 'string', 'minLength' => 2, 'maxLength' => 40 },
-                'patterned' => { 'type' => 'string', 'pattern' => '\A[a-z]+\z' },
-              },
+                'patterned' => { 'type' => 'string', 'pattern' => '\A[a-z]+\z' }
+              }
             } } } },
             'responses' => {
               '201' => { 'content' => { 'application/json' => { 'schema' => {
-                '$ref' => '#/components/schemas/User',
+                '$ref' => '#/components/schemas/User'
               } } } },
-              '422' => { 'content' => { 'application/json' => { 'schema' => { 'type' => 'object' } } } },
-            },
-          },
+              '422' => { 'content' => { 'application/json' => { 'schema' => { 'type' => 'object' } } } }
+            }
+          }
         },
         '/users/{id}' => {
           'get' => {
             'summary' => 'Fetch one user',
             'parameters' => [
               { 'name' => 'id', 'in' => 'path', 'required' => true,
-                'schema' => { 'type' => 'integer' } },
+                'schema' => { 'type' => 'integer' } }
             ],
             'responses' => {
               '200' => { 'content' => { 'application/json' => { 'schema' => {
-                '$ref' => '#/components/schemas/User',
+                '$ref' => '#/components/schemas/User'
               } } } },
-              'default' => { 'description' => 'anything' },
-            },
-          },
-        },
-      },
+              'default' => { 'description' => 'anything' }
+            }
+          }
+        }
+      }
     }
   end
 
@@ -116,7 +116,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
 
     it 'raises on a missing file' do
       expect { mod.load('/nonexistent/spec/openapi.yaml') }
-        .to raise_error(mod::Error, %r{no such file})
+        .to raise_error(mod::Error, /no such file/)
     end
 
     it 'raises on invalid YAML' do
@@ -158,14 +158,14 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'deduplicates name collisions with a numeric suffix' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/a' => { 'get' => { 'operationId' => 'doThing', 'responses' => {} } },
-        '/b' => { 'get' => { 'operationId' => 'do-thing', 'responses' => {} } },
+        '/b' => { 'get' => { 'operationId' => 'do-thing', 'responses' => {} } }
       } }
       expect(definitions(d).keys).to eq %i[do_thing do_thing_2]
     end
 
     it 'never produces reserved names' do
       d = { 'openapi' => '3.0.3', 'paths' => {
-        '/x' => { 'get' => { 'operationId' => 'send', 'responses' => {} } },
+        '/x' => { 'get' => { 'operationId' => 'send', 'responses' => {} } }
       } }
       expect(definitions(d).keys).not_to include(:send)
     end
@@ -173,14 +173,14 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'sanitizes characters that cannot appear in Ruby method names' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/v2/orders history' => { 'get' => { 'operationId' => 'list.orders history!',
-                                             'responses' => {} } },
+                                             'responses' => {} } }
       } }
       expect(definitions(d).keys).to include(:list_orders_history)
     end
 
     it 'raises on invalid path placeholders' do
       d = { 'openapi' => '3.0.3', 'paths' => {
-        '/files/{file name}' => { 'get' => { 'responses' => {} } },
+        '/files/{file name}' => { 'get' => { 'responses' => {} } }
       } }
       expect { definitions(d) }.to raise_error(mod::Error, /not a valid Ruby identifier/)
     end
@@ -210,6 +210,42 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       expect(param.required?).to be true
     end
 
+    it 'shifts an exclusive integer bound by one' do
+      d = { 'openapi' => '3.0.3',
+            'paths' => {
+              '/counts' => { 'get' => {
+                'operationId' => 'getCounts',
+                'parameters' => [{ 'name' => 'count', 'in' => 'query',
+                                   'schema' => { 'type' => 'integer', 'exclusiveMinimum' => 5 } }],
+                'responses' => {}
+              } }
+            } }
+
+      import = mod.import(d)
+
+      expect(import.definitions[:get_counts].params[:count].min).to eq 6
+      expect(import.notes.join).not_to match(/exclusiveMinimum approximated/)
+    end
+
+    it 'does not shift an exclusive numeric bound for a number schema' do
+      d = { 'openapi' => '3.0.3',
+            'paths' => {
+              '/ratios' => { 'get' => {
+                'operationId' => 'getRatios',
+                'parameters' => [{ 'name' => 'ratio', 'in' => 'query',
+                                   'schema' => { 'type' => 'number', 'exclusiveMinimum' => 5 } }],
+                'responses' => {}
+              } }
+            } }
+
+      import = mod.import(d)
+      param = import.definitions[:get_ratios].params[:ratio]
+
+      expect(param.min).to eq 5
+      expect(import.notes.join).to match(/exclusiveMinimum approximated as an inclusive bound/)
+      expect { param.process!(5.5) }.not_to raise_error
+    end
+
     it 'maps request body properties with required from the schema required array' do
       params = definitions[:create_user].params
       expect(params[:email].required?).to be true
@@ -220,9 +256,9 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
 
     it 'maps minLength/maxLength to a length range and pattern to a Regexp' do
       name = definitions[:create_user].params[:name]
-      expect(name.length).to eq (2..40)
+      expect(name.length).to eq(2..40)
       patterned = definitions[:create_user].params[:patterned]
-      expect(patterned.pattern).to eq /\A[a-z]+\z/
+      expect(patterned.pattern).to eq(/\A[a-z]+\z/)
     end
 
     it 'maps form-urlencoded request bodies to payload_style :form' do
@@ -231,11 +267,11 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
           'requestBody' => { 'content' => {
             'application/x-www-form-urlencoded' => { 'schema' => {
               'type' => 'object',
-              'properties' => { 'grant_type' => { 'type' => 'string' } },
-            } },
+              'properties' => { 'grant_type' => { 'type' => 'string' } }
+            } }
           } },
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
       expect(definitions(d)[:post_token].payload_style).to eq :form
     end
@@ -245,8 +281,8 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
         '/search' => { 'post' => {
           'parameters' => [{ 'name' => 'q', 'in' => 'query',
                              'schema' => { 'type' => 'string' } }],
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
       expect(definitions(d)[:post_search].payload_style).to eq :query
     end
@@ -256,15 +292,15 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
         '/items/{id}' => {
           'parameters' => [
             { 'name' => 'id', 'in' => 'path', 'schema' => { 'type' => 'string' } },
-            { 'name' => 'verbose', 'in' => 'query', 'schema' => { 'type' => 'boolean' } },
+            { 'name' => 'verbose', 'in' => 'query', 'schema' => { 'type' => 'boolean' } }
           ],
           'get' => {
             'parameters' => [
-              { 'name' => 'id', 'in' => 'path', 'schema' => { 'type' => 'integer' } },
+              { 'name' => 'id', 'in' => 'path', 'schema' => { 'type' => 'integer' } }
             ],
-            'responses' => {},
-          },
-        },
+            'responses' => {}
+          }
+        }
       } }
       params = definitions(d)[:get_items_id].params
       expect(params[:id].type).to eq Integer
@@ -275,13 +311,13 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       d = { 'openapi' => '3.0.3',
             'components' => { 'parameters' => {
               'PageParam' => { 'name' => 'page', 'in' => 'query',
-                               'schema' => { 'type' => 'integer' } },
+                               'schema' => { 'type' => 'integer' } }
             } },
             'paths' => {
               '/logs' => { 'get' => {
                 'parameters' => [{ '$ref' => '#/components/parameters/PageParam' }],
-                'responses' => {},
-              } },
+                'responses' => {}
+              } }
             } }
       expect(definitions(d)[:get_logs].params[:page].type).to eq Integer
     end
@@ -289,14 +325,14 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'resolves nested $ref schemas in params' do
       d = { 'openapi' => '3.0.3',
             'components' => { 'schemas' => {
-              'Limit' => { 'type' => 'integer', 'maximum' => 100 },
+              'Limit' => { 'type' => 'integer', 'maximum' => 100 }
             } },
             'paths' => {
               '/things' => { 'get' => {
                 'parameters' => [{ 'name' => 'limit', 'in' => 'query',
                                    'schema' => { '$ref' => '#/components/schemas/Limit' } }],
-                'responses' => {},
-              } },
+                'responses' => {}
+              } }
             } }
       expect(definitions(d)[:get_things].params[:limit].max).to eq 100
     end
@@ -324,9 +360,9 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/anything' => { 'get' => {
           'responses' => { '2XX' => { 'content' => { 'application/json' => {
-            'schema' => { 'type' => 'object' },
-          } } } },
-        } },
+            'schema' => { 'type' => 'object' }
+          } } } }
+        } }
       } }
       definition = definitions(d)[:get_anything]
       expect(definition.response_statuses).to eq [(200..299)]
@@ -342,8 +378,8 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'derives type :json for JSON bodies without a resolvable shape' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/blob' => { 'get' => {
-          'responses' => { '200' => { 'content' => { 'application/json' => {} } } },
-        } },
+          'responses' => { '200' => { 'content' => { 'application/json' => {} } } }
+        } }
       } }
       expect(definitions(d)[:get_blob].response_type).to eq :json
     end
@@ -352,9 +388,9 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/health' => { 'get' => {
           'responses' => { '200' => { 'content' => { 'application/json' => {
-            'schema' => { 'type' => 'string' },
-          } } } },
-        } },
+            'schema' => { 'type' => 'string' }
+          } } } }
+        } }
       } }
       definition = definitions(d)[:get_health]
       expect(definition.response_type).to eq String
@@ -368,10 +404,10 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
         '/w' => { 'get' => {
           'parameters' => [
             { 'name' => 'X-Request-Id', 'in' => 'header', 'schema' => { 'type' => 'string' } },
-            { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } },
+            { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
           ],
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
       notes = mod.import(d).notes
       expect(notes).to include(/header param "X-Request-Id": header parameters are not representable/)
@@ -383,24 +419,24 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
         '/upload' => { 'post' => {
           'requestBody' => { 'content' => { 'multipart/form-data' => {
             'schema' => { 'type' => 'object',
-                          'properties' => { 'file' => { 'type' => 'string', 'format' => 'binary' } } },
+                          'properties' => { 'file' => { 'type' => 'string', 'format' => 'binary' } } }
           } } },
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
-      expect(mod.import(d).notes).to include(/multipart\/form-data.*not representable as contract params/)
+      expect(mod.import(d).notes).to include(%r{multipart/form-data.*not representable as contract params})
     end
 
     it 'reports oneOf unions instead of guessing' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/pay' => { 'post' => {
           'requestBody' => { 'content' => { 'application/json' => {
-            'schema' => { 'oneOf' => [{ 'type' => 'object' }, { 'type' => 'array' }] },
+            'schema' => { 'oneOf' => [{ 'type' => 'object' }, { 'type' => 'array' }] }
           } } },
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
-      expect(mod.import(d).notes).to include(/schema combination \(oneOf\/anyOf\/allOf\)/)
+      expect(mod.import(d).notes).to include(%r{schema combination \(oneOf/anyOf/allOf\)})
       expect(definitions(d)[:post_pay].params).to be_empty
     end
 
@@ -410,10 +446,10 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
           'parameters' => [{ 'name' => 'dry_run', 'in' => 'query',
                              'schema' => { 'type' => 'boolean' } }],
           'requestBody' => { 'content' => { 'application/json' => {
-            'schema' => { 'type' => 'object', 'properties' => { 'qty' => { 'type' => 'integer' } } },
+            'schema' => { 'type' => 'object', 'properties' => { 'qty' => { 'type' => 'integer' } } }
           } } },
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
       notes = mod.import(d).notes
       expect(notes).to include(/mixes a request body and query parameters/)
@@ -424,11 +460,11 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/old' => { 'get' => {
           'deprecated' => true,
-          'responses' => { 'OK' => { 'description' => 'fine' } },
-        } },
+          'responses' => { 'OK' => { 'description' => 'fine' } }
+        } }
       } }
       notes = mod.import(d).notes
-      expect(notes).to include(/GET \/old: deprecated operation/)
+      expect(notes).to include(%r{GET /old: deprecated operation})
       expect(notes).to include(/response code "OK" is not a numeric status/)
     end
 
@@ -446,8 +482,8 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
         '/x' => { 'get' => {
           'parameters' => [{ 'name' => 'q', 'in' => 'query',
                              'schema' => { '$ref' => '#/components/schemas/Missing' } }],
-          'responses' => {},
-        } },
+          'responses' => {}
+        } }
       } }
       import = mod.import(d)
       expect(import.notes.join).to match(/unresolvable \$ref/)
@@ -457,11 +493,11 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'deduplicates repeated notes' do
       d = { 'openapi' => '3.0.3', 'paths' => {
         '/a' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } },
+          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
         ], 'responses' => {} } },
         '/b' => { 'get' => { 'parameters' => [
-          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } },
-        ], 'responses' => {} } },
+          { 'name' => 'sid', 'in' => 'cookie', 'schema' => { 'type' => 'string' } }
+        ], 'responses' => {} } }
       } }
       cookie_notes = mod.import(d).notes.grep(/cookie param "sid"/)
       expect(cookie_notes.size).to eq 2 # distinct labels stay distinct
@@ -476,7 +512,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'substitutes server variables with their defaults' do
       d = { 'openapi' => '3.0.3', 'servers' => [{
         'url' => 'https://{region}.acme.test/v1',
-        'variables' => { 'region' => { 'default' => 'us' } },
+        'variables' => { 'region' => { 'default' => 'us' } }
       }], 'paths' => { '/x' => { 'get' => { 'responses' => {} } } } }
       expect(mod.import(d).base_url).to eq 'https://us.acme.test/v1'
     end
@@ -487,7 +523,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
               'b' => { 'type' => 'http', 'scheme' => 'bearer' },
               'ba' => { 'type' => 'http', 'scheme' => 'basic' },
               'key' => { 'type' => 'apiKey', 'in' => 'header', 'name' => 'X-Api-Key' },
-              'qkey' => { 'type' => 'apiKey', 'in' => 'query', 'name' => 'api_token' },
+              'qkey' => { 'type' => 'apiKey', 'in' => 'query', 'name' => 'api_token' }
             } },
             'paths' => { '/x' => { 'get' => { 'responses' => {} } } } }
       hints = mod.import(d).auth_hints
@@ -500,7 +536,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     it 'notes OAuth schemes instead of faking them' do
       d = { 'openapi' => '3.0.3',
             'components' => { 'securitySchemes' => {
-              'oa' => { 'type' => 'oauth2', 'flows' => {} },
+              'oa' => { 'type' => 'oauth2', 'flows' => {} }
             } },
             'paths' => { '/x' => { 'get' => { 'responses' => {} } } } }
       expect(mod.import(d).notes.join).to match(/OAuth flows are not auto-generated/)
@@ -536,7 +572,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
 
     it 'emits import notes as comments' do
       expect(source).to include('# Import notes (review these):')
-      expect(source).to include("#   - GET /users/{id} response \"default\":")
+      expect(source).to include('#   - GET /users/{id} response "default":')
     end
 
     it 'rejects invalid class names' do
@@ -550,7 +586,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
     let(:source) do
       <<~RUBY
         class #{class_name}
-          include RestClient::Contract
+          include Contractful::Contract
           base 'https://smoke.test'
           contract :list_users, 'GET /users' do
             param :page, Integer, default: 1, min: 1
@@ -574,7 +610,7 @@ RSpec.describe RestClient::Contract::OpenAPIImport do
 
     it 'rejects invalid params before any network traffic' do
       expect { Object.const_get(class_name).new.list_users(page: 0) }
-        .to raise_error(RestClient::Contract::InvalidParam, /below minimum 1/)
+        .to raise_error(Contractful::Contract::InvalidParam, /below minimum 1/)
       expect(a_request(:any, //)).not_to have_been_made
     end
   end

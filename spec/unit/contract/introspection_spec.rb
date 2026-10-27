@@ -2,10 +2,11 @@
 
 require_relative '../../spec_helper'
 
-RSpec.describe 'RestClient::Contract reflection and dynamic dispatch' do
+RSpec.describe 'Contractful::Contract reflection and dynamic dispatch' do
   def build_client(&block)
     Class.new do
-      include RestClient::Contract
+      include Contractful::Contract
+
       base 'https://api.test'
       instance_exec(&block)
     end
@@ -22,7 +23,7 @@ RSpec.describe 'RestClient::Contract reflection and dynamic dispatch' do
   describe 'class-level introspection' do
     it 'exposes the contract registry' do
       expect(client_class.contracts.keys).to contain_exactly(:list_posts, :create_post)
-      expect(client_class.contracts[:list_posts]).to be_a(RestClient::Contract::Definition)
+      expect(client_class.contracts[:list_posts]).to be_a(Contractful::Contract::Definition)
     end
 
     it 'returns a defensive copy from .contracts' do
@@ -82,7 +83,7 @@ RSpec.describe 'RestClient::Contract reflection and dynamic dispatch' do
       expect(client.contracts.keys).to contain_exactly(:list_posts, :create_post)
       expect(client.contract_names).to contain_exactly(:list_posts, :create_post)
       expect(client.contract?(:list_posts)).to be true
-      expect(client.contract_for(:list_posts)).to be_a(RestClient::Contract::Definition)
+      expect(client.contract_for(:list_posts)).to be_a(Contractful::Contract::Definition)
     end
   end
 
@@ -98,7 +99,7 @@ RSpec.describe 'RestClient::Contract reflection and dynamic dispatch' do
 
     it 'returns definitions via #{name}_contract' do
       definition = client.list_posts_contract
-      expect(definition).to be_a(RestClient::Contract::Definition)
+      expect(definition).to be_a(Contractful::Contract::Definition)
       expect(definition.name).to eq :list_posts
     end
 

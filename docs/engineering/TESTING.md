@@ -1,6 +1,6 @@
 # TESTING — strategy, organization and commands
 
-rest-client's correctness story is its test suite: a fast offline unit
+contractful's correctness story is its test suite: a fast offline unit
 suite covering every module (including the full contract DSL), an
 integration suite with WebMock-stubbed HTTP behavior plus a small
 deliberate live component, and packaging verification via gem builds. If a
@@ -30,26 +30,30 @@ spec/
 │   ├── connection_pool_spec.rb, rate_limit_spec.rb, ...
 │   └── ...
 ├── integration/           # HTTP behavior through the real Request path
-│   ├── integration_spec.rb, request_spec.rb   # WebMock-stubbed
-│   └── httpbin_spec.rb    # LIVE network (WebMock disabled) — see below
+│   ├── integration_spec.rb                    # WebMock-stubbed, offline
+│   └── request_spec.rb, httpbin_spec.rb,
+│       contract_spec.rb                       # tagged :live (WebMock disabled)
 └── helpers.rb, spec_helper.rb
 ```
 
 Rules of placement: unit specs never touch real sockets (they exercise
 `Request` with WebMock or stubbed transports); integration specs drive the
-full request path; only `httpbin_spec.rb` and the contract live specs touch
-the network, because TLS, real headers and redirect chains deserve at least
-one truthful end-to-end verification.
+full request path. Specs that require a real host are tagged `:live` and
+excluded unless `LIVE_HTTP_TESTS` is set, because TLS, real headers and
+redirect chains deserve truthful end-to-end verification without making CI
+depend on the network.
 
 ## Commands
 
 ```sh
 bundle exec rake spec:unit         # spec/unit/** — includes contract/ (fixed to do so)
-bundle exec rake spec:integration  # spec/integration/* — includes the live httpbin specs
-bundle exec rake spec              # everything (default task)
+bundle exec rake spec:integration  # offline integration specs; :live excluded
+bundle exec rake spec:live         # live-network specs only (needs internet)
+bundle exec rake spec              # everything offline (default task)
 bundle exec rake doc               # specdoc dry-run
 ```
 
+Set `LIVE_HTTP_TESTS=1` to include the `:live` examples in any RSpec run.
 CI (`.github/workflows/ci.yml`) runs `spec:unit` and `spec:integration` on
 Ruby 3.0–4.0, plus an experimental non-blocking `ruby-head` job. A red
 matrix blocks merge; a red `ruby-head` is a warning about tomorrow.
@@ -74,7 +78,7 @@ Traps that have actually bitten this codebase — codify, don't rediscover:
    use `String#unpack1('m')` for basic-auth-style decoding.
 4. **`URI.parse('http:///').hostname`** is `''` on Ruby 3.4+, `nil` before —
    version-agnostic specs assert `hostname.to_s.empty?`.
-5. **Constant shadowing inside `RestClient::Request`:** `Exception` and
+5. **Constant shadowing inside `Contractful::Request`:** `Exception` and
    `Timeout` resolve to the gem's own constants; specs that stub top-level
    network errors must reference `::Timeout::Error` and friends explicitly.
 6. **Redirect-following in the suppression path:** when a contract declares
@@ -101,15 +105,19 @@ HTTP interaction) of missing, unknown, wrongly-typed and out-of-constraint
 values. Response-side validation is tested as an **open schema**: required
 fields and types bind, unknown fields pass through untouched, new enum
 members are data, and values are never coerced. What the specs deliberately
-do *not* cover is ordering/timing across calls — that belongs to the
-planned recorded-sequence helper (REQ-N02); if you are adding semantics
-that span calls (like pagination already does), say so explicitly in the
-feature spec and test the sequence with WebMock-orchestrated pages.
+do *not* cover is ordering/timing across calls — that is the recorded-
+sequence helper's job (REQ-N02,
+`require 'contractful/contract/sequence'`): sequence fixtures replay
+recorded vendor responses through a contract client, fail on the first
+violation with the step number attached, and carry stateful rules in
+`before_step`/`after_step` hooks. If you are adding semantics that span
+calls (like pagination already does), say so explicitly in the feature
+spec and test the sequence with WebMock-orchestrated pages.
 
 ## Release QA checklist
 
 Before tagging a release, maintainers run the full `rake spec` on the
-reference Ruby, spot-check the live httpbin specs, build both gemspecs,
-install the built Ruby-platform gem into a scratch gemset and run the
-README smoke snippets. The suite being green is necessary, not sufficient —
-packaging and docs are part of quality.
+reference Ruby, run `bundle exec rake spec:live` against the real hosts,
+build both gemspecs, install the built Ruby-platform gem into a scratch
+gemset and run the README smoke snippets. The suite being green is
+necessary, not sufficient — packaging and docs are part of quality.

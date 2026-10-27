@@ -1,6 +1,6 @@
 # DATABASE — data model and data at rest
 
-**rest-client has no database, and none is planned.** It is an HTTP client
+**contractful has no database, and none is planned.** It is an HTTP client
 library: it persists nothing between requests, requires no migrations, and
 ships no storage engine. This document exists to make that decision explicit
 and to govern the data that *does* live in the repository and in memory —
@@ -15,7 +15,7 @@ should not own it instead).
 | --- | --- | --- |
 | Request/response bodies, headers | `Request`, `Response` objects | Per call, garbage-collected with the objects |
 | Cookies | `http-cookie` jar, per request or per `Resource` | Caller-owned; the library never persists jars |
-| Pooled connections | `RestClient::ConnectionPool` (default global, thread-safe) | Idle connections closed at `max_idle`; keyed by host/port/proxy/SSL config including the client-cert fingerprint |
+| Pooled connections | `Contractful::ConnectionPool` (default global, thread-safe) | Idle connections closed at `max_idle`; keyed by host/port/proxy/SSL config including the client-cert fingerprint |
 | Parsed rate-limit state | Per response object (`response.rate_limit`) | Per response |
 | Contract definitions and config | Class-level `Config` objects on client classes | Process lifetime, immutable after declaration |
 
@@ -50,7 +50,7 @@ Fixture policy:
 
 ## Logs and artifacts
 
-The gem logs only through the caller-provided logger (`RestClient.log` /
+The gem logs only through the caller-provided logger (`Contractful.log` /
 `:log` option) and never to disk itself. Build artifacts (`pkg/`, built
 `.gem` files, `rdoc/`) are disposable and must never be committed. CI
 artifacts are ephemeral GitHub-hosted runner state; nothing about a CI run

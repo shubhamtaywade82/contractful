@@ -1,11 +1,16 @@
-# Unreleased
+# 0.1.0
 
-* Added: automated GitHub Actions release workflow (`.github/workflows/release.yml`)
+First release published as **contractful**. The version restarts at 0.1.0
+because the gem name changed: the `rest-client` name on RubyGems belongs to
+the original project this codebase modernized, and none of the versions
+below were ever published under it. The code itself is the current master
+line — same contracts, helpers and test suite — renamed:
+
+* Automated GitHub Actions release workflow (`.github/workflows/release.yml`)
   with TOTP MFA authentication, matching the DhanHQ release setup. Added
   `allowed_push_host`, `source_code_uri`, and author email to `contractful.gemspec`,
   along with an explicit allowlist for packaged gem files to omit specs and internal
   tooling from published releases. Added `docs/RELEASE_GUIDE.md`.
-
 * Added: a Postman Collection importer, `Contractful::Contract::PostmanImport`
   (opt-in, `require 'contractful/contract/postman_import'`). It reads v2.0 and
   v2.1 exports: folders flatten into one contract per request, `{{variables}}`
@@ -66,15 +71,6 @@
   suffix, so it expands to `/things/5:archive`. Behavior change: a template
   such as `/:year:month` now declares one placeholder with a literal `:month`
   suffix; it previously declared two.
-
-# 0.1.0
-
-First release published as **contractful**. The version restarts at 0.1.0
-because the gem name changed: the `rest-client` name on RubyGems belongs to
-the original project this codebase modernized, and none of the versions
-below were ever published under it. The code itself is the current master
-line — same contracts, helpers and test suite — renamed:
-
 * Renamed the gem, the require path and the module: `rest-client` →
   `contractful`, `require 'restclient'` → `require 'contractful'`,
   `RestClient` → `Contractful`, and the CLI with it (`bin/contractful`).

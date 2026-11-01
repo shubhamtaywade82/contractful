@@ -1,5 +1,11 @@
 # Unreleased
 
+* Added: automated GitHub Actions release workflow (`.github/workflows/release.yml`)
+  with TOTP MFA authentication, matching the DhanHQ release setup. Added
+  `allowed_push_host`, `source_code_uri`, and author email to `contractful.gemspec`,
+  along with an explicit allowlist for packaged gem files to omit specs and internal
+  tooling from published releases. Added `docs/RELEASE_GUIDE.md`.
+
 * Added: a Postman Collection importer, `Contractful::Contract::PostmanImport`
   (opt-in, `require 'contractful/contract/postman_import'`). It reads v2.0 and
   v2.1 exports: folders flatten into one contract per request, `{{variables}}`

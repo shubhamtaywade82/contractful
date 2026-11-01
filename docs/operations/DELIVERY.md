@@ -45,11 +45,13 @@ not merge blockers.
    install the built gem in a scratch gemset, run README smoke snippets.
 5. Commit the release (`Release X.Y.Z: <one-line summary>`), push, tag
    `vX.Y.Z`, push the tag.
-6. Publish: `gem push contractful-X.Y.Z.gem` and the Windows platform gem
-   (`rake all:release` automates build+tag+push). **Publication is
-   maintainer-only** — RubyGems credentials and MFA
-   (`rubygems_mfa_required`) are never held by automated agents
-   (AGENT_TOOL_POLICY.md).
+6. Publish: Automated via `.github/workflows/release.yml` when the tag
+   `vX.Y.Z` is pushed to GitHub. The workflow verifies the tag matches
+   `Contractful::VERSION`, generates the MFA OTP token using `RUBYGEMS_OTP_SECRET`,
+   builds the gem, pushes to RubyGems using `RUBYGEMS_API_KEY`, and attaches
+   the built `.gem` asset to the GitHub Release. See [docs/RELEASE_GUIDE.md](../RELEASE_GUIDE.md)
+   for one-time setup and instructions. Manual publish (`rake all:release`)
+   remains available for maintainers with local credentials.
 7. Verify the release page on rubygems.org picks up metadata (changelog
    URI, source code URI) from the gemspec.
 

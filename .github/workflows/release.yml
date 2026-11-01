@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Validate tag matches gem version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          tag_version="${tag#v}"
+          gem_version=$(ruby -e "require_relative 'lib/contractful/version'; puts Contractful::VERSION")
+          if [ "$tag_version" != "$gem_version" ]; then
+            echo "Tag version ($tag_version) does not match gem version ($gem_version)"
+            exit 1
+          fi
+      - name: Install OTP generator
+        run: gem install rotp
+      - name: Build gem
+        run: |
+          set -euo pipefail
+          echo "Current directory: $(pwd)"
+          echo "Building gem from gemspec..."
+          gem build contractful.gemspec
+          echo "Build completed. Verifying gem file:"
+          ls -lh contractful-*.gem
+      - name: Publish gem with OTP
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          RUBYGEMS_OTP_SECRET: ${{ secrets.RUBYGEMS_OTP_SECRET }}
+        run: |
+          set -euo pipefail
+
+          # Generate OTP code
+          echo "Generating OTP code..."
+          otp_code=$(ruby -r rotp -e "puts ROTP::TOTP.new(ENV['RUBYGEMS_OTP_SECRET']).now")
+          echo "OTP code generated successfully"
+
+          # Get gem version and file
+          gem_version=$(ruby -e "require_relative 'lib/contractful/version'; puts Contractful::VERSION")
+          echo "Gem version detected: ${gem_version}"
+          gem_file="contractful-${gem_version}.gem"
+          echo "Looking for gem file: ${gem_file}"
+
+          # Verify gem file exists
+          if [ ! -f "$gem_file" ]; then
+            echo "ERROR: Gem file not found: $gem_file"
+            echo "Available gem files:"
+            ls -la *.gem || echo "No gem files found"
+            exit 1
+          fi
+
+          # Push gem with OTP
+          echo "Pushing gem to RubyGems with OTP authentication..."
+          gem push "$gem_file" --otp "$otp_code"
+      - name: Attach gem to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          gem_version=$(ruby -e "require_relative 'lib/contractful/version'; puts Contractful::VERSION")
+          gem_file="contractful-${gem_version}.gem"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$gem_file" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$gem_file" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
+          fi
